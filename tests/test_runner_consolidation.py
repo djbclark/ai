@@ -1,4 +1,6 @@
-from ai.collectors.runner import _consolidate_accounts, _select_and_cross_check
+import time
+
+from ai.collectors.runner import _consolidate_accounts, _select_and_cross_check, run_collectors
 from ai.models import AccountUsage, BillingKind, QuotaWindow
 
 
@@ -98,3 +100,59 @@ def test_claude_gets_cross_checked_when_cswap_disabled():
     assert [account.source for account in accounts] == ["codexbar"]
     assert checks
     assert checks[0].status == "warning"
+
+
+def test_run_collectors_runs_sources_concurrently_not_sequentially(monkeypatch):
+    def slow_cswap():
+        time.sleep(0.1)
+        return [_account("cswap", "claude")]
+
+    def slow_codexbar(*, providers=None):
+        time.sleep(0.1)
+        return [_account("codexbar", "codex")]
+
+    def slow_tokscale():
+        time.sleep(0.1)
+        return [_account("tokscale", "grok")]
+
+    monkeypatch.setattr("ai.collectors.runner.collect_cswap", slow_cswap)
+    monkeypatch.setattr("ai.collectors.runner.collect_codexbar", slow_codexbar)
+    monkeypatch.setattr("ai.collectors.runner.collect_tokscale", slow_tokscale)
+
+    start = time.monotonic()
+    snapshot = run_collectors({})
+    elapsed = time.monotonic() - start
+
+    # Sequential would take >=0.3s; concurrent should take about one sleep's worth.
+    assert elapsed < 0.25
+    assert {account.provider for account in snapshot.accounts} == {"claude", "codex", "grok"}
+    assert snapshot.collector_errors == []
+
+
+def test_run_collectors_keeps_other_sources_when_one_raises(monkeypatch):
+    def failing_cswap():
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr("ai.collectors.runner.collect_cswap", failing_cswap)
+    monkeypatch.setattr(
+        "ai.collectors.runner.collect_codexbar",
+        lambda **_kwargs: [_account("codexbar", "codex")],
+    )
+    monkeypatch.setattr("ai.collectors.runner.collect_tokscale", lambda: [_account("tokscale", "grok")])
+
+    snapshot = run_collectors({})
+
+    assert {account.provider for account in snapshot.accounts} == {"codex", "grok"}
+    assert snapshot.collector_errors == ["cswap: boom"]
+
+
+def test_more_than_two_cswap_claude_accounts_all_survive_selection():
+    accounts = [_account("cswap", "claude") for _ in range(4)]
+    for i, account in enumerate(accounts):
+        account.account = f"user{i}@example.com"
+
+    selected, checks = _select_and_cross_check(accounts, cswap_authoritative=True)
+
+    assert {account.account for account in selected} == {f"user{i}@example.com" for i in range(4)}
+    # Each account gets its own cross-check note (no CodexBar row to match against).
+    assert len(checks) == 4

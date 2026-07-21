@@ -124,9 +124,11 @@ of those corresponding inputs.
 ## Notes / limitations
 
 - Live quota accuracy depends on each tool’s auth (browser cookies, OAuth, keychain). Errors are reported per account rather than aborting the whole run.
-- The default asks CodexBar for its enabled providers. `--providers all` is
-  intentionally thorough and can take about one minute; a comma-separated list
-  queries those providers one at a time.
+- cswap, CodexBar, and tokscale run concurrently, and by default each CodexBar
+  provider (and any explicit comma-separated `--providers` list) is queried as
+  its own concurrent subprocess, so total runtime tracks the slowest single
+  provider rather than the sum of all of them. `--providers all` is
+  intentionally thorough and stays a single, slower bundled CodexBar call.
 - CodexBar's raw numbered quota slots are translated to provider-specific names
   where known. Unnamed slots are explicitly reported as unnamed; output never
   presents a bare numbered slot as if its meaning were known.

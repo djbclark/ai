@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from ai.collectors.codexbar import _from_row, _normalize_providers
+import time
+
+from ai.collectors.base import CollectorError
+from ai.collectors.codexbar import _from_row, _normalize_providers, _parse_enabled_providers, _query_providers
 from ai.models import BillingKind
 
 
@@ -200,3 +203,159 @@ def test_unmapped_provider_windowminutes_bucketing_boundaries():
 
     monthly = _from_row({"provider": "codex", "usage": {"primary": {"usedPercent": 10, "windowMinutes": 44640}}})
     assert monthly.windows[0].label == "Codex monthly quota"
+
+
+def test_parse_enabled_providers_filters_to_enabled_true():
+    # Shape matches `codexbar config providers --format json`.
+    payload = [
+        {"provider": "codex", "enabled": True, "defaultEnabled": True, "displayName": "Codex"},
+        {"provider": "openai", "enabled": False, "defaultEnabled": False, "displayName": "OpenAI"},
+        {"provider": "claude", "enabled": True, "defaultEnabled": False, "displayName": "Claude"},
+    ]
+    assert _parse_enabled_providers(payload) == ["codex", "claude"]
+
+
+def test_parse_enabled_providers_returns_none_for_unexpected_shapes():
+    assert _parse_enabled_providers({"not": "a list"}) is None
+    assert _parse_enabled_providers([]) is None
+    assert _parse_enabled_providers([{"provider": "codex", "enabled": False}]) is None
+
+
+def test_query_providers_merges_results_in_deterministic_order(monkeypatch):
+    def fake_run_json(argv, *, timeout=90.0, allow_empty=False):
+        provider = argv[argv.index("--provider") + 1]
+        if provider == "cursor":
+            raise CollectorError("session expired")
+        return [{"provider": provider, "usage": {"primary": {"usedPercent": 1}}}]
+
+    monkeypatch.setattr("ai.collectors.codexbar.run_json", fake_run_json)
+
+    results = _query_providers(["codex", "cursor", "claude"])
+
+    assert [provider for provider, _ in results] == ["codex", "cursor", "claude"]
+    codex_outcome = results[0][1]
+    assert isinstance(codex_outcome, list)
+    assert codex_outcome[0]["provider"] == "codex"
+    cursor_outcome = results[1][1]
+    assert isinstance(cursor_outcome, CollectorError)
+    assert "session expired" in str(cursor_outcome)
+
+
+def test_collect_codexbar_discovers_and_queries_enabled_providers_individually(monkeypatch):
+    calls = []
+
+    def fake_run_json(argv, *, timeout=90.0, allow_empty=False):
+        calls.append(list(argv))
+        if "config" in argv:
+            return [
+                {"provider": "codex", "enabled": True},
+                {"provider": "claude", "enabled": True},
+                {"provider": "openai", "enabled": False},
+            ]
+        provider = argv[argv.index("--provider") + 1]
+        return [{"provider": provider, "usage": {"primary": {"usedPercent": 1}}}]
+
+    monkeypatch.setattr("ai.collectors.codexbar.which", lambda _cmd: "/usr/bin/codexbar")
+    monkeypatch.setattr("ai.collectors.codexbar.run_json", fake_run_json)
+
+    from ai.collectors.codexbar import collect_codexbar
+
+    accounts = collect_codexbar()
+
+    assert {account.provider for account in accounts} == {"codex", "claude"}
+    # The bundled no-`--provider` call is never made once discovery succeeds.
+    assert all("--provider" in call for call in calls if call[:2] == ["codexbar", "usage"])
+
+
+def test_one_slow_or_hanging_provider_does_not_delay_the_others(monkeypatch):
+    def fake_run_json(argv, *, timeout=90.0, allow_empty=False):
+        provider = argv[argv.index("--provider") + 1]
+        if provider == "claude":
+            time.sleep(0.15)  # stands in for a slow/hanging provider
+        return [{"provider": provider, "usage": {}}]
+
+    monkeypatch.setattr("ai.collectors.codexbar.run_json", fake_run_json)
+
+    start = time.monotonic()
+    results = _query_providers(["codex", "claude", "grok", "cursor"])
+    elapsed = time.monotonic() - start
+
+    # Sequential would take >=0.15s regardless, but with 4 fast lookups plus one slow
+    # one it would compound; concurrently it should track just the slow one.
+    assert elapsed < 0.2
+    outcomes = dict(results)
+    assert outcomes["codex"][0]["provider"] == "codex"
+    assert outcomes["claude"][0]["provider"] == "claude"
+    assert outcomes["grok"][0]["provider"] == "grok"
+    assert outcomes["cursor"][0]["provider"] == "cursor"
+
+
+def test_duplicate_providers_are_queried_once_not_raced(monkeypatch):
+    call_count = {"codex": 0}
+
+    def fake_run_json(argv, *, timeout=90.0, allow_empty=False):
+        provider = argv[argv.index("--provider") + 1]
+        if provider == "codex":
+            call_count["codex"] += 1
+        return [{"provider": provider, "usage": {}}]
+
+    monkeypatch.setattr("ai.collectors.codexbar.run_json", fake_run_json)
+
+    results = _query_providers(["codex", "codex", "claude"])
+
+    assert [provider for provider, _ in results] == ["codex", "claude"]
+    assert call_count["codex"] == 1
+
+
+def test_non_collector_error_from_one_provider_does_not_abort_the_batch(monkeypatch):
+    def fake_run_json(argv, *, timeout=90.0, allow_empty=False):
+        provider = argv[argv.index("--provider") + 1]
+        if provider == "claude":
+            raise ValueError("unexpected non-CollectorError failure")
+        return [{"provider": provider, "usage": {}}]
+
+    monkeypatch.setattr("ai.collectors.codexbar.run_json", fake_run_json)
+
+    results = _query_providers(["codex", "claude", "grok"])
+
+    outcomes = dict(results)
+    assert outcomes["codex"][0]["provider"] == "codex"
+    assert outcomes["grok"][0]["provider"] == "grok"
+    assert isinstance(outcomes["claude"], CollectorError)
+    assert "unexpected non-CollectorError failure" in str(outcomes["claude"])
+
+
+def test_discovery_failure_via_non_collector_error_falls_back_gracefully(monkeypatch):
+    def fake_run_json(argv, *, timeout=90.0, allow_empty=False):
+        if "config" in argv:
+            raise ValueError("codexbar config providers exploded")
+        return [{"provider": "codex", "usage": {}}]
+
+    monkeypatch.setattr("ai.collectors.codexbar.which", lambda _cmd: "/usr/bin/codexbar")
+    monkeypatch.setattr("ai.collectors.codexbar.run_json", fake_run_json)
+
+    from ai.collectors.codexbar import collect_codexbar
+
+    accounts = collect_codexbar()
+
+    # Falls back to the bundled no-`--provider` call instead of raising.
+    assert {account.provider for account in accounts} == {"codex"}
+
+
+def test_single_discovered_provider_gets_the_bundled_call_timeout_floor(monkeypatch):
+    captured_timeouts = []
+
+    def fake_run_json(argv, *, timeout=90.0, allow_empty=False):
+        if "config" in argv:
+            return [{"provider": "openrouter", "enabled": True}]
+        captured_timeouts.append(timeout)
+        return [{"provider": "openrouter", "usage": {}}]
+
+    monkeypatch.setattr("ai.collectors.codexbar.which", lambda _cmd: "/usr/bin/codexbar")
+    monkeypatch.setattr("ai.collectors.codexbar.run_json", fake_run_json)
+
+    from ai.collectors.codexbar import collect_codexbar
+
+    collect_codexbar()
+
+    assert captured_timeouts == [180.0]

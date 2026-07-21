@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
 from ai.models import (
@@ -28,6 +29,13 @@ PREPAID_HINTS = {
     "fireworks",
 }
 
+# CodexBar itself queries providers serially within a single invocation, so a
+# bundled "enabled providers" call costs the sum of every provider's latency.
+# Querying one provider per subprocess and running those concurrently instead
+# costs only the slowest provider's latency. Capped to avoid spawning an
+# unreasonable number of processes for a very long explicit --providers list.
+_MAX_CONCURRENT_PROVIDER_QUERIES = 16
+
 _SLOT_LABELS: dict[str, tuple[str, str, str]] = {
     "copilot": (
         "GitHub Copilot completions",
@@ -49,22 +57,28 @@ def collect_codexbar(*, providers: str | list[str] | None = "enabled") -> list[A
         raise CollectorError("codexbar not found on PATH")
 
     provider_list = _normalize_providers(providers)
+    # A single discovered provider stands in for what used to be one bundled,
+    # more generously timed call; give it at least that same time ceiling.
+    min_timeout: float | None = None
+    if provider_list == [None]:
+        # Discover the actual enabled-provider list ourselves so each can be
+        # queried as its own concurrent subprocess, instead of asking CodexBar
+        # for "enabled providers" in one call that it resolves serially.
+        discovered = _discover_enabled_providers()
+        if discovered:
+            provider_list = discovered
+            if len(provider_list) == 1:
+                min_timeout = 180.0
+
     accounts: list[AccountUsage] = []
     errors: list[str] = []
 
-    for provider_arg in provider_list:
-        # Omitting --provider asks CodexBar for its enabled-provider list and data.
-        argv = ["codexbar", "usage", "--format", "json"]
-        if provider_arg is not None:
-            argv.extend(["--provider", provider_arg])
-        timeout = 180.0 if provider_arg in (None, "all", "both") else 90.0
-        try:
-            payload = run_json(argv, timeout=timeout)
-        except CollectorError as exc:
+    for provider_arg, outcome in _query_providers(provider_list, min_timeout=min_timeout):
+        if isinstance(outcome, CollectorError):
             name = provider_arg or "enabled providers"
-            errors.append(f"{name}: {exc}")
+            errors.append(f"{name}: {outcome}")
             continue
-        rows = payload if isinstance(payload, list) else [payload]
+        rows = outcome if isinstance(outcome, list) else [outcome]
         for row in rows:
             if isinstance(row, dict):
                 accounts.append(_from_row(row))
@@ -97,6 +111,78 @@ def _normalize_providers(providers: str | list[str] | None) -> list[str | None]:
             return [text]
         items = [provider.strip().lower() for provider in text.split(",") if provider.strip()]
     return list(items) if items else [None]
+
+
+def _discover_enabled_providers() -> list[str | None] | None:
+    """Ask CodexBar's own fast, documented config lookup which providers are
+    enabled (`codexbar config providers`, a local read that takes milliseconds),
+    so the caller can query each one independently instead of via the slow
+    bundled call. Returns None if unavailable or unparsable, so the caller
+    falls back to that bundled call. Any failure here must fall back rather
+    than propagate, since discovery is a best-effort optimization.
+    """
+    try:
+        payload = run_json(["codexbar", "config", "providers", "--format", "json"], timeout=5.0)
+    except Exception:  # noqa: BLE001
+        return None
+    return _parse_enabled_providers(payload)
+
+
+def _parse_enabled_providers(payload: Any) -> list[str | None] | None:
+    if not isinstance(payload, list):
+        return None
+    enabled: list[str | None] = [
+        str(row["provider"]).lower()
+        for row in payload
+        if isinstance(row, dict) and row.get("enabled") and row.get("provider")
+    ]
+    return enabled or None
+
+
+def _query_providers(
+    provider_list: list[str | None],
+    *,
+    min_timeout: float | None = None,
+) -> list[tuple[str | None, Any]]:
+    """Run one `codexbar usage` call per entry in provider_list, concurrently.
+
+    Returns (provider_arg, payload_or_error) pairs in provider_list order,
+    regardless of which subprocess finishes first, so downstream account and
+    error ordering stays deterministic. Duplicate entries are queried once —
+    querying the same provider twice concurrently is never useful and would
+    otherwise race on which duplicate's outcome survives.
+    """
+    deduped: list[str | None] = list(dict.fromkeys(provider_list))
+    if len(deduped) <= 1:
+        return [(provider_arg, _query_provider(provider_arg, min_timeout=min_timeout)) for provider_arg in deduped]
+
+    workers = min(len(deduped), _MAX_CONCURRENT_PROVIDER_QUERIES)
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = {
+            pool.submit(_query_provider, provider_arg, min_timeout=min_timeout): provider_arg
+            for provider_arg in deduped
+        }
+        outcomes: dict[str | None, Any] = {}
+        for future in as_completed(futures):
+            outcomes[futures[future]] = future.result()
+    return [(provider_arg, outcomes[provider_arg]) for provider_arg in deduped]
+
+
+def _query_provider(provider_arg: str | None, *, min_timeout: float | None = None) -> Any:
+    # Omitting --provider asks CodexBar for its enabled-provider list and data
+    # (only reached as a fallback if _discover_enabled_providers() fails).
+    argv = ["codexbar", "usage", "--format", "json"]
+    if provider_arg is not None:
+        argv.extend(["--provider", provider_arg])
+    timeout = 180.0 if provider_arg in (None, "all", "both") else 90.0
+    if min_timeout is not None:
+        timeout = max(timeout, min_timeout)
+    try:
+        return run_json(argv, timeout=timeout)
+    except CollectorError as exc:
+        return exc
+    except Exception as exc:  # noqa: BLE001 — isolate this provider's failure from the rest of the batch
+        return CollectorError(str(exc))
 
 
 def _from_row(row: dict[str, Any]) -> AccountUsage:

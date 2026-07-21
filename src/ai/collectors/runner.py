@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 from ai.models import AccountUsage, CrossCheck, QuotaWindow, Snapshot, provider_display_name, utcnow
@@ -16,27 +18,25 @@ def run_collectors(config: dict[str, Any] | None = None) -> Snapshot:
     collectors_cfg = config.get("collectors") or {}
     snapshot = Snapshot(collected_at=utcnow())
 
-    # cswap — Claude multi-account
+    # Each collector shells out to an independent tool, so run them concurrently
+    # rather than paying the sum of their latencies one after another.
+    jobs: list[tuple[str, Callable[[], list[AccountUsage]]]] = []
     if _enabled(collectors_cfg, "cswap"):
-        try:
-            snapshot.accounts.extend(collect_cswap())
-        except Exception as exc:  # noqa: BLE001
-            snapshot.collector_errors.append(f"cswap: {exc}")
-
-    # codexbar — live quotas across many providers
+        jobs.append(("cswap", collect_cswap))
     if _enabled(collectors_cfg, "codexbar"):
-        try:
-            providers = (collectors_cfg.get("codexbar") or {}).get("providers", "enabled")
-            snapshot.accounts.extend(collect_codexbar(providers=providers))
-        except Exception as exc:  # noqa: BLE001
-            snapshot.collector_errors.append(f"codexbar: {exc}")
-
-    # tokscale — independent live view used for cross-checking and source selection
+        providers = (collectors_cfg.get("codexbar") or {}).get("providers", "enabled")
+        jobs.append(("codexbar", lambda: collect_codexbar(providers=providers)))
     if _enabled(collectors_cfg, "tokscale"):
-        try:
-            snapshot.accounts.extend(collect_tokscale())
-        except Exception as exc:  # noqa: BLE001
-            snapshot.collector_errors.append(f"tokscale: {exc}")
+        jobs.append(("tokscale", collect_tokscale))
+
+    if jobs:
+        with ThreadPoolExecutor(max_workers=len(jobs)) as pool:
+            futures = {name: pool.submit(fn) for name, fn in jobs}
+        for name, _ in jobs:
+            try:
+                snapshot.accounts.extend(futures[name].result())
+            except Exception as exc:  # noqa: BLE001
+                snapshot.collector_errors.append(f"{name}: {exc}")
 
     snapshot.accounts, snapshot.cross_checks = _select_and_cross_check(
         snapshot.accounts,
