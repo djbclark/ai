@@ -13,6 +13,7 @@ from ai.models import (
     Snapshot,
     Urgency,
     UseOrLoseAlert,
+    provider_display_name,
 )
 
 URGENCY_ICON = {
@@ -221,7 +222,7 @@ def _render_summary(
             when = _human_deadline(alert.days_until_reset)
             who = alert.account or "default account"
             lines.append(
-                f"  {i}. {s.bold(_provider_name(alert.provider))} ({who}): burn "
+                f"  {i}. {s.bold(provider_display_name(alert.provider))} ({who}): burn "
                 f"{s.yellow(f'{alert.remaining_percent:.0f}%')} of "
                 f"{alert.window_label} {when}"
             )
@@ -243,7 +244,7 @@ def _summary_alert_line(alert: UseOrLoseAlert, s: _Style) -> str:
     when = _human_deadline(alert.days_until_reset)
     who = alert.account or "default"
     return (
-        f"    {badge} {s.bold(_provider_name(alert.provider))} · {who} · "
+        f"    {badge} {s.bold(provider_display_name(alert.provider))} · {who} · "
         f"{alert.window_label}: {alert.remaining_percent:.0f}% left · use {when}"
     )
 
@@ -279,7 +280,7 @@ def _sorted_accounts(accounts: list[AccountUsage]) -> list[AccountUsage]:
     return sorted(
         accounts,
         key=lambda a: (
-            _provider_name(a.provider).casefold(),
+            provider_display_name(a.provider).casefold(),
             (a.account or "").casefold(),
             a.source.casefold(),
         ),
@@ -288,7 +289,7 @@ def _sorted_accounts(accounts: list[AccountUsage]) -> list[AccountUsage]:
 
 def _render_account(acc: AccountUsage, s: _Style) -> list[str]:
     lines: list[str] = []
-    head = s.bold(_provider_name(acc.provider))
+    head = s.bold(provider_display_name(acc.provider))
     if acc.account:
         head += f" · account={acc.account}"
     if acc.plan:
@@ -316,16 +317,20 @@ def _render_account(acc: AccountUsage, s: _Style) -> list[str]:
         else:
             reset_s = "reset unknown"
         bar = _colored_bar(rem if rem is not None else 0, s)
-        rem_colored = rem_s
+        # Pad the plain text to a fixed width first, then colorize — colorizing
+        # first would bake invisible ANSI codes into the string that the `:10`
+        # width spec counts as visible characters, breaking column alignment.
+        rem_padded = f"{rem_s:10}"
+        rem_colored = rem_padded
         if rem is not None:
             if rem >= 70:
-                rem_colored = s.yellow(rem_s)
+                rem_colored = s.yellow(rem_padded)
             elif rem >= 40:
-                rem_colored = s.cyan(rem_s)
+                rem_colored = s.cyan(rem_padded)
             else:
-                rem_colored = s.green(rem_s)
+                rem_colored = s.green(rem_padded)
         lines.append(f"  quota: {w.label}")
-        lines.append(f"    {bar} {rem_colored:10} {used_s:10} {s.dim(reset_s)}")
+        lines.append(f"    {bar} {rem_colored} {used_s:10} {s.dim(reset_s)}")
 
     for note in acc.notes:
         lines.append(s.dim(f"  · {note}"))
@@ -340,8 +345,8 @@ def _render_cross_checks(checks: list[CrossCheck], s: _Style) -> list[str]:
         checks,
         key=lambda item: (
             order.get(item.status, 9),
-            item.provider,
-            item.account or "",
+            item.provider.casefold(),
+            (item.account or "").casefold(),
         ),
     ):
         status = {
@@ -349,7 +354,7 @@ def _render_cross_checks(checks: list[CrossCheck], s: _Style) -> list[str]:
             "unavailable": s.yellow("UNAVAILABLE"),
             "consistent": s.green("CONSISTENT"),
         }.get(check.status, check.status.upper())
-        subject = _provider_name(check.provider)
+        subject = provider_display_name(check.provider)
         if check.account:
             subject += f" · account={check.account}"
         sources = " versus ".join(check.sources)
@@ -374,17 +379,6 @@ def _fmt_dt(dt: datetime | None) -> str:
     if not dt:
         return "?"
     return dt.strftime("%Y-%m-%d %H:%M UTC")
-
-
-def _provider_name(provider: str) -> str:
-    return {
-        "claude": "Claude Code",
-        "codex": "Codex",
-        "copilot": "GitHub Copilot",
-        "antigravity": "Google AI / Antigravity",
-        "grok": "Grok",
-        "opencode-go": "OpenCode Go",
-    }.get(provider, provider.replace("-", " ").title())
 
 
 def _source_description(source: str) -> str:

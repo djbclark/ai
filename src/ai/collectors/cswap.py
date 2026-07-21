@@ -4,7 +4,15 @@ from __future__ import annotations
 
 from typing import Any
 
-from ai.models import AccountUsage, BillingKind, QuotaWindow, parse_dt
+from ai.models import (
+    AccountUsage,
+    BillingKind,
+    QuotaWindow,
+    classify_window_minutes,
+    parse_dt,
+)
+from ai.models import coerce_float as _number
+from ai.models import coerce_int as _int_or_none
 
 from .base import CollectorError, run_json, which
 
@@ -152,7 +160,8 @@ def _window_from_block(label: str, block: dict[str, Any]) -> QuotaWindow | None:
         remaining = max(0.0, 100.0 - used)
 
     resets = parse_dt(block.get("resetsAt") or block.get("resets_at") or block.get("resetAt") or block.get("reset_at"))
-    if used is None and remaining is None and resets is None:
+    description = block.get("countdown") or block.get("resetDescription") or block.get("reset_description")
+    if used is None and remaining is None and resets is None and not description:
         return None
     return QuotaWindow(
         label=label,
@@ -160,41 +169,22 @@ def _window_from_block(label: str, block: dict[str, Any]) -> QuotaWindow | None:
         remaining_percent=remaining,
         resets_at=resets,
         window_minutes=_int_or_none(block.get("windowMinutes") or block.get("window_minutes")),
-        reset_description=block.get("countdown") or block.get("resetDescription") or block.get("reset_description"),
+        reset_description=description,
         raw=block,
     )
 
 
 def _generic_label(block: dict[str, Any], index: int) -> str:
     minutes = _int_or_none(block.get("windowMinutes") or block.get("window_minutes"))
-    if minutes is not None:
-        if minutes <= 360:
-            return "Claude Code 5-hour"
-        if minutes <= 10080:
-            return "Claude Code weekly"
-        if minutes <= 44640:
-            return "Claude Code monthly"
+    kind = classify_window_minutes(minutes)
+    if kind == "5h":
+        return "Claude Code 5-hour"
+    if kind == "weekly":
+        return "Claude Code weekly"
+    if kind == "monthly":
+        return "Claude Code monthly"
     return f"Claude Code quota {index} (unnamed by cswap)"
 
 
 def _same_window_present(windows: list[QuotaWindow], candidate: QuotaWindow) -> bool:
-    return any(
-        window.resets_at == candidate.resets_at
-        and window.used_percent == candidate.used_percent
-        and window.window_minutes == candidate.window_minutes
-        for window in windows
-    )
-
-
-def _number(value: Any) -> float | None:
-    if value is None:
-        return None
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return None
-
-
-def _int_or_none(value: Any) -> int | None:
-    number = _number(value)
-    return int(number) if number is not None else None
+    return any(window.same_measurement(candidate) for window in windows)

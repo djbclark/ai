@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ai.models import AccountUsage, CrossCheck, QuotaWindow, Snapshot, utcnow
+from ai.models import AccountUsage, CrossCheck, QuotaWindow, Snapshot, provider_display_name, utcnow
 
 from .codexbar import collect_codexbar
 from .cswap import collect_cswap
@@ -71,7 +71,7 @@ def _canonical_provider(provider: str) -> str:
     return _PROVIDER_ALIASES.get(key, key)
 
 
-_CROSS_CHECK_PROVIDERS = {"codex", "copilot", "grok"}
+_CROSS_CHECK_PROVIDERS = {"claude", "codex", "copilot", "grok"}
 
 
 def _select_and_cross_check(
@@ -89,7 +89,7 @@ def _select_and_cross_check(
     for account in accounts:
         account.provider = _canonical_provider(account.provider)
 
-    providers = sorted({account.provider for account in accounts})
+    providers = sorted({account.provider for account in accounts}, key=str.casefold)
     selected: list[AccountUsage] = []
     checks: list[CrossCheck] = []
     for provider in providers:
@@ -254,7 +254,7 @@ def _provider_cross_check(
         )
 
     available = "CodexBar" if codexbar_live else "tokscale" if tokscale_live else "neither tool"
-    provider_name = _provider_display_name(provider)
+    provider_name = provider_display_name(provider)
     return CrossCheck(
         provider=provider,
         account=account,
@@ -348,13 +348,3 @@ def _has_usable_capacity(window: QuotaWindow) -> bool:
 
 def _source_name(source: str) -> str:
     return {"codexbar": "CodexBar", "tokscale": "tokscale", "cswap": "cswap"}.get(source, source)
-
-
-def _provider_display_name(provider: str) -> str:
-    return {
-        "claude": "Claude Code",
-        "codex": "Codex",
-        "copilot": "GitHub Copilot",
-        "grok": "Grok",
-        "opencode-go": "OpenCode Go",
-    }.get(provider, provider.replace("-", " ").title())

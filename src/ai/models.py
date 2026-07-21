@@ -12,6 +12,55 @@ def utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def coerce_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def coerce_int(value: Any) -> int | None:
+    number = coerce_float(value)
+    return int(number) if number is not None else None
+
+
+# Window-duration boundaries (minutes) shared by every collector that buckets a
+# raw `windowMinutes` value into a human quota kind, and by the analysis layer
+# that decides whether a window is a short rate-limit (not "monthly waste").
+WINDOW_5H_MAX_MINUTES = 360
+WINDOW_WEEKLY_MAX_MINUTES = 10080
+WINDOW_MONTHLY_MAX_MINUTES = 44640
+
+
+def classify_window_minutes(minutes: int | None) -> str | None:
+    """Bucket a window's duration in minutes into '5h' | 'weekly' | 'monthly' | None."""
+    if minutes is None:
+        return None
+    if minutes <= WINDOW_5H_MAX_MINUTES:
+        return "5h"
+    if minutes <= WINDOW_WEEKLY_MAX_MINUTES:
+        return "weekly"
+    if minutes <= WINDOW_MONTHLY_MAX_MINUTES:
+        return "monthly"
+    return None
+
+
+PROVIDER_DISPLAY_NAMES: dict[str, str] = {
+    "antigravity": "Google AI / Antigravity",
+    "claude": "Claude Code",
+    "codex": "Codex",
+    "copilot": "GitHub Copilot",
+    "grok": "Grok",
+    "opencode-go": "OpenCode Go",
+}
+
+
+def provider_display_name(provider: str) -> str:
+    return PROVIDER_DISPLAY_NAMES.get(provider, provider.replace("-", " ").title())
+
+
 def parse_dt(value: str | None) -> datetime | None:
     if not value:
         return None
@@ -71,6 +120,14 @@ class QuotaWindow:
             return None
         now = now or utcnow()
         return (self.resets_at - now).total_seconds() / 86400.0
+
+    def same_measurement(self, other: "QuotaWindow") -> bool:
+        """Whether two windows look like the same underlying measurement (for dedup)."""
+        return (
+            self.resets_at == other.resets_at
+            and self.used_percent == other.used_percent
+            and self.window_minutes == other.window_minutes
+        )
 
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)

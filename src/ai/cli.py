@@ -16,6 +16,7 @@ from ai.__init__ import __version__
 from ai.analysis.use_or_lose import analyze_use_or_lose
 from ai.collectors.runner import run_collectors
 from ai.config import default_config_path, load_config
+from ai.models import provider_display_name
 from ai.report import render_report
 
 
@@ -154,7 +155,7 @@ def main(argv: list[str] | None = None) -> int:
             account = f" · account={warning['account']}" if warning["account"] else ""
             sources = " versus ".join(warning["sources"])
             print(
-                f"[cross-check warning] {_display_provider(str(warning['provider']))}"
+                f"[cross-check warning] {provider_display_name(str(warning['provider']))}"
                 f"{account} · "
                 f"{sources}: {warning['message']}"
             )
@@ -183,17 +184,6 @@ def _apply_cli_overrides(config: dict[str, Any], args: argparse.Namespace) -> No
         analysis["min_remaining_percent"] = args.min_remaining
     if args.max_days is not None:
         analysis["max_days_until_reset"] = args.max_days
-
-
-def _display_provider(provider: str) -> str:
-    return {
-        "antigravity": "Google AI / Antigravity",
-        "claude": "Claude Code",
-        "codex": "Codex",
-        "copilot": "GitHub Copilot",
-        "grok": "Grok",
-        "opencode-go": "OpenCode Go",
-    }.get(provider, provider.replace("-", " ").title())
 
 
 if __name__ == "__main__":

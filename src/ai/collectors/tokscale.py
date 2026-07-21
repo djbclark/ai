@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ai.models import AccountUsage, BillingKind, QuotaWindow, parse_dt
+from ai.models import AccountUsage, BillingKind, QuotaWindow, coerce_float, parse_dt
 
 from .base import CollectorError, run_json, which
 
@@ -31,15 +31,15 @@ def _from_row(row: dict[str, Any]) -> AccountUsage:
     for m in row.get("metrics") or []:
         if not isinstance(m, dict):
             continue
-        used = m.get("used_percent")
-        remaining = m.get("remaining_percent")
+        used = coerce_float(m.get("used_percent"))
+        remaining = coerce_float(m.get("remaining_percent"))
         if remaining is None and used is not None:
-            remaining = max(0.0, 100.0 - float(used))
+            remaining = max(0.0, 100.0 - used)
         windows.append(
             QuotaWindow(
                 label=_metric_label(provider_key, str(m.get("label") or "unnamed quota")),
-                used_percent=float(used) if used is not None else None,
-                remaining_percent=float(remaining) if remaining is not None else None,
+                used_percent=used,
+                remaining_percent=remaining,
                 resets_at=parse_dt(m.get("resets_at")),
                 reset_description=m.get("remaining_label"),
                 raw=m,

@@ -5,7 +5,15 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from ai.models import AccountUsage, BillingKind, QuotaWindow, parse_dt
+from ai.models import (
+    AccountUsage,
+    BillingKind,
+    QuotaWindow,
+    classify_window_minutes,
+    parse_dt,
+)
+from ai.models import coerce_float as _f
+from ai.models import coerce_int as _int_or_none
 
 from .base import CollectorError, run_json, which
 
@@ -133,7 +141,7 @@ def _from_row(row: dict[str, Any]) -> AccountUsage:
             continue
         label = _slot_label(provider, index, block)
         window = _window(label, block)
-        if window and not any(_same_measurement(window, extra) for extra in extra_windows):
+        if window and not any(window.same_measurement(extra) for extra in extra_windows):
             windows.append(window)
 
     # Provider-specific balance/usage blobs that are not subscription windows.
@@ -179,11 +187,15 @@ def _from_row(row: dict[str, Any]) -> AccountUsage:
     if billing == BillingKind.PREPAID_BALANCE and balance_usd is None and credits_remaining is not None:
         balance_usd = credits_remaining
 
-    # DeepSeek-style prepaid balance embedded in a quota description.
+    # DeepSeek-style prepaid balance embedded in a quota description. A "$" figure
+    # immediately followed by "/" (e.g. "$0.002/1K tokens") is a per-unit rate, not
+    # a balance, so it's skipped.
     for window in windows:
         description = (window.reset_description or "") + " " + str(window.raw.get("resetDescription") or "")
         if "$" in description and balance_usd is None:
             match = re.search(r"\$([0-9]+(?:\.[0-9]+)?)", description)
+            if match and re.match(r"\s*/", description[match.end() :]):
+                match = None
             if match:
                 balance_usd = float(match.group(1))
                 if billing == BillingKind.UNKNOWN:
@@ -244,22 +256,14 @@ def _slot_label(provider: str, index: int, block: dict[str, Any]) -> str:
         "opencodego": "OpenCode Go",
         "antigravity": "Google AI / Antigravity",
     }.get(provider, provider.replace("-", " ").title())
-    if minutes is not None:
-        if minutes <= 360:
-            return f"{provider_name} 5-hour quota"
-        if minutes <= 10080:
-            return f"{provider_name} weekly quota"
-        if minutes <= 44640:
-            return f"{provider_name} monthly quota"
+    kind = classify_window_minutes(minutes)
+    if kind == "5h":
+        return f"{provider_name} 5-hour quota"
+    if kind == "weekly":
+        return f"{provider_name} weekly quota"
+    if kind == "monthly":
+        return f"{provider_name} monthly quota"
     return f"{provider_name} quota {index} (name not supplied by CodexBar)"
-
-
-def _same_measurement(left: QuotaWindow, right: QuotaWindow) -> bool:
-    return (
-        left.resets_at == right.resets_at
-        and left.used_percent == right.used_percent
-        and left.window_minutes == right.window_minutes
-    )
 
 
 def _billing_kind(
@@ -267,28 +271,17 @@ def _billing_kind(
     usage: dict[str, Any] | None,
     windows: list[QuotaWindow] | None = None,
 ) -> BillingKind:
-    if provider.lower() in PREPAID_HINTS:
-        return BillingKind.PREPAID_BALANCE
-    if usage and usage.get("openRouterUsage"):
-        return BillingKind.PREPAID_BALANCE
+    # Usage-shape signals are checked before the generic provider-name hint list so a
+    # provider that happens to be in PREPAID_HINTS but reports a real subscription
+    # window (or an explicit pay-as-you-go usage blob) is not misclassified.
     if usage and usage.get("openAIAPIUsage"):
         return BillingKind.PAYG_API
+    if usage and usage.get("openRouterUsage"):
+        return BillingKind.PREPAID_BALANCE
     if windows and any(window.resets_at is not None for window in windows):
         return BillingKind.SUBSCRIPTION_WINDOW
+    if provider.lower() in PREPAID_HINTS:
+        return BillingKind.PREPAID_BALANCE
     if usage and any(usage.get(key) for key in ("primary", "secondary", "tertiary")):
         return BillingKind.UNKNOWN
     return BillingKind.UNKNOWN
-
-
-def _f(value: Any) -> float | None:
-    if value is None:
-        return None
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return None
-
-
-def _int_or_none(value: Any) -> int | None:
-    number = _f(value)
-    return int(number) if number is not None else None

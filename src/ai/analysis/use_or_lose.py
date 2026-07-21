@@ -5,12 +5,14 @@ from __future__ import annotations
 from typing import Any
 
 from ai.models import (
+    WINDOW_5H_MAX_MINUTES,
     AccountUsage,
     BillingKind,
     QuotaWindow,
     Snapshot,
     Urgency,
     UseOrLoseAlert,
+    provider_display_name,
     utcnow,
 )
 
@@ -123,12 +125,12 @@ def analyze_use_or_lose(
                     score=score,
                 )
             )
-    alerts.sort(key=lambda a: (-a.score, a.provider, a.window_label))
+    alerts.sort(key=lambda a: (-a.score, a.provider.casefold(), a.window_label.casefold()))
     return alerts
 
 
 def _is_short_window(window: QuotaWindow) -> bool:
-    if window.window_minutes is not None and window.window_minutes <= 360:
+    if window.window_minutes is not None and window.window_minutes <= WINDOW_5H_MAX_MINUTES:
         return True
     low = window.label.lower().strip()
     if low in SHORT_WINDOW_LABELS:
@@ -145,19 +147,13 @@ def _looks_monthly(label: str) -> bool:
 
 def _plan_meta(provider: str, plans: dict[str, Any]) -> dict[str, Any]:
     key = provider.lower().replace(" ", "-")
-    # common aliases
+    # By the time an account reaches here, runner.py's _canonical_provider has already
+    # rewritten raw collector slugs (chatgpt, grok-build, github-copilot, ...) to their
+    # canonical provider name. This maps canonical provider -> plans.yaml config key,
+    # for the providers whose config key differs from the canonical provider name.
     aliases = {
-        "chatgpt": "codex",
-        "codex": "codex",
-        "openai-codex": "codex",
-        "grok-build": "grok",
-        "supergrok": "grok",
-        "github-copilot": "copilot",
         "antigravity": "gemini",
-        "google-ai-pro": "gemini",
         "opencode-go": "opencode",
-        "opencodego": "opencode",
-        "opencode": "opencode",
     }
     lookup = aliases.get(key, key)
     meta = plans.get(lookup) or plans.get(provider) or {}
@@ -221,18 +217,7 @@ def _message(
     time_part = f"resets in {days:.1f} day(s)" if days is not None else "reset time unknown"
     note = f" {plan_notes}" if plan_notes else ""
     return (
-        f"Use {_provider_display_name(account.provider)} ({who}, {plan}) soon: "
+        f"Use {provider_display_name(account.provider)} ({who}, {plan}) soon: "
         f"{remaining:.0f}% of the {window_label} remains and {time_part}."
         f"{note}"
     )
-
-
-def _provider_display_name(provider: str) -> str:
-    return {
-        "antigravity": "Google AI / Antigravity",
-        "claude": "Claude Code",
-        "codex": "Codex",
-        "copilot": "GitHub Copilot",
-        "opencodego": "OpenCode Go",
-        "opencode-go": "OpenCode Go",
-    }.get(provider, provider.replace("-", " ").title())

@@ -145,3 +145,58 @@ def test_zero_of_zero_is_not_reported_as_fully_unused():
 def test_provider_selection_defaults_to_enabled_and_splits_csv():
     assert _normalize_providers("enabled") == [None]
     assert _normalize_providers("codex,copilot") == ["codex", "copilot"]
+
+
+def test_openai_api_usage_is_payg_not_prepaid():
+    # "openai" is in PREPAID_HINTS, but an explicit openAIAPIUsage blob means this
+    # account is billed pay-as-you-go, not a prepaid balance that rolls over.
+    acc = _from_row(
+        {
+            "provider": "openai",
+            "usage": {"openAIAPIUsage": {"usedPercent": 12}},
+        }
+    )
+    assert acc.billing_kind == BillingKind.PAYG_API
+
+
+def test_prepaid_hint_provider_with_real_window_is_subscription_window():
+    # A PREPAID_HINTS provider (e.g. "together") that reports a genuine rate-limit
+    # window with a real reset time must still be flagged as use-or-lose eligible,
+    # not silently treated as a non-urgent prepaid balance.
+    acc = _from_row(
+        {
+            "provider": "together",
+            "usage": {
+                "primary": {
+                    "usedPercent": 5,
+                    "resetsAt": "2026-08-01T00:00:00Z",
+                    "windowMinutes": 10080,
+                }
+            },
+        }
+    )
+    assert acc.billing_kind == BillingKind.SUBSCRIPTION_WINDOW
+    assert acc.windows[0].remaining() == 95
+
+
+def test_dollar_rate_in_description_is_not_mistaken_for_a_balance():
+    acc = _from_row(
+        {
+            "provider": "glama",
+            "usage": {
+                "primary": {
+                    "usedPercent": 10,
+                    "resetDescription": "Overage billed at $0.002/1K tokens, no fixed reset",
+                }
+            },
+        }
+    )
+    assert acc.balance_usd is None
+
+
+def test_unmapped_provider_windowminutes_bucketing_boundaries():
+    weekly = _from_row({"provider": "codex", "usage": {"primary": {"usedPercent": 10, "windowMinutes": 500}}})
+    assert weekly.windows[0].label == "Codex weekly quota"
+
+    monthly = _from_row({"provider": "codex", "usage": {"primary": {"usedPercent": 10, "windowMinutes": 44640}}})
+    assert monthly.windows[0].label == "Codex monthly quota"

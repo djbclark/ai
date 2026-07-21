@@ -69,3 +69,32 @@ def test_cross_check_warns_when_percentages_disagree():
     assert [account.source for account in accounts] == ["codexbar"]
     assert checks[0].status == "warning"
     assert "percentage points" in checks[0].message
+
+
+def test_claude_cross_check_matches_accounts_case_insensitively():
+    cswap_row = _account("cswap", "claude")
+    cswap_row.account = "User@Example.com"
+    cswap_row.windows[0].label = "Claude Code weekly"
+    codexbar_row = _account("codexbar", "claude")
+    codexbar_row.account = "user@example.com"
+    codexbar_row.windows[0].label = "Claude Code weekly"
+    codexbar_row.windows[0].used_percent = 50
+
+    accounts, checks = _select_and_cross_check([cswap_row, codexbar_row], cswap_authoritative=True)
+
+    assert [account.source for account in accounts] == ["cswap"]
+    assert checks[0].status == "warning"
+    assert "percentage points" in checks[0].message
+
+
+def test_claude_gets_cross_checked_when_cswap_disabled():
+    codexbar_row = _account("codexbar", "claude")
+    tokscale_row = _account("tokscale", "claude")
+    codexbar_row.windows[0].used_percent = 5
+    tokscale_row.windows[0].used_percent = 90
+
+    accounts, checks = _select_and_cross_check([codexbar_row, tokscale_row], cswap_authoritative=False)
+
+    assert [account.source for account in accounts] == ["codexbar"]
+    assert checks
+    assert checks[0].status == "warning"
