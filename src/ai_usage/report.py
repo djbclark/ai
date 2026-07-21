@@ -273,8 +273,8 @@ def _footer_tips(s: _Style) -> str:
         "  • Subscription windows (weekly/monthly) expire unused — burn them on real work.\n"
         "  • Prepaid API balances usually roll; no rush unless a promo credit has an expiry.\n"
         "  • Fix cswap keychain / browser cookies if Claude/Cursor show errors.\n"
-        "  • Re-run:  ai-usage              (pretty human report, default)\n"
-        "  • JSON:    ai-usage --json       or  ai-usage --format json\n"
+        "  • Re-run:  ai              (pretty human report, default)\n"
+        "  • JSON:    ai --json       or  ai --format json\n"
         "  • Config:  copy config/services.example.yaml → config/services.yaml"
     )
     return s.dim(tips)

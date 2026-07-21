@@ -1,6 +1,8 @@
-# ai-usage
+# ai
 
 Aggregate **monthly subscription** and **API** usage across your local AI tooling, then highlight allotments you should use **before they reset** (use-it-or-lose-it).
+
+CLI command: **`ai`**
 
 ## Data sources
 
@@ -33,23 +35,23 @@ cp config/services.example.yaml config/services.yaml
 
 ```bash
 # Pretty human-readable report (default)
-ai-usage
-ai-usage --format pretty
-ai-usage --no-color          # plain text, no ANSI
+ai
+ai --format pretty
+ai --no-color          # plain text, no ANSI
 
 # or without install:
 PYTHONPATH=src python -m ai_usage
 
 # Machine-readable JSON on stdout (progress still on stderr)
-ai-usage --json
-ai-usage --format json
-ai-usage --json --alerts-only
-ai-usage --save ~/tmp/ai-usage-snapshot.json   # also write JSON file
+ai --json
+ai --format json
+ai --json --alerts-only
+ai --save ~/tmp/ai-snapshot.json   # also write JSON file
 
 # Faster / partial
-ai-usage --providers copilot,grok,codex   # skip slow "all"
-ai-usage --no-tokscale
-ai-usage --min-remaining 50 --max-days 10
+ai --providers copilot,grok,codex   # skip slow "all"
+ai --no-tokscale
+ai --min-remaining 50 --max-days 10
 ```
 
 | Flag | Effect |

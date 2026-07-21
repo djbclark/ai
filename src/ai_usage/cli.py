@@ -1,4 +1,4 @@
-"""CLI entrypoint for ai-usage.
+"""CLI entrypoint for the `ai` command.
 
 Default output is a pretty human-readable report on stdout.
 Use --json / --format json for machine-readable output.
@@ -21,7 +21,7 @@ from ai_usage.report import render_report
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog="ai-usage",
+        prog="ai",
         description=(
             "Aggregate AI subscription and API usage from ccusage, cswap, "
             "codexbar, and tokscale; flag allotments that will reset unused. "
