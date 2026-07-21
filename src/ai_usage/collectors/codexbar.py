@@ -233,7 +233,8 @@ def _window(label: str, block: dict[str, Any]) -> QuotaWindow | None:
 
 def _relabel_window(w: QuotaWindow) -> QuotaWindow:
     """Map generic Primary/Secondary to human labels using duration."""
-    if w.label not in ("Primary", "Secondary", "Tertiary"):
+    tier = w.label  # Primary / Secondary / Tertiary or already specific
+    if tier not in ("Primary", "Secondary", "Tertiary"):
         return w
     minutes = w.window_minutes
     if minutes is None and w.resets_at is not None:
@@ -249,13 +250,18 @@ def _relabel_window(w: QuotaWindow) -> QuotaWindow:
     if minutes is None:
         return w
     if minutes <= 360:
-        label = "5-hour"
+        period = "5-hour"
     elif minutes <= 10080:
-        label = "Weekly"
+        period = "Weekly"
     elif minutes <= 44640:
-        label = "Monthly"
+        period = "Monthly"
     else:
-        label = w.label
+        period = tier
+    # Keep Primary/Secondary distinct when both are the same period (e.g. Copilot)
+    if period in ("5-hour", "Weekly", "Monthly") and tier != "Primary":
+        label = f"{period} ({tier.lower()})"
+    else:
+        label = period
     return QuotaWindow(
         label=label,
         used_percent=w.used_percent,

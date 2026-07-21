@@ -31,8 +31,9 @@ def test_parse_copilot_style():
     assert acc.billing_kind == BillingKind.SUBSCRIPTION_WINDOW
     assert len(acc.windows) == 2
     assert acc.windows[0].remaining_percent == 100
-    # windowMinutes 44640 → Monthly relabel
+    # windowMinutes 44640 → Monthly relabel (Primary keeps short name)
     assert acc.windows[0].label == "Monthly"
+    assert acc.windows[1].label == "Monthly (secondary)"
 
 
 def test_parse_error_row():

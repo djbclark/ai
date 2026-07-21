@@ -1,4 +1,8 @@
-"""CLI entrypoint for ai-usage."""
+"""CLI entrypoint for ai-usage.
+
+Default output is a pretty human-readable report on stdout.
+Use --json / --format json for machine-readable output.
+"""
 
 from __future__ import annotations
 
@@ -20,7 +24,9 @@ def build_parser() -> argparse.ArgumentParser:
         prog="ai-usage",
         description=(
             "Aggregate AI subscription and API usage from ccusage, cswap, "
-            "codexbar, and tokscale; flag allotments that will reset unused."
+            "codexbar, and tokscale; flag allotments that will reset unused. "
+            "Default output is a pretty human-readable report; pass --json "
+            "for machine-readable JSON."
         ),
     )
     p.add_argument(
@@ -28,15 +34,27 @@ def build_parser() -> argparse.ArgumentParser:
         "-c",
         help="Path to services.yaml (default: config/services.yaml if present)",
     )
-    p.add_argument(
+    fmt = p.add_mutually_exclusive_group()
+    fmt.add_argument(
+        "--format",
+        choices=("pretty", "json"),
+        default="pretty",
+        help="Output format (default: pretty human-readable report)",
+    )
+    fmt.add_argument(
         "--json",
         action="store_true",
-        help="Emit full snapshot + alerts as JSON",
+        help="Shorthand for --format json (full snapshot + alerts)",
+    )
+    p.add_argument(
+        "--no-color",
+        action="store_true",
+        help="Disable ANSI colors in pretty output",
     )
     p.add_argument(
         "--alerts-only",
         action="store_true",
-        help="Only print use-or-lose recommendations",
+        help="Only print use-or-lose recommendations (pretty text, unless --json)",
     )
     p.add_argument(
         "--no-tokscale",
@@ -75,7 +93,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--save",
         metavar="PATH",
-        help="Also write JSON snapshot to PATH",
+        help="Also write JSON snapshot to PATH (independent of stdout format)",
     )
     p.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     return p
@@ -86,35 +104,36 @@ def main(argv: list[str] | None = None) -> int:
     config = load_config(args.config)
     _apply_cli_overrides(config, args)
 
+    as_json = bool(args.json) or args.format == "json"
+
+    # Progress stays on stderr so --json stdout is clean for piping
     print("Collecting usage from local tools…", file=sys.stderr)
     snapshot = run_collectors(config)
     alerts = analyze_use_or_lose(snapshot, config)
+
+    payload = {
+        "snapshot": snapshot.to_dict(),
+        "alerts": [a.to_dict() for a in alerts],
+    }
 
     if args.save:
         path = Path(args.save).expanduser()
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(
-            json.dumps(
-                {
-                    "snapshot": snapshot.to_dict(),
-                    "alerts": [a.to_dict() for a in alerts],
-                },
-                indent=2,
-                default=str,
-            )
-            + "\n",
+            json.dumps(payload, indent=2, default=str) + "\n",
             encoding="utf-8",
         )
         print(f"Wrote {path}", file=sys.stderr)
 
-    if args.json:
-        payload = {
-            "snapshot": snapshot.to_dict(),
-            "alerts": [a.to_dict() for a in alerts],
-        }
-        print(json.dumps(payload, indent=2, default=str))
+    if as_json:
+        if args.alerts_only:
+            print(json.dumps({"alerts": payload["alerts"]}, indent=2, default=str))
+        else:
+            print(json.dumps(payload, indent=2, default=str))
         return 0
 
+    # Pretty human-readable (default)
+    color = False if args.no_color else None
     if args.alerts_only:
         if not alerts:
             print("No use-or-lose alerts.")
@@ -123,8 +142,9 @@ def main(argv: list[str] | None = None) -> int:
             print(f"[{a.urgency.value}] {a.message}")
         return 0
 
-    print(render_report(snapshot, alerts, config=config))
+    print(render_report(snapshot, alerts, config=config, color=color))
     return 0
+
 
 
 def _apply_cli_overrides(config: dict[str, Any], args: argparse.Namespace) -> None:

@@ -32,22 +32,32 @@ cp config/services.example.yaml config/services.yaml
 ## Usage
 
 ```bash
-# Full report (collectors + recommendations)
+# Pretty human-readable report (default)
 ai-usage
+ai-usage --format pretty
+ai-usage --no-color          # plain text, no ANSI
 
 # or without install:
 PYTHONPATH=src python -m ai_usage
 
-# Machine-readable
+# Machine-readable JSON on stdout (progress still on stderr)
 ai-usage --json
-ai-usage --alerts-only
-ai-usage --save ~/tmp/ai-usage-snapshot.json
+ai-usage --format json
+ai-usage --json --alerts-only
+ai-usage --save ~/tmp/ai-usage-snapshot.json   # also write JSON file
 
 # Faster / partial
 ai-usage --providers copilot,grok,codex   # skip slow "all"
 ai-usage --no-tokscale
 ai-usage --min-remaining 50 --max-days 10
 ```
+
+| Flag | Effect |
+|------|--------|
+| *(none)* / `--format pretty` | Colorized terminal report (default) |
+| `--json` / `--format json` | Full snapshot + alerts as JSON |
+| `--no-color` | Disable ANSI colors in pretty mode |
+| `--alerts-only` | Recommendations only (respects pretty vs json) |
 
 ## What “use it or lose it” means
 
