@@ -89,6 +89,13 @@ def render_report(
     config: dict[str, Any] | None = None,
     color: bool | None = None,
 ) -> str:
+    """
+    Report order:
+      1. Tips
+      2. Spend history
+      3. Per-provider detail
+      4. Summary — what to use, by when, so paid allotment is not wasted
+    """
     s = _Style(use_color(force=color))
     lines: list[str] = []
     width = 72
@@ -98,68 +105,201 @@ def render_report(
     lines.append(s.dim(f"Collected at {snapshot.collected_at.isoformat()}"))
     lines.append(s.bold("=" * width))
 
-    action = [a for a in alerts if a.urgency not in (Urgency.INFO, Urgency.NONE)]
-    info = [a for a in alerts if a.urgency == Urgency.INFO]
-
+    # 1) Tips first
     lines.append("")
-    lines.append(s.bold("## Recommendations (use subscription allotment before reset)"))
+    lines.append(s.bold("## Tips"))
     lines.append(s.dim("-" * width))
-    if not action:
-        lines.append(s.green("No high-priority use-or-lose windows found."))
-        lines.append(
-            s.dim(
-                "(Either quotas are well-used, resets are far out, or live quota "
-                "data is missing — see accounts below.)"
-            )
-        )
-    else:
-        for alert in action:
-            icon = URGENCY_ICON.get(alert.urgency, "   ")
-            days = (
-                f"{alert.days_until_reset:.1f}d"
-                if alert.days_until_reset is not None
-                else "?"
-            )
-            badge = s.urgency(
-                alert.urgency,
-                f"[{icon} {alert.urgency.value.upper():8}]",
-            )
-            lines.append(
-                f"{badge} "
-                f"{s.bold(f'{alert.provider:14}')} {alert.window_label:12} "
-                f"{alert.remaining_percent:5.0f}% left  reset in {days}"
-            )
-            lines.append(f"    {alert.message}")
-            lines.append("")
+    lines.extend(_tips_lines(s))
 
-    if info:
-        lines.append(s.bold("## Notes (prepaid / non-expiring)"))
-        lines.append(s.dim("-" * width))
-        for alert in info:
-            lines.append(s.dim(f"  - {alert.message}"))
-        lines.append("")
-
-    lines.append(s.bold("## Live accounts / quotas"))
+    # 2) Spend history
+    lines.append("")
+    lines.append(s.bold("## Local spend history (ccusage, API-equivalent $)"))
     lines.append(s.dim("-" * width))
-    for acc in _sorted_accounts(snapshot.accounts):
-        lines.extend(_render_account(acc, s))
-
     if snapshot.spend_history:
-        lines.append("")
-        lines.append(s.bold("## Local spend history (ccusage, API-equivalent $)"))
-        lines.append(s.dim("-" * width))
         lines.extend(_render_spend(snapshot.spend_history, s))
+    else:
+        lines.append(s.dim("  (no ccusage history available)"))
+
+    # 3) Per-provider detail
+    lines.append("")
+    lines.append(s.bold("## Per-provider usage"))
+    lines.append(s.dim("-" * width))
+    accounts = _sorted_accounts(snapshot.accounts)
+    if accounts:
+        for acc in accounts:
+            lines.extend(_render_account(acc, s))
+    else:
+        lines.append(s.dim("  (no provider data collected)"))
 
     if snapshot.collector_errors:
-        lines.append("")
         lines.append(s.bold(s.red("## Collector errors")))
         lines.append(s.dim("-" * width))
         for err in snapshot.collector_errors:
             lines.append(s.red(f"  - {err}"))
+        lines.append("")
 
-    lines.append("")
-    lines.append(_footer_tips(s))
+    # 4) Summary — use within timeframe or lose "free" (prepaid-with-plan) tokens
+    lines.append(s.bold("## Summary — use these before they reset"))
+    lines.append(s.dim("-" * width))
+    lines.extend(_render_summary(alerts, s, width=width))
+
     return "\n".join(lines)
+
+
+def _tips_lines(s: _Style) -> list[str]:
+    return [
+        s.dim(
+            "  • Subscription windows (weekly/monthly) expire unused — burn them on real work."
+        ),
+        s.dim(
+            "  • Prepaid API balances usually roll; no rush unless a promo credit has an expiry."
+        ),
+        s.dim(
+            "  • Fix cswap keychain / browser cookies if Claude/Cursor show errors."
+        ),
+        s.dim("  • Re-run:  ai              (pretty human report, default)"),
+        s.dim("  • JSON:    ai --json       or  ai --format json"),
+        s.dim(
+            "  • Config:  copy config/services.example.yaml → config/services.yaml"
+        ),
+    ]
+
+
+def _render_summary(
+    alerts: list[UseOrLoseAlert],
+    s: _Style,
+    *,
+    width: int,
+) -> list[str]:
+    action = [a for a in alerts if a.urgency not in (Urgency.INFO, Urgency.NONE)]
+    info = [a for a in alerts if a.urgency == Urgency.INFO]
+    lines: list[str] = []
+
+    if not action:
+        lines.append(s.green("  Nothing urgent: no large unused subscription windows"))
+        lines.append(s.green("  are about to reset under your current thresholds."))
+        lines.append(
+            s.dim(
+                "  (Quotas may be well-used, resets far out, or live quota data missing"
+            )
+        )
+        lines.append(s.dim("   — check per-provider detail above.)")
+        )
+    else:
+        lines.append(
+            s.dim(
+                "  Paid plan capacity that goes unused when the window resets is gone forever."
+            )
+        )
+        lines.append(
+            s.dim(
+                "  Prefer these providers/accounts soon so you do not leave tokens on the table."
+            )
+        )
+        lines.append("")
+
+        # Group by time bucket for a clear "within X" narrative
+        buckets: dict[str, list[UseOrLoseAlert]] = {
+            "within 24 hours": [],
+            "within 3 days": [],
+            "within 7 days": [],
+            "within 14 days": [],
+            "later / unknown reset": [],
+        }
+        for alert in action:
+            buckets[_time_bucket(alert.days_until_reset)].append(alert)
+
+        for bucket_name, items in buckets.items():
+            if not items:
+                continue
+            lines.append(s.bold(f"  → {bucket_name}"))
+            for alert in sorted(
+                items,
+                key=lambda a: (
+                    a.days_until_reset if a.days_until_reset is not None else 999,
+                    -a.remaining_percent,
+                ),
+            ):
+                lines.append(_summary_alert_line(alert, s))
+            lines.append("")
+
+        # One-line action plan
+        lines.append(s.bold("  Action plan"))
+        lines.append(s.dim("  " + "-" * (width - 4)))
+        for i, alert in enumerate(
+            sorted(
+                action,
+                key=lambda a: (
+                    a.days_until_reset if a.days_until_reset is not None else 999,
+                    -a.score,
+                ),
+            ),
+            start=1,
+        ):
+            when = _human_deadline(alert.days_until_reset)
+            who = alert.account or "default account"
+            plan_bit = ""
+            if alert.estimated_plan_value_usd is not None:
+                est = alert.estimated_plan_value_usd * (alert.remaining_percent / 100.0)
+                plan_bit = f" (~${est:.0f} of plan value at risk)"
+            lines.append(
+                f"  {i}. {s.bold(alert.provider)} ({who}): burn "
+                f"{s.yellow(f'{alert.remaining_percent:.0f}%')} of "
+                f"{alert.window_label} {when}{plan_bit}"
+            )
+        lines.append("")
+
+    if info:
+        lines.append(s.bold("  Prepaid / non-expiring (no hard deadline)"))
+        lines.append(s.dim("  " + "-" * (width - 4)))
+        for alert in info:
+            lines.append(s.dim(f"  · {alert.message}"))
+        lines.append("")
+
+    return lines
+
+
+def _summary_alert_line(alert: UseOrLoseAlert, s: _Style) -> str:
+    icon = URGENCY_ICON.get(alert.urgency, "   ")
+    badge = s.urgency(alert.urgency, f"[{icon} {alert.urgency.value.upper():8}]")
+    when = _human_deadline(alert.days_until_reset)
+    who = alert.account or "default"
+    value = ""
+    if alert.estimated_plan_value_usd is not None:
+        est = alert.estimated_plan_value_usd * (alert.remaining_percent / 100.0)
+        value = s.dim(f"  ~${est:.0f} at risk")
+    return (
+        f"    {badge} {s.bold(alert.provider)} · {who} · "
+        f"{alert.window_label}: {alert.remaining_percent:.0f}% left · use {when}"
+        f"{value}"
+    )
+
+
+def _time_bucket(days: float | None) -> str:
+    if days is None:
+        return "later / unknown reset"
+    if days <= 1:
+        return "within 24 hours"
+    if days <= 3:
+        return "within 3 days"
+    if days <= 7:
+        return "within 7 days"
+    if days <= 14:
+        return "within 14 days"
+    return "later / unknown reset"
+
+
+def _human_deadline(days: float | None) -> str:
+    if days is None:
+        return "before the next reset (time unknown)"
+    if days <= 0:
+        return "immediately (reset imminent or past)"
+    if days < 1:
+        hours = max(1, int(round(days * 24)))
+        return f"within ~{hours}h"
+    if days < 2:
+        return "within 1 day"
+    return f"within {days:.1f} days"
 
 
 def _sorted_accounts(accounts: list[AccountUsage]) -> list[AccountUsage]:
@@ -265,16 +405,3 @@ def _fmt_dt(dt: datetime | None) -> str:
     if not dt:
         return "?"
     return dt.strftime("%Y-%m-%d %H:%M UTC")
-
-
-def _footer_tips(s: _Style) -> str:
-    tips = (
-        "Tips:\n"
-        "  • Subscription windows (weekly/monthly) expire unused — burn them on real work.\n"
-        "  • Prepaid API balances usually roll; no rush unless a promo credit has an expiry.\n"
-        "  • Fix cswap keychain / browser cookies if Claude/Cursor show errors.\n"
-        "  • Re-run:  ai              (pretty human report, default)\n"
-        "  • JSON:    ai --json       or  ai --format json\n"
-        "  • Config:  copy config/services.example.yaml → config/services.yaml"
-    )
-    return s.dim(tips)
