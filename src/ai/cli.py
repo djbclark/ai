@@ -12,18 +12,18 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from ai_usage import __version__
-from ai_usage.analysis import analyze_use_or_lose
-from ai_usage.collectors import run_collectors
-from ai_usage.config import load_config
-from ai_usage.report import render_report
+from ai.__init__ import __version__
+from ai.analysis.use_or_lose import analyze_use_or_lose
+from ai.collectors.runner import run_collectors
+from ai.config import default_config_path, load_config
+from ai.report import render_report
 
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="ai",
         description=(
-            "Aggregate AI subscription and API usage from ccusage, cswap, "
+            "Aggregate live AI subscription and API usage from cswap, "
             "codexbar, and tokscale; flag allotments that will reset unused. "
             "Default output is a pretty human-readable report; pass --json "
             "for machine-readable JSON."
@@ -32,7 +32,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--config",
         "-c",
-        help="Path to services.yaml (default: config/services.yaml if present)",
+        help=("Path to services.yaml (default: $XDG_CONFIG_HOME/ai/services.yaml or ~/.config/ai/services.yaml)"),
+    )
+    p.add_argument(
+        "--show-config-path",
+        action="store_true",
+        help="Print the default per-user configuration path and exit",
     )
     fmt = p.add_mutually_exclusive_group()
     fmt.add_argument(
@@ -62,11 +67,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="Skip tokscale collector",
     )
     p.add_argument(
-        "--no-ccusage",
-        action="store_true",
-        help="Skip ccusage collector",
-    )
-    p.add_argument(
         "--no-cswap",
         action="store_true",
         help="Skip cswap collector",
@@ -78,7 +78,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument(
         "--providers",
-        help="CodexBar providers (default from config, usually 'all')",
+        help=(
+            "CodexBar providers: 'enabled' (default), 'all', or a comma-separated list queried one provider at a time"
+        ),
     )
     p.add_argument(
         "--min-remaining",
@@ -101,6 +103,9 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.show_config_path:
+        print(default_config_path())
+        return 0
     config = load_config(args.config)
     _apply_cli_overrides(config, args)
 
@@ -115,6 +120,7 @@ def main(argv: list[str] | None = None) -> int:
         "snapshot": snapshot.to_dict(),
         "alerts": [a.to_dict() for a in alerts],
     }
+    cross_check_warnings = [check.to_dict() for check in snapshot.cross_checks if check.status == "warning"]
 
     if args.save:
         path = Path(args.save).expanduser()
@@ -127,7 +133,16 @@ def main(argv: list[str] | None = None) -> int:
 
     if as_json:
         if args.alerts_only:
-            print(json.dumps({"alerts": payload["alerts"]}, indent=2, default=str))
+            print(
+                json.dumps(
+                    {
+                        "alerts": payload["alerts"],
+                        "cross_check_warnings": cross_check_warnings,
+                    },
+                    indent=2,
+                    default=str,
+                )
+            )
         else:
             print(json.dumps(payload, indent=2, default=str))
         return 0
@@ -135,24 +150,28 @@ def main(argv: list[str] | None = None) -> int:
     # Pretty human-readable (default)
     color = False if args.no_color else None
     if args.alerts_only:
-        if not alerts:
-            print("No use-or-lose alerts.")
-            return 0
+        for warning in cross_check_warnings:
+            account = f" · account={warning['account']}" if warning["account"] else ""
+            sources = " versus ".join(warning["sources"])
+            print(
+                f"[cross-check warning] {_display_provider(str(warning['provider']))}"
+                f"{account} · "
+                f"{sources}: {warning['message']}"
+            )
         for a in alerts:
             print(f"[{a.urgency.value}] {a.message}")
+        if not alerts and not cross_check_warnings:
+            print("No use-or-lose alerts or cross-check warnings.")
         return 0
 
     print(render_report(snapshot, alerts, config=config, color=color))
     return 0
 
 
-
 def _apply_cli_overrides(config: dict[str, Any], args: argparse.Namespace) -> None:
     collectors = config.setdefault("collectors", {})
     if args.no_tokscale:
         collectors.setdefault("tokscale", {})["enabled"] = False
-    if args.no_ccusage:
-        collectors.setdefault("ccusage", {})["enabled"] = False
     if args.no_cswap:
         collectors.setdefault("cswap", {})["enabled"] = False
     if args.no_codexbar:
@@ -164,6 +183,17 @@ def _apply_cli_overrides(config: dict[str, Any], args: argparse.Namespace) -> No
         analysis["min_remaining_percent"] = args.min_remaining
     if args.max_days is not None:
         analysis["max_days_until_reset"] = args.max_days
+
+
+def _display_provider(provider: str) -> str:
+    return {
+        "antigravity": "Google AI / Antigravity",
+        "claude": "Claude Code",
+        "codex": "Codex",
+        "copilot": "GitHub Copilot",
+        "grok": "Grok",
+        "opencode-go": "OpenCode Go",
+    }.get(provider, provider.replace("-", " ").title())
 
 
 if __name__ == "__main__":

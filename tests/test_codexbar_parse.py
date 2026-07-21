@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
-from ai_usage.collectors.codexbar import _from_row
-from ai_usage.models import BillingKind
+from ai.collectors.codexbar import _from_row, _normalize_providers
+from ai.models import BillingKind
 
 
 def test_parse_copilot_style():
     row = {
         "provider": "copilot",
         "source": "api",
-        "account": "djbclark (Individual)",
+        "account": "example-user (Individual)",
         "usage": {
             "primary": {
                 "usedPercent": 0,
@@ -23,7 +23,7 @@ def test_parse_copilot_style():
                 "windowMinutes": 44640,
             },
             "loginMethod": "Individual",
-            "accountEmail": "djbclark (Individual)",
+            "accountEmail": "example-user (Individual)",
         },
     }
     acc = _from_row(row)
@@ -31,9 +31,9 @@ def test_parse_copilot_style():
     assert acc.billing_kind == BillingKind.SUBSCRIPTION_WINDOW
     assert len(acc.windows) == 2
     assert acc.windows[0].remaining_percent == 100
-    # windowMinutes 44640 → Monthly relabel (Primary keeps short name)
-    assert acc.windows[0].label == "Monthly"
-    assert acc.windows[1].label == "Monthly (secondary)"
+    assert acc.windows[0].label == "GitHub Copilot completions"
+    assert acc.windows[1].label == "GitHub Copilot chat messages"
+    assert all("secondary" not in window.label.lower() for window in acc.windows)
 
 
 def test_parse_error_row():
@@ -65,3 +65,83 @@ def test_parse_openrouter_prepaid():
     assert acc.billing_kind == BillingKind.PREPAID_BALANCE
     assert acc.balance_usd is not None
     assert acc.balance_usd > 18
+
+
+def test_parse_named_extra_rate_windows_without_generic_duplicates():
+    row = {
+        "provider": "antigravity",
+        "source": "app",
+        "usage": {
+            "extraRateWindows": [
+                {
+                    "title": "Gemini weekly",
+                    "window": {
+                        "usedPercent": 0,
+                        "resetsAt": "2026-08-01T00:00:00Z",
+                        "windowMinutes": 10080,
+                    },
+                },
+                {
+                    "title": "Claude/GPT weekly",
+                    "window": {
+                        "usedPercent": 75,
+                        "resetsAt": "2026-07-25T00:00:00Z",
+                        "windowMinutes": 10080,
+                    },
+                },
+            ],
+            # These are duplicate projections of the named windows above.
+            "primary": {
+                "usedPercent": 0,
+                "resetsAt": "2026-08-01T00:00:00Z",
+                "windowMinutes": 10080,
+            },
+            "secondary": {
+                "usedPercent": 75,
+                "resetsAt": "2026-07-25T00:00:00Z",
+                "windowMinutes": 10080,
+            },
+        },
+    }
+    acc = _from_row(row)
+    assert [window.label for window in acc.windows] == [
+        "Gemini weekly",
+        "Claude/GPT weekly",
+    ]
+
+
+def test_unknown_duration_is_not_guessed_from_reset_time():
+    acc = _from_row(
+        {
+            "provider": "grok",
+            "usage": {
+                "primary": {
+                    "usedPercent": 25,
+                    "resetsAt": "2099-01-01T00:00:00Z",
+                }
+            },
+        }
+    )
+    assert acc.windows[0].label == "Grok usage limit"
+
+
+def test_zero_of_zero_is_not_reported_as_fully_unused():
+    acc = _from_row(
+        {
+            "provider": "warp",
+            "usage": {
+                "primary": {
+                    "usedPercent": 0,
+                    "resetDescription": "0/0 credits",
+                    "resetsAt": "2099-01-01T00:00:00Z",
+                }
+            },
+        }
+    )
+    assert acc.windows[0].label == "Warp credits"
+    assert acc.windows[0].remaining() == 0
+
+
+def test_provider_selection_defaults_to_enabled_and_splits_csv():
+    assert _normalize_providers("enabled") == [None]
+    assert _normalize_providers("codex,copilot") == ["codex", "copilot"]

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ai_usage.models import AccountUsage, BillingKind, QuotaWindow, parse_dt
+from ai.models import AccountUsage, BillingKind, QuotaWindow, parse_dt
 
 from .base import CollectorError, run_json, which
 
@@ -37,7 +37,7 @@ def _from_row(row: dict[str, Any]) -> AccountUsage:
             remaining = max(0.0, 100.0 - float(used))
         windows.append(
             QuotaWindow(
-                label=str(m.get("label") or "Quota"),
+                label=_metric_label(provider_key, str(m.get("label") or "unnamed quota")),
                 used_percent=float(used) if used is not None else None,
                 remaining_percent=float(remaining) if remaining is not None else None,
                 resets_at=parse_dt(m.get("resets_at")),
@@ -46,7 +46,7 @@ def _from_row(row: dict[str, Any]) -> AccountUsage:
             )
         )
 
-    notes: list[str] = []
+    notes: list[str] = ["Live data fetched by tokscale for selection and cross-checking."]
     credit_status = row.get("credit_status")
     if isinstance(credit_status, dict):
         if credit_status.get("balance") is not None:
@@ -70,3 +70,18 @@ def _from_row(row: dict[str, Any]) -> AccountUsage:
         notes=notes,
         raw=row,
     )
+
+
+def _metric_label(provider: str, label: str) -> str:
+    key = label.lower()
+    if provider == "codex" and key == "weekly":
+        return "Codex weekly quota"
+    if provider == "copilot":
+        return {
+            "chat": "GitHub Copilot chat messages",
+            "completions": "GitHub Copilot completions",
+            "premium": "GitHub Copilot premium requests",
+        }.get(key, f"GitHub Copilot {label}")
+    if provider == "grok-build" and key == "weekly":
+        return "Grok weekly quota"
+    return f"{provider.replace('-', ' ').title()} {label}"

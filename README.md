@@ -1,17 +1,18 @@
 # ai
 
-Aggregate **monthly subscription** and **API** usage across your local AI tooling, then highlight allotments you should use **before they reset** (use-it-or-lose-it).
+Aggregate live **subscription quota** and **prepaid balance** information across
+your local AI tooling, then highlight allotments you should use **before they
+reset** (use-it-or-lose-it).
 
 CLI command: **`ai`**
 
 ## Data sources
 
-| Tool | Role | JSON |
-|------|------|------|
-| [**codexbar**](https://github.com/) `codexbar usage --format json` | Live quotas & balances (Codex, Claude, Cursor, Copilot, Grok, Gemini/Antigravity, OpenRouter, …) | ✅ |
-| [**ccusage**](https://ccusage.com/) `ccusage monthly --json` | Historical token/cost from local agent logs (Claude Code, Codex, OpenCode, …) | ✅ |
-| [**cswap**](https://github.com/) `cswap list --json` | Multi-account Claude slots + usage when credentials allow | ✅ |
-| [**tokscale**](https://www.npmjs.com/) `tokscale usage --json` | Secondary live subscription view | ✅ |
+| Tool                                                               | Purpose                                                   | Authority                                                                         |
+| ------------------------------------------------------------------ | --------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| [**cswap**](https://github.com/) `cswap list --json`               | Live Claude Code quota for every configured email/account | Canonical for Claude; CodexBar is only an account-aware cross-check               |
+| [**CodexBar**](https://github.com/) `codexbar usage --format json` | Live quotas and balances for enabled providers            | Preferred for non-Claude providers                                                |
+| [**tokscale**](https://www.npmjs.com/) `tokscale usage --json`     | Independent live subscription quota measurement           | Cross-checked against CodexBar; selected for alerts when CodexBar has no live row |
 
 This project shells out to tools already on your `PATH`; it does not scrape billing dashboards itself.
 
@@ -27,9 +28,16 @@ pip install -e ".[dev]"
 Optional config:
 
 ```bash
-cp config/services.example.yaml config/services.yaml
-# edit plan prices / analysis thresholds
+mkdir -p "${XDG_CONFIG_HOME:-$HOME/.config}/ai"
+cp config/services.example.yaml "${XDG_CONFIG_HOME:-$HOME/.config}/ai/services.yaml"
+# edit plan notes / analysis thresholds
 ```
+
+The default user config is `$XDG_CONFIG_HOME/ai/services.yaml`, falling back to
+`~/.config/ai/services.yaml` when `XDG_CONFIG_HOME` is unset. Run
+`ai --show-config-path` to print the resolved path. Provider credentials and
+account identities remain owned by cswap, CodexBar, and tokscale; this config
+does not duplicate email addresses, access tokens, or other provider state.
 
 ## Usage
 
@@ -40,7 +48,7 @@ ai --format pretty
 ai --no-color          # plain text, no ANSI
 
 # or without install:
-PYTHONPATH=src python -m ai_usage
+PYTHONPATH=src python -m ai
 
 # Machine-readable JSON on stdout (progress still on stderr)
 ai --json
@@ -49,17 +57,17 @@ ai --json --alerts-only
 ai --save ~/tmp/ai-snapshot.json   # also write JSON file
 
 # Faster / partial
-ai --providers copilot,grok,codex   # skip slow "all"
+ai --providers copilot,grok,codex   # query these separately
 ai --no-tokscale
 ai --min-remaining 50 --max-days 10
 ```
 
-| Flag | Effect |
-|------|--------|
-| *(none)* / `--format pretty` | Colorized terminal report (default) |
-| `--json` / `--format json` | Full snapshot + alerts as JSON |
-| `--no-color` | Disable ANSI colors in pretty mode |
-| `--alerts-only` | Recommendations only (respects pretty vs json) |
+| Flag                         | Effect                                         |
+| ---------------------------- | ---------------------------------------------- |
+| _(none)_ / `--format pretty` | Colorized terminal report (default)            |
+| `--json` / `--format json`   | Full snapshot + alerts as JSON                 |
+| `--no-color`                 | Disable ANSI colors in pretty mode             |
+| `--alerts-only`              | Recommendations only (respects pretty vs json) |
 
 ## What “use it or lose it” means
 
@@ -67,26 +75,31 @@ Most **subscription** coding plans (Claude Pro/Max, ChatGPT Plus/Codex, Cursor, 
 
 This tool:
 
-1. Pulls **remaining %** and **reset times** from codexbar/tokscale (and cswap when available).
+1. Pulls **remaining %** and **reset times** from cswap for each distinct Claude
+   Code account and from CodexBar/tokscale for other providers.
 2. Scores windows that still have **lots left** and **reset soon**.
 3. Skips pure **pay-as-you-go** history and treats **prepaid API balances** (OpenRouter, etc.) as non-urgent (they usually roll until spent).
-4. Shows **ccusage** local spend so you can see where you actually burned tokens this month.
+4. Compares overlapping CodexBar and tokscale measurements and reports clear
+   consistency warnings. Claude Code remains canonical in cswap, with CodexBar
+   used only as an account-aware cross-check when possible.
+
+This command intentionally does not report historical local-token usage or
+API-equivalent cost estimates.
 
 ## Example recommendation
 
 ```
-[!!! CRITICAL] codex          Weekly        100% left  reset in 3.0d
-    Use codex (you@example.com, plus) soon: 100% of the Weekly window
-    remains and resets in 3.0 day(s). Roughly ~$20 of a $20/mo plan is
-    still unused.
+[!!! CRITICAL] Codex · you@example.com · Codex weekly quota: 100% left
+    Use Codex (you@example.com, plus) soon: 100% of the Codex weekly quota
+    remains and resets in 3.0 day(s).
 ```
 
 ## Project layout
 
 ```
-src/ai_usage/
+src/ai/
   cli.py                 # entrypoint
-  collectors/            # ccusage, cswap, codexbar, tokscale
+  collectors/            # cswap, codexbar, tokscale
   analysis/use_or_lose.py
   report.py
 config/services.example.yaml
@@ -96,17 +109,31 @@ tests/
 ## Tests
 
 ```bash
-pytest
+just test
+just check # tests plus deterministic lint, type, spelling, and format checks
+just lint  # full check plus Bandit, Semgrep, and Gitleaks
+just format
 ```
+
+The quality suite mirrors the applicable tools from `stayturgid`: pytest, Ruff,
+mypy, yamllint, markdownlint, Prettier (including TOML support), typos, Bandit,
+Semgrep, Gitleaks, pre-commit, and `just`. Ansible, shell, JavaScript/CSS, dotenv,
+Caddy, and browser-page checks are omitted because this repository contains none
+of those corresponding inputs.
 
 ## Notes / limitations
 
 - Live quota accuracy depends on each tool’s auth (browser cookies, OAuth, keychain). Errors are reported per account rather than aborting the whole run.
-- `codexbar --provider all` can take ~1 minute; use `--providers` for a subset.
-- ccusage costs are **API-equivalent estimates** from local logs, not your exact subscription bill.
+- The default asks CodexBar for its enabled providers. `--providers all` is
+  intentionally thorough and can take about one minute; a comma-separated list
+  queries those providers one at a time.
+- CodexBar's raw numbered quota slots are translated to provider-specific names
+  where known. Unnamed slots are explicitly reported as unnamed; output never
+  presents a bare numbered slot as if its meaning were known.
+- Duplicate live measurements are retained for cross-checking but only one copy
+  drives recommendations, preventing duplicate alerts.
 - Short **5-hour** rate limits are ignored for “monthly waste” scoring (they refill often). Weekly/monthly windows are what matter for “I paid for this month.”
 
 ## Related reading
 
-- [ccusage](https://ccusage.com/) — local multi-agent usage CLI
 - Local quota dashboards in the same category as OpenUsage / CodexBar menu bar tools

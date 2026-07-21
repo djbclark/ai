@@ -1,3 +1,6 @@
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
 .venv/
 venv/
 __pycache__/
@@ -6,9 +9,7 @@ __pycache__/
 .eggs/
 dist/
 build/
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
+node_modules/
 .DS_Store
 config/services.yaml
 *.json.bak

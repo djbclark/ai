@@ -1,4 +1,4 @@
-"""Analysis: use-it-or-lose-it and burn rate."""
+"""Use-it-or-lose-it quota analysis."""
 
 from .use_or_lose import analyze_use_or_lose
 

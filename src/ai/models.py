@@ -1,4 +1,4 @@
-"""Normalized data models for multi-source AI usage."""
+"""Normalized data models for live provider quotas."""
 
 from __future__ import annotations
 
@@ -35,7 +35,6 @@ class BillingKind(str, Enum):
     SUBSCRIPTION_WINDOW = "subscription_window"  # resets on schedule; unused is lost
     PREPAID_BALANCE = "prepaid_balance"  # rolls until spent
     PAYG_API = "payg_api"  # pay as you go, no allotment
-    HISTORICAL = "historical"  # local spend history only
     UNKNOWN = "unknown"
 
 
@@ -84,7 +83,7 @@ class QuotaWindow:
 class AccountUsage:
     """Normalized usage for one provider account."""
 
-    source: str  # ccusage | cswap | codexbar | tokscale
+    source: str  # cswap | codexbar | tokscale
     provider: str
     account: str | None = None
     plan: str | None = None
@@ -112,21 +111,6 @@ class AccountUsage:
 
 
 @dataclass
-class SpendPeriod:
-    """Historical spend/tokens from local logs (ccusage, etc.)."""
-
-    period: str
-    total_cost_usd: float
-    total_tokens: int
-    agents: list[str] = field(default_factory=list)
-    models: list[str] = field(default_factory=list)
-    source: str = "ccusage"
-
-    def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
-
-
-@dataclass
 class UseOrLoseAlert:
     """Recommendation to burn remaining subscription allotment before reset."""
 
@@ -137,7 +121,6 @@ class UseOrLoseAlert:
     remaining_percent: float
     days_until_reset: float | None
     plan: str | None
-    estimated_plan_value_usd: float | None
     message: str
     source: str
     score: float  # higher = more important
@@ -151,11 +134,24 @@ class UseOrLoseAlert:
             "remaining_percent": self.remaining_percent,
             "days_until_reset": self.days_until_reset,
             "plan": self.plan,
-            "estimated_plan_value_usd": self.estimated_plan_value_usd,
             "message": self.message,
             "source": self.source,
             "score": self.score,
         }
+
+
+@dataclass
+class CrossCheck:
+    """Comparison of overlapping live measurements from independent tools."""
+
+    provider: str
+    account: str | None
+    status: str  # consistent | warning | unavailable
+    sources: list[str]
+    message: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
 
 
 @dataclass
@@ -164,13 +160,13 @@ class Snapshot:
 
     collected_at: datetime
     accounts: list[AccountUsage] = field(default_factory=list)
-    spend_history: list[SpendPeriod] = field(default_factory=list)
+    cross_checks: list[CrossCheck] = field(default_factory=list)
     collector_errors: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "collected_at": self.collected_at.isoformat(),
             "accounts": [a.to_dict() for a in self.accounts],
-            "spend_history": [s.to_dict() for s in self.spend_history],
+            "cross_checks": [check.to_dict() for check in self.cross_checks],
             "collector_errors": self.collector_errors,
         }

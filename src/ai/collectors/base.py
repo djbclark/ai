@@ -57,6 +57,4 @@ def run_json(
             except json.JSONDecodeError as err:
                 last_err = err
                 continue
-        raise CollectorError(
-            f"invalid JSON from {' '.join(argv)}: {last_err or 'parse failed'}"
-        ) from last_err
+        raise CollectorError(f"invalid JSON from {' '.join(argv)}: {last_err or 'parse failed'}") from last_err

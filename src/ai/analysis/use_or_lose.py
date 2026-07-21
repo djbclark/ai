@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from ai_usage.models import (
+from ai.models import (
     AccountUsage,
     BillingKind,
+    QuotaWindow,
     Snapshot,
     Urgency,
     UseOrLoseAlert,
@@ -35,7 +36,7 @@ def analyze_use_or_lose(
     for account in snapshot.accounts:
         if account.error and not account.windows:
             continue
-        if account.billing_kind in (BillingKind.PAYG_API, BillingKind.HISTORICAL):
+        if account.billing_kind == BillingKind.PAYG_API:
             continue
         if account.billing_kind == BillingKind.PREPAID_BALANCE:
             # Prepaid usually rolls; only note large idle balances as INFO
@@ -49,7 +50,6 @@ def analyze_use_or_lose(
                         remaining_percent=100.0,
                         days_until_reset=None,
                         plan=account.plan,
-                        estimated_plan_value_usd=account.balance_usd,
                         message=(
                             f"{account.provider}: ${account.balance_usd:.2f} prepaid "
                             "balance (usually does not expire — spend when useful, "
@@ -62,11 +62,8 @@ def analyze_use_or_lose(
             continue
 
         plan_meta = _plan_meta(account.provider, plans)
-        plan_value = plan_meta.get("monthly_usd")
-
         for window in account.windows:
-            if _is_short_window(window.label):
-                # Still flag 5h if nearly full and you have alternate accounts idle
+            if _is_short_window(window):
                 continue
 
             remaining = window.remaining()
@@ -74,20 +71,21 @@ def analyze_use_or_lose(
                 continue
             days = window.days_until_reset(now)
 
+            # Use-or-lose recommendations require a future, known deadline.
+            if days is None or days <= 0:
+                continue
+
             # Skip fully used windows
             if remaining < min_remaining:
                 continue
-            # Skip far-away resets (unless remaining is extremely high and monthly)
-            if days is not None and days > max_days:
-                if remaining < 90 or not _looks_monthly(window.label):
-                    continue
+            if days > max_days:
+                continue
 
             key = (
                 account.provider.lower(),
                 (account.account or "").lower(),
-                window.label.lower(),
+                f"{window.label.lower()}|{window.resets_at.isoformat() if window.resets_at else ''}",
             )
-            # Prefer codexbar over tokscale when both report same window
             if key in seen:
                 continue
             seen.add(key)
@@ -98,8 +96,8 @@ def analyze_use_or_lose(
                 urgent_remaining=urgent_remaining,
                 urgent_days=urgent_days,
                 min_remaining=min_remaining,
-                plan_value=plan_value,
                 label=window.label,
+                max_days=max_days,
             )
             if urgency == Urgency.NONE:
                 continue
@@ -109,7 +107,6 @@ def analyze_use_or_lose(
                 window_label=window.label,
                 remaining=remaining,
                 days=days,
-                plan_value=plan_value,
                 plan_notes=plan_meta.get("notes"),
             )
             alerts.append(
@@ -121,41 +118,19 @@ def analyze_use_or_lose(
                     remaining_percent=remaining,
                     days_until_reset=days,
                     plan=account.plan or plan_meta.get("name"),
-                    estimated_plan_value_usd=float(plan_value) if plan_value else None,
                     message=message,
                     source=account.source,
                     score=score,
                 )
             )
-
-        # Multi-account Claude: if one account is idle, surface it
-        if account.source == "cswap" and not account.windows and account.error:
-            alerts.append(
-                UseOrLoseAlert(
-                    urgency=Urgency.MEDIUM,
-                    provider="claude",
-                    account=account.account,
-                    window_label="unknown (usage unavailable)",
-                    remaining_percent=100.0,
-                    days_until_reset=None,
-                    plan=account.plan,
-                    estimated_plan_value_usd=float(plan_value) if plan_value else None,
-                    message=(
-                        f"Claude account {account.account}: live quota unavailable "
-                        f"({account.error}). If this seat is paid monthly, re-auth "
-                        "cswap so we can tell whether unused allotment is about to reset."
-                    ),
-                    source="cswap",
-                    score=40.0,
-                )
-            )
-
     alerts.sort(key=lambda a: (-a.score, a.provider, a.window_label))
     return alerts
 
 
-def _is_short_window(label: str) -> bool:
-    low = label.lower().strip()
+def _is_short_window(window: QuotaWindow) -> bool:
+    if window.window_minutes is not None and window.window_minutes <= 360:
+        return True
+    low = window.label.lower().strip()
     if low in SHORT_WINDOW_LABELS:
         return True
     if "5-hour" in low or "5 hour" in low or "5h" in low:
@@ -196,8 +171,8 @@ def _score(
     urgent_remaining: float,
     urgent_days: float,
     min_remaining: float,
-    plan_value: Any,
     label: str,
+    max_days: float,
 ) -> tuple[Urgency, float]:
     # Base score from remaining fraction that would be wasted
     score = remaining
@@ -217,21 +192,15 @@ def _score(
     else:
         score += 5  # unknown reset — still interesting if high remaining
 
-    # Monthly windows weigh more than weekly (bigger $ bucket typically)
+    # Longer-lived quotas are generally more important than short refill windows.
     if _looks_monthly(label):
         score += 15
     elif "week" in label.lower() or "7" in label.lower():
         score += 8
 
-    if plan_value:
-        try:
-            score += min(30.0, float(plan_value) / 2.0)
-        except (TypeError, ValueError):
-            pass
-
-    if remaining >= urgent_remaining and (days is None or days <= urgent_days):
-        urgency = Urgency.CRITICAL if (days is not None and days <= 3) or remaining >= 90 else Urgency.HIGH
-    elif remaining >= min_remaining and (days is None or days <= 14):
+    if remaining >= urgent_remaining and days is not None and days <= urgent_days:
+        urgency = Urgency.CRITICAL if days <= 3 or remaining >= 90 else Urgency.HIGH
+    elif remaining >= min_remaining and days is not None and days <= max_days:
         urgency = Urgency.MEDIUM if remaining >= 50 else Urgency.LOW
     else:
         urgency = Urgency.NONE
@@ -245,26 +214,25 @@ def _message(
     window_label: str,
     remaining: float,
     days: float | None,
-    plan_value: Any,
     plan_notes: Any,
 ) -> str:
     who = account.account or "default"
     plan = account.plan or "subscription"
-    time_part = (
-        f"resets in {days:.1f} day(s)"
-        if days is not None
-        else "reset time unknown"
-    )
-    waste = ""
-    if plan_value:
-        try:
-            est = float(plan_value) * (remaining / 100.0)
-            waste = f" Roughly ~${est:.0f} of a ${float(plan_value):.0f}/mo plan is still unused."
-        except (TypeError, ValueError):
-            waste = ""
+    time_part = f"resets in {days:.1f} day(s)" if days is not None else "reset time unknown"
     note = f" {plan_notes}" if plan_notes else ""
     return (
-        f"Use {account.provider} ({who}, {plan}) soon: "
-        f"{remaining:.0f}% of the {window_label} window remains and {time_part}."
-        f"{waste}{note}"
+        f"Use {_provider_display_name(account.provider)} ({who}, {plan}) soon: "
+        f"{remaining:.0f}% of the {window_label} remains and {time_part}."
+        f"{note}"
     )
+
+
+def _provider_display_name(provider: str) -> str:
+    return {
+        "antigravity": "Google AI / Antigravity",
+        "claude": "Claude Code",
+        "codex": "Codex",
+        "copilot": "GitHub Copilot",
+        "opencodego": "OpenCode Go",
+        "opencode-go": "OpenCode Go",
+    }.get(provider, provider.replace("-", " ").title())

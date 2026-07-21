@@ -7,10 +7,10 @@ import sys
 from datetime import datetime
 from typing import Any, TextIO
 
-from ai_usage.models import (
+from ai.models import (
     AccountUsage,
+    CrossCheck,
     Snapshot,
-    SpendPeriod,
     Urgency,
     UseOrLoseAlert,
 )
@@ -92,8 +92,8 @@ def render_report(
     """
     Report order:
       1. Tips
-      2. Spend history
-      3. Per-provider detail
+      2. Per-provider live quota detail
+      3. Cross-checks between overlapping live tools
       4. Summary — what to use, by when, so paid allotment is not wasted
     """
     s = _Style(use_color(force=color))
@@ -111,16 +111,7 @@ def render_report(
     lines.append(s.dim("-" * width))
     lines.extend(_tips_lines(s))
 
-    # 2) Spend history
-    lines.append("")
-    lines.append(s.bold("## Local spend history (ccusage, API-equivalent $)"))
-    lines.append(s.dim("-" * width))
-    if snapshot.spend_history:
-        lines.extend(_render_spend(snapshot.spend_history, s))
-    else:
-        lines.append(s.dim("  (no ccusage history available)"))
-
-    # 3) Per-provider detail
+    # 2) Per-provider live quota detail
     lines.append("")
     lines.append(s.bold("## Per-provider usage"))
     lines.append(s.dim("-" * width))
@@ -131,6 +122,16 @@ def render_report(
     else:
         lines.append(s.dim("  (no provider data collected)"))
 
+    # 3) Independent live-source consistency checks
+    lines.append("")
+    lines.append(s.bold("## Cross-checks between live tools"))
+    lines.append(s.dim("-" * width))
+    if snapshot.cross_checks:
+        lines.extend(_render_cross_checks(snapshot.cross_checks, s))
+    else:
+        lines.append(s.dim("  (no overlapping live measurements were available)"))
+    lines.append("")
+
     if snapshot.collector_errors:
         lines.append(s.bold(s.red("## Collector errors")))
         lines.append(s.dim("-" * width))
@@ -138,7 +139,7 @@ def render_report(
             lines.append(s.red(f"  - {err}"))
         lines.append("")
 
-    # 4) Summary — use within timeframe or lose "free" (prepaid-with-plan) tokens
+    # 4) Summary — use within timeframe or lose subscription capacity
     lines.append(s.bold("## Summary — use these before they reset"))
     lines.append(s.dim("-" * width))
     lines.extend(_render_summary(alerts, s, width=width))
@@ -148,20 +149,14 @@ def render_report(
 
 def _tips_lines(s: _Style) -> list[str]:
     return [
-        s.dim(
-            "  • Subscription windows (weekly/monthly) expire unused — burn them on real work."
-        ),
-        s.dim(
-            "  • Prepaid API balances usually roll; no rush unless a promo credit has an expiry."
-        ),
-        s.dim(
-            "  • Fix cswap keychain / browser cookies if Claude/Cursor show errors."
-        ),
+        s.dim("  • Subscription windows (weekly/monthly) expire unused — burn them on real work."),
+        s.dim("  • Prepaid API balances usually roll; no rush unless a promo credit has an expiry."),
+        s.dim("  • Claude Code accounts come only from cswap, the canonical Claude source."),
+        s.dim("  • Each Claude Code email is reported as a separate account."),
+        s.dim("  • Overlapping tools are cross-checked; only one copy drives alerts."),
         s.dim("  • Re-run:  ai              (pretty human report, default)"),
         s.dim("  • JSON:    ai --json       or  ai --format json"),
-        s.dim(
-            "  • Config:  copy config/services.example.yaml → config/services.yaml"
-        ),
+        s.dim("  • Config:  $XDG_CONFIG_HOME/ai/services.yaml (default ~/.config/ai/services.yaml)"),
     ]
 
 
@@ -178,24 +173,11 @@ def _render_summary(
     if not action:
         lines.append(s.green("  Nothing urgent: no large unused subscription windows"))
         lines.append(s.green("  are about to reset under your current thresholds."))
-        lines.append(
-            s.dim(
-                "  (Quotas may be well-used, resets far out, or live quota data missing"
-            )
-        )
-        lines.append(s.dim("   — check per-provider detail above.)")
-        )
+        lines.append(s.dim("  (Quotas may be well-used, resets far out, or live quota data missing"))
+        lines.append(s.dim("   — check per-provider detail above.)"))
     else:
-        lines.append(
-            s.dim(
-                "  Paid plan capacity that goes unused when the window resets is gone forever."
-            )
-        )
-        lines.append(
-            s.dim(
-                "  Prefer these providers/accounts soon so you do not leave tokens on the table."
-            )
-        )
+        lines.append(s.dim("  Paid plan capacity that goes unused when the window resets is gone forever."))
+        lines.append(s.dim("  Prefer these providers/accounts soon so you do not leave tokens on the table."))
         lines.append("")
 
         # Group by time bucket for a clear "within X" narrative
@@ -238,14 +220,10 @@ def _render_summary(
         ):
             when = _human_deadline(alert.days_until_reset)
             who = alert.account or "default account"
-            plan_bit = ""
-            if alert.estimated_plan_value_usd is not None:
-                est = alert.estimated_plan_value_usd * (alert.remaining_percent / 100.0)
-                plan_bit = f" (~${est:.0f} of plan value at risk)"
             lines.append(
-                f"  {i}. {s.bold(alert.provider)} ({who}): burn "
+                f"  {i}. {s.bold(_provider_name(alert.provider))} ({who}): burn "
                 f"{s.yellow(f'{alert.remaining_percent:.0f}%')} of "
-                f"{alert.window_label} {when}{plan_bit}"
+                f"{alert.window_label} {when}"
             )
         lines.append("")
 
@@ -264,14 +242,9 @@ def _summary_alert_line(alert: UseOrLoseAlert, s: _Style) -> str:
     badge = s.urgency(alert.urgency, f"[{icon} {alert.urgency.value.upper():8}]")
     when = _human_deadline(alert.days_until_reset)
     who = alert.account or "default"
-    value = ""
-    if alert.estimated_plan_value_usd is not None:
-        est = alert.estimated_plan_value_usd * (alert.remaining_percent / 100.0)
-        value = s.dim(f"  ~${est:.0f} at risk")
     return (
-        f"    {badge} {s.bold(alert.provider)} · {who} · "
+        f"    {badge} {s.bold(_provider_name(alert.provider))} · {who} · "
         f"{alert.window_label}: {alert.remaining_percent:.0f}% left · use {when}"
-        f"{value}"
     )
 
 
@@ -306,22 +279,21 @@ def _sorted_accounts(accounts: list[AccountUsage]) -> list[AccountUsage]:
     return sorted(
         accounts,
         key=lambda a: (
-            0 if a.error else 1,
-            a.provider.lower(),
-            (a.account or "").lower(),
-            a.source,
+            _provider_name(a.provider).casefold(),
+            (a.account or "").casefold(),
+            a.source.casefold(),
         ),
     )
 
 
 def _render_account(acc: AccountUsage, s: _Style) -> list[str]:
     lines: list[str] = []
-    head = s.bold(acc.provider)
+    head = s.bold(_provider_name(acc.provider))
     if acc.account:
-        head += f" · {acc.account}"
+        head += f" · account={acc.account}"
     if acc.plan:
         head += s.dim(f" · plan={acc.plan}")
-    head += s.dim(f"  [{acc.source}]")
+    head += s.dim(f" · {_source_description(acc.source)}")
     lines.append(head)
 
     if acc.error:
@@ -352,9 +324,8 @@ def _render_account(acc: AccountUsage, s: _Style) -> list[str]:
                 rem_colored = s.cyan(rem_s)
             else:
                 rem_colored = s.green(rem_s)
-        lines.append(
-            f"  {w.label:12} {bar} {rem_colored:10} {used_s:10} {s.dim(reset_s)}"
-        )
+        lines.append(f"  quota: {w.label}")
+        lines.append(f"    {bar} {rem_colored:10} {used_s:10} {s.dim(reset_s)}")
 
     for note in acc.notes:
         lines.append(s.dim(f"  · {note}"))
@@ -362,30 +333,28 @@ def _render_account(acc: AccountUsage, s: _Style) -> list[str]:
     return lines
 
 
-def _render_spend(spend: list[SpendPeriod], s: _Style) -> list[str]:
+def _render_cross_checks(checks: list[CrossCheck], s: _Style) -> list[str]:
     lines: list[str] = []
-    rows = sorted(spend, key=lambda x: x.period)[-6:]
-    for row in rows:
-        agents = f" ({', '.join(row.agents)})" if row.agents else ""
-        lines.append(
-            f"  {row.period}:  {s.bold(f'${row.total_cost_usd:10,.2f}')}  "
-            f"{row.total_tokens:>14,} tokens{s.dim(agents)}"
-        )
-    if len(rows) >= 2:
-        last = rows[-1]
-        prev = rows[-2]
-        if prev.total_cost_usd > 0:
-            delta = (
-                (last.total_cost_usd - prev.total_cost_usd) / prev.total_cost_usd
-            ) * 100
-            delta_s = f"{delta:+.0f}%"
-            if delta > 20:
-                delta_s = s.yellow(delta_s)
-            elif delta < -20:
-                delta_s = s.green(delta_s)
-            lines.append(
-                f"  MoM change ({prev.period} → {last.period}): {delta_s}"
-            )
+    order = {"warning": 0, "unavailable": 1, "consistent": 2}
+    for check in sorted(
+        checks,
+        key=lambda item: (
+            order.get(item.status, 9),
+            item.provider,
+            item.account or "",
+        ),
+    ):
+        status = {
+            "warning": s.red("WARNING"),
+            "unavailable": s.yellow("UNAVAILABLE"),
+            "consistent": s.green("CONSISTENT"),
+        }.get(check.status, check.status.upper())
+        subject = _provider_name(check.provider)
+        if check.account:
+            subject += f" · account={check.account}"
+        sources = " versus ".join(check.sources)
+        lines.append(f"  [{status}] {s.bold(subject)} · {sources}")
+        lines.append(f"    {check.message}")
     return lines
 
 
@@ -405,3 +374,22 @@ def _fmt_dt(dt: datetime | None) -> str:
     if not dt:
         return "?"
     return dt.strftime("%Y-%m-%d %H:%M UTC")
+
+
+def _provider_name(provider: str) -> str:
+    return {
+        "claude": "Claude Code",
+        "codex": "Codex",
+        "copilot": "GitHub Copilot",
+        "antigravity": "Google AI / Antigravity",
+        "grok": "Grok",
+        "opencode-go": "OpenCode Go",
+    }.get(provider, provider.replace("-", " ").title())
+
+
+def _source_description(source: str) -> str:
+    return {
+        "cswap": "canonical source: cswap",
+        "codexbar": "selected live source: CodexBar",
+        "tokscale": "selected live source: tokscale",
+    }.get(source, f"source: {source}")
