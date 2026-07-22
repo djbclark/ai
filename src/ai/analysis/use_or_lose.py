@@ -189,6 +189,9 @@ def analyze_use_or_lose(
     alerts: list[UseOrLoseAlert] = []
     seen: set[tuple[str, str, str]] = set()
     analysis_cfg = cfg
+    multi_dim = bool(analysis_cfg.get("use_multi_dim_scoring", False))
+    min_value_usd = float(analysis_cfg.get("min_value_at_risk_usd", 0.50))
+    min_value_fraction = float(analysis_cfg.get("min_value_fraction", 0.05))
 
     for account in snapshot.accounts:
         if account.error and not account.windows:
@@ -223,7 +226,7 @@ def analyze_use_or_lose(
         value_multipliers = plan_meta.get("value_multiplier")
 
         for window in account.windows:
-            if _is_short_window(window):
+            if not multi_dim and _is_short_window(window):
                 continue
 
             remaining = window.remaining()
@@ -231,14 +234,8 @@ def analyze_use_or_lose(
                 continue
             days = window.days_until_reset(now)
 
-            # Use-or-lose recommendations require a future, known deadline.
-            if days is None or days <= 0:
-                continue
-
-            # Skip fully used windows
-            if remaining < min_remaining:
-                continue
-            if days > max_days:
+            # Deadlines in the past are not actionable
+            if days is not None and days <= 0:
                 continue
 
             key = (
@@ -249,26 +246,6 @@ def analyze_use_or_lose(
             if key in seen:
                 continue
             seen.add(key)
-
-            urgency, score = _score(
-                remaining=remaining,
-                days=days,
-                urgent_remaining=urgent_remaining,
-                urgent_days=urgent_days,
-                min_remaining=min_remaining,
-                label=window.label,
-                max_days=max_days,
-            )
-            if urgency == Urgency.NONE:
-                continue
-
-            message = _message(
-                account=account,
-                window_label=window.label,
-                remaining=remaining,
-                days=days,
-                plan_notes=plan_meta.get("notes"),
-            )
 
             duration_kind = classify_window_minutes(window.window_minutes)
             window_value_mult = 1.0
@@ -282,6 +259,61 @@ def analyze_use_or_lose(
                 monthly_price=monthly_price,
                 value_multiplier=window_value_mult,
                 now=now,
+            )
+
+            if multi_dim:
+                if flex_profile is None:
+                    continue
+
+                urgency, score = _score_multi_dimension(
+                    profile=flex_profile,
+                    remaining=remaining,
+                    days=days,
+                    config=config,
+                )
+
+                value_usd = flex_profile.value_at_risk_usd
+                plan_price = float(monthly_price or 0)
+
+                if urgency in (Urgency.NONE,):
+                    continue
+                if value_usd is not None:
+                    if value_usd < min_value_usd:
+                        if plan_price > 0 and (value_usd / plan_price) < min_value_fraction:
+                            continue
+                        elif plan_price <= 0:
+                            continue
+                    elif plan_price > 0 and (value_usd / plan_price) < min_value_fraction:
+                        if urgency in (Urgency.INFO, Urgency.LOW):
+                            continue
+                if urgency == Urgency.INFO and value_usd is not None and value_usd < min_value_usd:
+                    continue
+            else:
+                if days is None:
+                    continue
+                if remaining < min_remaining:
+                    continue
+                if days > max_days:
+                    continue
+
+                urgency, score = _score(
+                    remaining=remaining,
+                    days=days,
+                    urgent_remaining=urgent_remaining,
+                    urgent_days=urgent_days,
+                    min_remaining=min_remaining,
+                    label=window.label,
+                    max_days=max_days,
+                )
+                if urgency == Urgency.NONE:
+                    continue
+
+            message = _message(
+                account=account,
+                window_label=window.label,
+                remaining=remaining,
+                days=days,
+                plan_notes=plan_meta.get("notes"),
             )
 
             alerts.append(
@@ -372,6 +404,107 @@ def _score(
         urgency = Urgency.CRITICAL if days <= 3 or remaining >= 90 else Urgency.HIGH
     elif remaining >= min_remaining and days is not None and days <= max_days:
         urgency = Urgency.MEDIUM if remaining >= 50 else Urgency.LOW
+    else:
+        urgency = Urgency.NONE
+
+    return urgency, score
+
+
+def _redistribute_weights(flexibility: float) -> tuple[float, float, float]:
+    base_value = 0.35
+    base_flex = 0.30
+    base_deadline = 0.35
+
+    redistributed = base_flex * flexibility
+    w_flex = base_flex - redistributed
+    w_value = base_value + redistributed * 0.50
+    w_deadline = base_deadline + redistributed * 0.50
+
+    return (w_value, w_flex, w_deadline)
+
+
+def _score_multi_dimension(
+    *,
+    profile: FlexibilityProfile,
+    remaining: float,
+    days: float | None,
+    config: dict[str, Any] | None = None,
+) -> tuple[Urgency, float]:
+    cfg = config or {}
+    raw_plans = cfg.get("plans")
+    plans_cfg: dict[str, Any] = raw_plans if isinstance(raw_plans, dict) else {}
+
+    if remaining < 1.0:
+        return Urgency.NONE, 0.0
+
+    max_plan_price = 20.0
+    for plan in plans_cfg.values():
+        if isinstance(plan, dict):
+            price = plan.get("monthly_price")
+            if isinstance(price, (int, float)) and price > max_plan_price:
+                max_plan_price = float(price)
+
+    flex = profile.consumption_flexibility
+
+    # --- value_urgency (0-100) ---
+    value_urgency = 0.0
+    if profile.value_at_risk_usd is not None and max_plan_price > 0:
+        value_urgency = max(0.0, min(100.0, (profile.value_at_risk_usd / max_plan_price) * 100))
+
+    # --- flexibility_urgency (0-100) ---
+    flexibility_urgency = 0.0
+    if flex >= 0.9:
+        flexibility_urgency = 0.0
+    elif flex >= 0.4:
+        flexibility_urgency = 30.0 * (1.0 - flex) + 10.0
+    else:
+        if profile.earliest_start_calendar is not None:
+            now = utcnow()
+            remaining_sec = profile.earliest_start_calendar.timestamp() - now.timestamp()
+            total_sec = 3600.0
+            if days is not None and days > 0:
+                total_sec = days * 86400.0
+            if remaining_sec <= 0:
+                flexibility_urgency = 100.0
+            else:
+                ratio = max(0.0, min(1.0, remaining_sec / total_sec))
+                flexibility_urgency = 60.0 + 40.0 * (1.0 - ratio)
+        elif flex < 0.1:
+            flexibility_urgency = 30.0
+        else:
+            flexibility_urgency = 15.0
+
+    # --- deadline_urgency (0-100) ---
+    deadline_urgency = 0.0
+    if days is not None:
+        if days <= 0.5:
+            raw = 100.0
+        elif days <= 1:
+            raw = 80.0
+        elif days <= 3:
+            raw = 60.0
+        elif days <= 7:
+            raw = 40.0
+        elif days <= 14:
+            raw = 20.0
+        else:
+            raw = 5.0
+        deadline_urgency = max(0.0, min(100.0, raw * (0.5 + flex * 0.5)))
+
+    # --- composite ---
+    w_value, w_flex, w_deadline = _redistribute_weights(flex)
+    score = (w_value * value_urgency + w_flex * flexibility_urgency + w_deadline * deadline_urgency) * 1.5
+
+    if score >= 100:
+        urgency = Urgency.CRITICAL
+    elif score >= 75:
+        urgency = Urgency.HIGH
+    elif score >= 60:
+        urgency = Urgency.MEDIUM
+    elif score >= 30:
+        urgency = Urgency.LOW
+    elif score >= 10:
+        urgency = Urgency.INFO
     else:
         urgency = Urgency.NONE
 
