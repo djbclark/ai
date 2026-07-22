@@ -593,8 +593,21 @@ def _consumption_line(
         parts.append(f"${value_usd:.2f}")
     parts.append(f"flex:{flex_bar} {class_label}")
 
-    if window.refill_capacity and window.window_minutes:
-        unit = window.refill_capacity_unit or ""
-        parts.append(f"{window.refill_capacity:.0f}{unit}/cycle")
+    capacity = window.refill_capacity
+    capacity_unit = window.refill_capacity_unit
+    if capacity is None and duration_kind:
+        overrides_cfg = analysis.get("provider_overrides") or {}
+        overrides = overrides_cfg if isinstance(overrides_cfg, dict) else {}
+        prov_overrides = overrides.get(provider_key)
+        if isinstance(prov_overrides, dict):
+            window_overrides = prov_overrides.get(duration_kind)
+            if isinstance(window_overrides, dict):
+                capacity = window_overrides.get("refill_capacity")
+                if capacity_unit is None:
+                    capacity_unit = window_overrides.get("refill_capacity_unit")
+
+    if capacity and window.window_minutes:
+        unit = capacity_unit or ""
+        parts.append(f"{capacity:.0f}{unit}/cycle")
 
     return " · ".join(parts)

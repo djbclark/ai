@@ -136,6 +136,19 @@ def _compute_flexibility_profile(
 
     capacity = window.refill_capacity
     capacity_unit = window.refill_capacity_unit
+
+    if capacity is None and duration_kind:
+        overrides_cfg = cfg.get("provider_overrides") or {}
+        overrides = overrides_cfg if isinstance(overrides_cfg, dict) else {}
+        provider_key = provider.lower().replace(" ", "-")
+        prov_overrides = overrides.get(provider_key)
+        if isinstance(prov_overrides, dict):
+            window_overrides = prov_overrides.get(duration_kind)
+            if isinstance(window_overrides, dict):
+                capacity = window_overrides.get("refill_capacity")
+                if capacity_unit is None:
+                    capacity_unit = window_overrides.get("refill_capacity_unit")
+
     if capacity is not None and capacity > 0 and window.window_minutes:
         cycles_needed = max(1, int(round((remaining / 100.0) * capacity / capacity)))
         if capacity_unit == "tokens":

@@ -11,6 +11,10 @@ analysis:
   urgent_remaining_percent: 70
   urgent_days_until_reset: 7
 
+  # Phase 4 (experimental): learn actual consumption rates from persisted snapshots.
+  learn_from_history: false
+  snapshot_retention_days: 90
+
   # ---- consumption flexibility (Phase 1: data-only, Phase 2: scoring) ----
 
   # How many hours per day you're awake and able to use AI tools.
@@ -42,10 +46,17 @@ analysis:
       5h:
         flexibility: 0.0
         refill_capacity_unit: "requests"
+        refill_capacity: 45
+    gemini:
+      5h:
+        flexibility: 0.0
+        refill_capacity_unit: "requests"
+        refill_capacity: 50
     grok:
       weekly:
         flexibility: 0.5
         refill_capacity_unit: "requests"
+        refill_capacity: 100
 
 # Plan metadata for value-at-risk and display context.
 plans:
