@@ -45,16 +45,22 @@ def run_json(
         detail = stderr or f"exit {proc.returncode}"
         raise CollectorError(f"no JSON from {' '.join(argv)}: {detail}")
 
-    # Some tools print banners before JSON; try last JSON-looking blob.
-    try:
-        return json.loads(stdout)
-    except json.JSONDecodeError:
-        start_candidates = [i for i, ch in enumerate(stdout) if ch in "{["]
-        last_err: Exception | None = None
-        for start in reversed(start_candidates[-5:]):
-            try:
-                return json.loads(stdout[start:])
-            except json.JSONDecodeError as err:
-                last_err = err
-                continue
-        raise CollectorError(f"invalid JSON from {' '.join(argv)}: {last_err or 'parse failed'}") from last_err
+    # Some tools print banners before JSON or trailing text after JSON.
+    # Use raw_decode to stop at end of first complete JSON value.
+    start_candidates = [i for i, ch in enumerate(stdout) if ch in "{["]
+    if not start_candidates:
+        raise CollectorError(
+            f"no JSON object or array found in output from {' '.join(argv)}"
+        )
+    decoder = json.JSONDecoder()
+    last_err: Exception | None = None
+    for start in reversed(start_candidates[-5:]):
+        try:
+            obj, _ = decoder.raw_decode(stdout[start:])
+            return obj
+        except json.JSONDecodeError as err:
+            last_err = err
+            continue
+    raise CollectorError(
+        f"invalid JSON from {' '.join(argv)}: {last_err or 'parse failed'}"
+    ) from last_err
