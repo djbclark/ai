@@ -90,6 +90,7 @@ def render_report(
     config: dict[str, Any] | None = None,
     color: bool | None = None,
     show_consumption: bool = False,
+    traditional_summary: bool = False,
 ) -> str:
     """
     Report order:
@@ -144,7 +145,10 @@ def render_report(
     # 4) Summary — use within timeframe or lose subscription capacity
     lines.append(s.bold("## Summary — use these before they reset"))
     lines.append(s.dim("-" * width))
-    lines.extend(_render_summary(alerts, s, width=width))
+    if traditional_summary:
+        lines.extend(_render_traditional_summary(alerts, s, width=width))
+    else:
+        lines.extend(_render_action_plan(alerts, s, width=width))
 
     return "\n".join(lines)
 
@@ -162,7 +166,7 @@ def _tips_lines(s: _Style) -> list[str]:
     ]
 
 
-def _render_summary(
+def _render_traditional_summary(
     alerts: list[UseOrLoseAlert],
     s: _Style,
     *,
@@ -237,6 +241,150 @@ def _render_summary(
         lines.append("")
 
     return lines
+
+
+def _render_action_plan(
+    alerts: list[UseOrLoseAlert],
+    s: _Style,
+    *,
+    width: int,
+) -> list[str]:
+    action = [a for a in alerts if a.urgency not in (Urgency.INFO, Urgency.NONE)]
+    info = [a for a in alerts if a.urgency == Urgency.INFO]
+    lines: list[str] = []
+
+    total_value_usd = sum(
+        a.flexibility_profile.value_at_risk_usd
+        for a in action
+        if a.flexibility_profile and a.flexibility_profile.value_at_risk_usd is not None
+    )
+    providers = len({a.provider for a in action})
+
+    if not action and not info:
+        lines.append(s.green("  Nothing urgent: no large unused subscription windows"))
+        lines.append(s.green("  are about to reset under your current thresholds."))
+        lines.append(s.dim("  (Quotas may be well-used, resets far out, or live quota data missing"))
+        lines.append(s.dim("   — check per-provider detail above.)"))
+        return lines
+
+    if action:
+        if total_value_usd > 0:
+            lines.append(
+                s.dim(
+                    f"  Available capacity this cycle: {s.bold(f'${total_value_usd:.2f}')} across {len(action)} windows ({providers} providers)."
+                )
+            )
+        else:
+            lines.append(s.dim(f"  {len(action)} windows with unused capacity across {providers} providers."))
+        lines.append("")
+
+        buckets = _action_buckets(action)
+        for bucket_label, bucket_name in [
+            ("THIS WEEK", "start now — capacity will reset or needs lead time"),
+            ("THIS WEEKEND", "plan ahead"),
+            ("LATER THIS MONTH", "before next billing cycle"),
+        ]:
+            items = buckets.get(bucket_label, [])
+            if not items:
+                continue
+            lines.append(f"  {s.bold(bucket_label)} ({s.dim(bucket_name)})")
+            lines.append(s.dim(f"  {'─' * (width - 4)}"))
+            for alert in sorted(items, key=lambda a: (-a.score,)):
+                lines.append(_action_plan_line(alert, s))
+            lines.append("")
+
+        throttled = buckets.get("THROTTLED", [])
+        if throttled:
+            lines.append(f"  {s.bold('THROTTLED — ACCUMULATING WASTE')}")
+            lines.append(s.dim(f"  {'─' * (width - 4)}"))
+            lines.append(s.dim("  These windows refill so fast you can't use them all. Estimated"))
+            lines.append(s.dim("  plan value silently wasted each month:"))
+            lines.append("")
+            for alert in sorted(throttled, key=lambda a: (-a.score,)):
+                lines.append(_throttled_waste_line(alert, s))
+            lines.append("")
+
+    if info:
+        lines.append(s.bold("  PREPAID / NON-EXPIRING (no hard deadline)"))
+        lines.append(s.dim(f"  {'─' * (width - 4)}"))
+        for alert in info:
+            lines.append(s.dim(f"  · {alert.message}"))
+        lines.append("")
+
+    return lines
+
+
+def _action_buckets(alerts: list[UseOrLoseAlert]) -> dict[str, list[UseOrLoseAlert]]:
+    buckets: dict[str, list[UseOrLoseAlert]] = {
+        "THIS WEEK": [],
+        "THIS WEEKEND": [],
+        "LATER THIS MONTH": [],
+        "THROTTLED": [],
+    }
+    for alert in alerts:
+        profile = alert.flexibility_profile
+        is_throttled = profile is not None and profile.consumption_flexibility < 0.2
+        days = alert.days_until_reset
+
+        if is_throttled and days is not None and days <= 3:
+            buckets["THIS WEEK"].append(alert)
+        elif is_throttled:
+            buckets["THROTTLED"].append(alert)
+        elif days is not None and days <= 7:
+            buckets["THIS WEEK"].append(alert)
+        elif days is not None and days <= 10:
+            buckets["THIS WEEKEND"].append(alert)
+        else:
+            buckets["LATER THIS MONTH"].append(alert)
+
+    return buckets
+
+
+def _action_plan_line(alert: UseOrLoseAlert, s: _Style) -> str:
+    icon = URGENCY_ICON.get(alert.urgency, "   ")
+    badge = s.urgency(alert.urgency, f"{icon}")
+    who = alert.account or "default"
+    when = _human_deadline(alert.days_until_reset)
+
+    profile = alert.flexibility_profile
+    value_part = ""
+    flex_note = ""
+    if profile:
+        if profile.value_at_risk_usd is not None:
+            value_part = f" · ${profile.value_at_risk_usd:.2f} at risk"
+        if profile.consumption_flexibility >= 0.9:
+            flex_note = "Burstable — one heavy session will cover it."
+        elif profile.consumption_flexibility >= 0.4:
+            flex_note = "Semi-throttled — steady usage will exhaust it."
+        else:
+            flex_note = "Throttled — single shot, use it or accept losing it."
+        if profile.burn_estimate:
+            flex_note = f"{flex_note} ({profile.burn_estimate})"
+
+    return (
+        f"  {badge} {s.bold(provider_display_name(alert.provider))} · "
+        f"{who} · {alert.window_label}: {alert.remaining_percent:.0f}% left · "
+        f"use {when}{value_part}\n"
+        f"      {s.dim(flex_note)}"
+    )
+
+
+def _throttled_waste_line(alert: UseOrLoseAlert, s: _Style) -> str:
+    who = alert.account or "default"
+    profile = alert.flexibility_profile
+    value_usd = profile.value_at_risk_usd if profile else None
+    remaining = alert.remaining_percent
+
+    if value_usd is not None and value_usd > 0.01:
+        monthly_waste = value_usd * 30
+        return s.dim(
+            f"  · {provider_display_name(alert.provider)} · {who} · "
+            f"{alert.window_label}: {remaining:.0f}% left per cycle "
+            f"(~${value_usd:.2f}/cycle ≈ ~${monthly_waste:.2f}/month wasted at this pace)"
+        )
+    return s.dim(
+        f"  · {provider_display_name(alert.provider)} · {who} · {alert.window_label}: {remaining:.0f}% left per cycle"
+    )
 
 
 def _summary_alert_line(alert: UseOrLoseAlert, s: _Style) -> str:

@@ -13,7 +13,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "max_days_until_reset": 14,
         "urgent_remaining_percent": 70,
         "urgent_days_until_reset": 7,
-        "use_multi_dim_scoring": False,
+        "use_multi_dim_scoring": True,
         "waking_hours_per_day": 16,
         "min_value_at_risk_usd": 0.50,
         "min_value_fraction": 0.05,

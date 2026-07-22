@@ -103,6 +103,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Show per-window consumption flexibility analysis in pretty report",
     )
+    p.add_argument(
+        "--traditional-summary",
+        action="store_true",
+        help="Use legacy flat summary format instead of the unified action plan",
+    )
     p.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     return p
 
@@ -170,7 +175,16 @@ def main(argv: list[str] | None = None) -> int:
             print("No use-or-lose alerts or cross-check warnings.")
         return 0
 
-    print(render_report(snapshot, alerts, config=config, color=color, show_consumption=args.show_consumption))
+    print(
+        render_report(
+            snapshot,
+            alerts,
+            config=config,
+            color=color,
+            show_consumption=args.show_consumption,
+            traditional_summary=args.traditional_summary,
+        )
+    )
     return 0
 
 
