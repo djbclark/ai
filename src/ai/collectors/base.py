@@ -45,6 +45,12 @@ def run_json(
         detail = stderr or f"exit {proc.returncode}"
         raise CollectorError(f"no JSON from {' '.join(argv)}: {detail}")
 
+    # Most tools emit clean JSON; try that path first.
+    try:
+        return json.loads(stdout)
+    except json.JSONDecodeError:
+        pass
+
     # Some tools print banners before JSON or trailing text after JSON.
     # Use raw_decode to stop at end of first complete JSON value.
     start_candidates = [i for i, ch in enumerate(stdout) if ch in "{["]
@@ -54,7 +60,7 @@ def run_json(
         )
     decoder = json.JSONDecoder()
     last_err: Exception | None = None
-    for start in reversed(start_candidates[-5:]):
+    for start in start_candidates[:5]:
         try:
             obj, _ = decoder.raw_decode(stdout[start:])
             return obj
