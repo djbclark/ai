@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from ai.__init__ import __version__
+from ai.analysis.history import save_snapshot
 from ai.analysis.use_or_lose import analyze_use_or_lose
 from ai.collectors.runner import run_collectors
 from ai.config import default_config_path, load_config
@@ -121,6 +122,14 @@ def main(argv: list[str] | None = None) -> int:
     print("Collecting usage from local tools…", file=sys.stderr)
     snapshot = run_collectors(config)
     alerts = analyze_use_or_lose(snapshot, config)
+
+    analysis_cfg = config.get("analysis") if isinstance(config.get("analysis"), dict) else {}
+    if analysis_cfg.get("learn_from_history"):
+        try:
+            snapshot_path = save_snapshot(snapshot, alerts)
+            print(f"Saved snapshot to {snapshot_path}", file=sys.stderr)
+        except OSError as exc:
+            print(f"Warning: could not save snapshot: {exc}", file=sys.stderr)
 
     payload = {
         "snapshot": snapshot.to_dict(),

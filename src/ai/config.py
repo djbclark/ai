@@ -14,6 +14,8 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "urgent_remaining_percent": 70,
         "urgent_days_until_reset": 7,
         "use_multi_dim_scoring": True,
+        "learn_from_history": False,
+        "snapshot_retention_days": 90,
         "waking_hours_per_day": 16,
         "min_value_at_risk_usd": 0.50,
         "min_value_fraction": 0.05,

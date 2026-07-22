@@ -5,6 +5,11 @@ from __future__ import annotations
 from datetime import timedelta
 from typing import Any
 
+from ai.analysis.history import (
+    chronic_waste_summary,
+    compute_learned_flexibility,
+    merge_learned_flexibility,
+)
 from ai.models import (
     WINDOW_5H_MAX_MINUTES,
     AccountUsage,
@@ -92,6 +97,7 @@ def _compute_flexibility_profile(
     monthly_price: float | None,
     value_multiplier: float = 1.0,
     now: Any | None = None,
+    learned: dict[str, float] | None = None,
 ) -> FlexibilityProfile | None:
     remaining = window.remaining()
     if remaining is None:
@@ -100,6 +106,16 @@ def _compute_flexibility_profile(
     cfg = config or {}
     waking = float(cfg.get("waking_hours_per_day", _DEFAULT_WAKING_HOURS))
     flex_class, flex_score = _classify_flexibility(window_minutes=window.window_minutes, provider=provider, config=cfg)
+
+    duration_kind = classify_window_minutes(window.window_minutes)
+    if learned and duration_kind:
+        flex_score = merge_learned_flexibility(flex_score, provider, duration_kind, learned)
+        if flex_score >= 0.9:
+            flex_class = FlexibilityClass.BURSTABLE
+        elif flex_score >= 0.4:
+            flex_class = FlexibilityClass.SEMI_THROTTLED
+        else:
+            flex_class = FlexibilityClass.THROTTLED
 
     value_usd: float | None = None
     if monthly_price is not None and window.window_minutes:
@@ -193,6 +209,11 @@ def analyze_use_or_lose(
     min_value_usd = float(analysis_cfg.get("min_value_at_risk_usd", 0.50))
     min_value_fraction = float(analysis_cfg.get("min_value_fraction", 0.05))
 
+    learned_flex: dict[str, float] = {}
+    if analysis_cfg.get("learn_from_history"):
+        retention = int(analysis_cfg.get("snapshot_retention_days", 90))
+        learned_flex = compute_learned_flexibility(current=snapshot, retention_days=retention)
+
     for account in snapshot.accounts:
         if account.error and not account.windows:
             continue
@@ -259,6 +280,7 @@ def analyze_use_or_lose(
                 monthly_price=monthly_price,
                 value_multiplier=window_value_mult,
                 now=now,
+                learned=learned_flex if learned_flex else None,
             )
 
             if multi_dim:
@@ -332,6 +354,32 @@ def analyze_use_or_lose(
                 )
             )
     alerts.sort(key=lambda a: (-a.score, a.provider.casefold(), a.window_label.casefold()))
+
+    if analysis_cfg.get("learn_from_history"):
+        retention = int(analysis_cfg.get("snapshot_retention_days", 90))
+        for wasted in chronic_waste_summary(current=snapshot, retention_days=retention):
+            provider = wasted["provider"]
+            label = wasted["label"]
+            avg_remaining = wasted["avg_remaining_pct"]
+            samples = wasted["sample_count"]
+            alerts.append(
+                UseOrLoseAlert(
+                    urgency=Urgency.INFO,
+                    provider=provider,
+                    account=None,
+                    window_label=label,
+                    remaining_percent=avg_remaining,
+                    days_until_reset=None,
+                    plan=None,
+                    message=(
+                        f"{provider_display_name(provider)} {label}: {avg_remaining:.0f}% left on average "
+                        f"(over {samples} snapshots). Throttled window — consistently underused."
+                    ),
+                    source="history",
+                    score=4.0,
+                )
+            )
+
     return alerts
 
 
