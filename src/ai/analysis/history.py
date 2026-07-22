@@ -23,6 +23,7 @@ def snapshot_dir() -> Path:
 def save_snapshot(snapshot: Snapshot, alerts: list[Any]) -> Path:
     path = snapshot_dir()
     path.mkdir(parents=True, exist_ok=True)
+    path.chmod(0o700)
     ts = snapshot.collected_at.strftime("%Y-%m-%dT%H%M%SZ")
     filepath = path / f"{ts}.json"
     payload = {
@@ -31,6 +32,7 @@ def save_snapshot(snapshot: Snapshot, alerts: list[Any]) -> Path:
         "alerts": [a.to_dict() for a in alerts],
     }
     filepath.write_text(json.dumps(payload, indent=2, default=str) + "\n", encoding="utf-8")
+    filepath.chmod(0o600)
     return filepath
 
 
