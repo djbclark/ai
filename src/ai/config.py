@@ -13,35 +13,59 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "max_days_until_reset": 14,
         "urgent_remaining_percent": 70,
         "urgent_days_until_reset": 7,
+        "waking_hours_per_day": 16,
+        "min_value_at_risk_usd": 0.50,
+        "min_value_fraction": 0.05,
+        "max_sustained_tokens_per_minute": 200000,
+        "max_requests_per_minute": 0.5,
+        "max_usd_per_minute": 0.05,
+        "consumption_flexibility_defaults": {
+            "5h": 0.0,
+            "daily": 0.1,
+            "weekly": 0.7,
+            "monthly": 1.0,
+        },
+        "provider_overrides": {
+            "claude": {"5h": {"flexibility": 0.0, "refill_capacity_unit": "requests"}},
+            "grok": {"weekly": {"flexibility": 0.5, "refill_capacity_unit": "requests"}},
+        },
     },
     "plans": {
         "codex": {
             "name": "ChatGPT / Codex Plus",
             "notes": "Weekly Codex limits reset; unused weekly quota is lost.",
+            "monthly_price": 20,
         },
         "claude": {
             "name": "Claude Pro / Max",
             "notes": "5-hour and weekly limits; multi-account via cswap.",
+            "monthly_price": 20,
+            "value_multiplier": {"5h": 1.4},
         },
         "cursor": {
             "name": "Cursor",
             "notes": "Monthly included usage resets with billing cycle.",
+            "monthly_price": 20,
         },
         "copilot": {
             "name": "GitHub Copilot",
             "notes": "Premium request quotas typically reset monthly.",
+            "monthly_price": 10,
         },
         "grok": {
             "name": "SuperGrok",
             "notes": "Credits / rate windows reset on a short cycle.",
+            "monthly_price": 30,
         },
         "gemini": {
             "name": "Google AI Pro / Ultra",
             "notes": "Often exposed via Antigravity / Gemini CLI.",
+            "monthly_price": 20,
         },
         "opencode": {
             "name": "OpenCode Go",
             "notes": "Has 5h / weekly / monthly windows when subscribed.",
+            "monthly_price": 10,
         },
     },
     "collectors": {

@@ -89,6 +89,7 @@ def render_report(
     *,
     config: dict[str, Any] | None = None,
     color: bool | None = None,
+    show_consumption: bool = False,
 ) -> str:
     """
     Report order:
@@ -119,7 +120,7 @@ def render_report(
     accounts = _sorted_accounts(snapshot.accounts)
     if accounts:
         for acc in accounts:
-            lines.extend(_render_account(acc, s))
+            lines.extend(_render_account(acc, s, show_consumption=show_consumption))
     else:
         lines.append(s.dim("  (no provider data collected)"))
 
@@ -287,7 +288,7 @@ def _sorted_accounts(accounts: list[AccountUsage]) -> list[AccountUsage]:
     )
 
 
-def _render_account(acc: AccountUsage, s: _Style) -> list[str]:
+def _render_account(acc: AccountUsage, s: _Style, *, show_consumption: bool = False) -> list[str]:
     lines: list[str] = []
     head = s.bold(provider_display_name(acc.provider))
     if acc.account:
@@ -331,6 +332,9 @@ def _render_account(acc: AccountUsage, s: _Style) -> list[str]:
                 rem_colored = s.green(rem_padded)
         lines.append(f"  quota: {w.label}")
         lines.append(f"    {bar} {rem_colored} {used_s:10} {s.dim(reset_s)}")
+
+        if show_consumption and rem is not None and w.window_minutes:
+            lines.extend(_consumption_detail(w, rem, acc, s))
 
     for note in acc.notes:
         lines.append(s.dim(f"  · {note}"))
@@ -387,3 +391,50 @@ def _source_description(source: str) -> str:
         "codexbar": "selected live source: CodexBar",
         "tokscale": "selected live source: tokscale",
     }.get(source, f"source: {source}")
+
+
+def _flex_bar(remaining_percent: float, flexibility: float, s: _Style, width: int = 10) -> str:
+    filled = int(round((1.0 - flexibility) * (width - 1)))
+    bar = "=" * filled + "-" * (width - filled)
+    if flexibility <= 0.1:
+        char = "░" * width
+        return s.dim(f"[{char}]")
+    return s.dim(f"[{bar}]")
+
+
+def _consumption_detail(window: Any, remaining: float, acc: Any, s: _Style) -> list[str]:
+    lines: list[str] = []
+
+    duration_hint = ""
+    if window.window_minutes:
+        if window.window_minutes <= 360:
+            duration_hint = "5h"
+        elif window.window_minutes <= 10080:
+            duration_hint = "weekly"
+        elif window.window_minutes <= 44640:
+            duration_hint = "monthly"
+
+    flex_label = "? burstable"
+    if duration_hint == "5h":
+        flex_label = "throttled"
+    elif duration_hint == "weekly":
+        flex_label = "semi-throttled"
+    elif duration_hint == "monthly":
+        flex_label = "burstable"
+
+    flex_bar = _flex_bar(remaining, 0.0 if duration_hint == "5h" else 1.0, s)
+    clock_days = window.days_until_reset()
+    if clock_days is not None and clock_days > 0:
+        clock_urgency = max(0, min(100, 100 - (clock_days / 14) * 100))
+        clock_filled = int(round((clock_urgency / 100) * 10))
+        clock_bar = s.dim(f"[{'=' * clock_filled}{'-' * (10 - clock_filled)}]")
+    else:
+        clock_bar = s.dim(f"[{'-' * 10}]")
+
+    value_bar = _colored_bar(remaining, s, width=10)
+
+    lines.append(s.dim(f"    value {value_bar} at stake"))
+    lines.append(s.dim(f"    flex  {flex_bar} {flex_label}"))
+    lines.append(s.dim(f"    clock {clock_bar} urgency"))
+
+    return lines

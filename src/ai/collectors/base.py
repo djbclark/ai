@@ -55,9 +55,7 @@ def run_json(
     # Use raw_decode to stop at end of first complete JSON value.
     start_candidates = [i for i, ch in enumerate(stdout) if ch in "{["]
     if not start_candidates:
-        raise CollectorError(
-            f"no JSON object or array found in output from {' '.join(argv)}"
-        )
+        raise CollectorError(f"no JSON object or array found in output from {' '.join(argv)}")
     decoder = json.JSONDecoder()
     last_err: Exception | None = None
     for start in start_candidates[:5]:
@@ -67,6 +65,4 @@ def run_json(
         except json.JSONDecodeError as err:
             last_err = err
             continue
-    raise CollectorError(
-        f"invalid JSON from {' '.join(argv)}: {last_err or 'parse failed'}"
-    ) from last_err
+    raise CollectorError(f"invalid JSON from {' '.join(argv)}: {last_err or 'parse failed'}") from last_err

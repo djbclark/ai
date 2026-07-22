@@ -2,22 +2,176 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
 from typing import Any
 
 from ai.models import (
     WINDOW_5H_MAX_MINUTES,
     AccountUsage,
     BillingKind,
+    FlexibilityClass,
+    FlexibilityProfile,
     QuotaWindow,
     Snapshot,
     Urgency,
     UseOrLoseAlert,
+    classify_window_minutes,
     provider_display_name,
     utcnow,
 )
 
 # Windows shorter than this are rate-limits, not "monthly plan waste"
 SHORT_WINDOW_LABELS = {"5-hour", "5h", "session", "hourly"}
+
+DAYS_PER_MONTH = 30.44
+MINUTES_PER_MONTH = DAYS_PER_MONTH * 24 * 60
+
+# Default burn-rate assumptions
+_DEFAULT_MAX_TOKENS_PER_MINUTE = 200000
+_DEFAULT_MAX_REQUESTS_PER_MINUTE = 0.5
+_DEFAULT_MAX_USD_PER_MINUTE = 0.05
+_DEFAULT_WAKING_HOURS = 16
+
+
+def _compute_value_at_risk(
+    *,
+    remaining: float,
+    window_minutes: int,
+    monthly_price: float,
+    waking_hours_per_day: float,
+    value_multiplier: float = 1.0,
+) -> float:
+    active_minutes_per_month = waking_hours_per_day * DAYS_PER_MONTH * 60
+    if active_minutes_per_month <= 0 or window_minutes <= 0:
+        return 0.0
+    active_cycles = active_minutes_per_month / window_minutes
+    value_per_refill = monthly_price / active_cycles
+    return value_per_refill * (remaining / 100.0) * value_multiplier
+
+
+def _classify_flexibility(
+    *,
+    window_minutes: int | None,
+    provider: str,
+    config: dict[str, Any],
+) -> tuple[FlexibilityClass, float]:
+    duration_kind = classify_window_minutes(window_minutes)
+    defaults_cfg = config.get("consumption_flexibility_defaults") or {}
+    defaults = defaults_cfg if isinstance(defaults_cfg, dict) else {}
+    overrides_cfg = config.get("provider_overrides") or {}
+    overrides = overrides_cfg if isinstance(overrides_cfg, dict) else {}
+
+    flex = None
+    provider_key = provider.lower().replace(" ", "-")
+
+    if provider_key in overrides and duration_kind:
+        prov_overrides = overrides[provider_key]
+        if isinstance(prov_overrides, dict) and duration_kind in prov_overrides:
+            per_window = prov_overrides[duration_kind]
+            if isinstance(per_window, dict) and "flexibility" in per_window:
+                flex = float(per_window["flexibility"])
+    if flex is None and duration_kind:
+        raw = defaults.get(duration_kind)
+        flex = float(raw) if raw is not None else None
+    if flex is None:
+        flex = 0.5
+
+    flex = max(0.0, min(1.0, flex))
+    if flex >= 0.9:
+        return FlexibilityClass.BURSTABLE, flex
+    if flex >= 0.4:
+        return FlexibilityClass.SEMI_THROTTLED, flex
+    return FlexibilityClass.THROTTLED, flex
+
+
+def _compute_flexibility_profile(
+    *,
+    window: QuotaWindow,
+    provider: str,
+    config: dict[str, Any],
+    monthly_price: float | None,
+    value_multiplier: float = 1.0,
+    now: Any | None = None,
+) -> FlexibilityProfile | None:
+    remaining = window.remaining()
+    if remaining is None:
+        return None
+
+    cfg = config or {}
+    waking = float(cfg.get("waking_hours_per_day", _DEFAULT_WAKING_HOURS))
+    flex_class, flex_score = _classify_flexibility(window_minutes=window.window_minutes, provider=provider, config=cfg)
+
+    value_usd: float | None = None
+    if monthly_price is not None and window.window_minutes:
+        value_usd = round(
+            _compute_value_at_risk(
+                remaining=remaining,
+                window_minutes=window.window_minutes,
+                monthly_price=monthly_price,
+                waking_hours_per_day=waking,
+                value_multiplier=value_multiplier,
+            ),
+            2,
+        )
+
+    cycles_needed: int | None = None
+    earliest: Any | None = None
+    burn_minutes: float | None = None
+
+    capacity = window.refill_capacity
+    capacity_unit = window.refill_capacity_unit
+    if capacity is not None and capacity > 0 and window.window_minutes:
+        cycles_needed = max(1, int(round((remaining / 100.0) * capacity / capacity)))
+        if capacity_unit == "tokens":
+            rate = float(cfg.get("max_sustained_tokens_per_minute", _DEFAULT_MAX_TOKENS_PER_MINUTE))
+        elif capacity_unit == "requests":
+            rate = float(cfg.get("max_requests_per_minute", _DEFAULT_MAX_REQUESTS_PER_MINUTE))
+        elif capacity_unit == "usd":
+            rate = float(cfg.get("max_usd_per_minute", _DEFAULT_MAX_USD_PER_MINUTE))
+        else:
+            rate = 1.0
+        burn_minutes = capacity / max(rate, 0.001)
+        burn_minutes = round(burn_minutes, 1)
+
+        now_dt = now or utcnow()
+        if window.resets_at and isinstance(window.resets_at, type(now_dt)):
+            earliest = window.resets_at - timedelta(minutes=cycles_needed * window.window_minutes)
+
+    burn_text = _burn_estimate_text(
+        burn_minutes=burn_minutes,
+        capacity_unit=capacity_unit,
+        cycles_needed=cycles_needed,
+    )
+
+    return FlexibilityProfile(
+        flexibility_class=flex_class,
+        consumption_flexibility=flex_score,
+        value_at_risk_usd=value_usd,
+        cycles_needed=cycles_needed,
+        earliest_start_calendar=earliest if isinstance(earliest, type(utcnow())) else None,
+        effective_burn_minutes=burn_minutes,
+        burn_estimate=burn_text,
+    )
+
+
+def _burn_estimate_text(
+    *,
+    burn_minutes: float | None,
+    capacity_unit: str | None,
+    cycles_needed: int | None,
+) -> str | None:
+    if burn_minutes is None:
+        return None
+    if capacity_unit == "requests":
+        if burn_minutes < 60:
+            return f"~{burn_minutes:.0f} min of focused use"
+        return f"~{burn_minutes / 60:.1f}h of focused use"
+    if burn_minutes < 60:
+        return f"~{burn_minutes:.0f} min at typical pace"
+    if burn_minutes < 180:
+        return f"~{burn_minutes / 60:.1f}h at typical pace"
+    sessions = max(1, (cycles_needed or 1))
+    return f"~{burn_minutes / 60:.1f}h across {sessions} session(s)"
 
 
 def analyze_use_or_lose(
@@ -34,6 +188,7 @@ def analyze_use_or_lose(
     now = utcnow()
     alerts: list[UseOrLoseAlert] = []
     seen: set[tuple[str, str, str]] = set()
+    analysis_cfg = cfg
 
     for account in snapshot.accounts:
         if account.error and not account.windows:
@@ -64,6 +219,9 @@ def analyze_use_or_lose(
             continue
 
         plan_meta = _plan_meta(account.provider, plans)
+        monthly_price = plan_meta.get("monthly_price")
+        value_multipliers = plan_meta.get("value_multiplier")
+
         for window in account.windows:
             if _is_short_window(window):
                 continue
@@ -111,6 +269,21 @@ def analyze_use_or_lose(
                 days=days,
                 plan_notes=plan_meta.get("notes"),
             )
+
+            duration_kind = classify_window_minutes(window.window_minutes)
+            window_value_mult = 1.0
+            if isinstance(value_multipliers, dict) and duration_kind:
+                window_value_mult = float(value_multipliers.get(duration_kind, 1.0))
+
+            flex_profile = _compute_flexibility_profile(
+                window=window,
+                provider=account.provider,
+                config=analysis_cfg,
+                monthly_price=monthly_price,
+                value_multiplier=window_value_mult,
+                now=now,
+            )
+
             alerts.append(
                 UseOrLoseAlert(
                     urgency=urgency,
@@ -123,6 +296,7 @@ def analyze_use_or_lose(
                     message=message,
                     source=account.source,
                     score=score,
+                    flexibility_profile=flex_profile,
                 )
             )
     alerts.sort(key=lambda a: (-a.score, a.provider.casefold(), a.window_label.casefold()))

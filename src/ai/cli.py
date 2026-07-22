@@ -98,6 +98,11 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="PATH",
         help="Also write JSON snapshot to PATH (independent of stdout format)",
     )
+    p.add_argument(
+        "--show-consumption",
+        action="store_true",
+        help="Show per-window consumption flexibility analysis in pretty report",
+    )
     p.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     return p
 
@@ -165,7 +170,7 @@ def main(argv: list[str] | None = None) -> int:
             print("No use-or-lose alerts or cross-check warnings.")
         return 0
 
-    print(render_report(snapshot, alerts, config=config, color=color))
+    print(render_report(snapshot, alerts, config=config, color=color, show_consumption=args.show_consumption))
     return 0
 
 

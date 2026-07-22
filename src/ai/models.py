@@ -96,6 +96,40 @@ class Urgency(str, Enum):
     NONE = "none"
 
 
+class FlexibilityClass(str, Enum):
+    BURSTABLE = "burstable"  # use all at once
+    SEMI_THROTTLED = "semi"  # burst possible but day-capped
+    THROTTLED = "throttled"  # strictly rate-limited per refill
+
+
+@dataclass
+class FlexibilityProfile:
+    """Derived per-window consumption characteristics (not raw data)."""
+
+    flexibility_class: FlexibilityClass
+    consumption_flexibility: float  # 0.0–1.0 continuous
+    value_at_risk_usd: float | None = None
+    cycles_needed: int | None = None
+    earliest_start_calendar: datetime | None = None
+    effective_burn_minutes: float | None = None
+    burn_estimate: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        d: dict[str, Any] = {
+            "flexibility_class": self.flexibility_class.value,
+            "consumption_flexibility": self.consumption_flexibility,
+            "value_at_risk_usd": self.value_at_risk_usd,
+            "cycles_needed": self.cycles_needed,
+            "effective_burn_minutes": self.effective_burn_minutes,
+            "burn_estimate": self.burn_estimate,
+        }
+        if self.earliest_start_calendar:
+            d["earliest_start_calendar"] = self.earliest_start_calendar.isoformat()
+        else:
+            d["earliest_start_calendar"] = None
+        return d
+
+
 @dataclass
 class QuotaWindow:
     """A single rate-limit / credit window (5h, weekly, monthly, ...)."""
@@ -107,6 +141,11 @@ class QuotaWindow:
     window_minutes: int | None = None
     reset_description: str | None = None
     raw: dict[str, Any] = field(default_factory=dict)
+
+    # Per-refill capacity metadata (populated by collectors when known)
+    refill_capacity: float | None = None
+    refill_capacity_unit: str | None = None  # "tokens" | "requests" | "usd"
+    internal_throttle: bool = False
 
     def remaining(self) -> float | None:
         if self.remaining_percent is not None:
@@ -182,8 +221,10 @@ class UseOrLoseAlert:
     source: str
     score: float  # higher = more important
 
+    flexibility_profile: FlexibilityProfile | None = None
+
     def to_dict(self) -> dict[str, Any]:
-        return {
+        d: dict[str, Any] = {
             "urgency": self.urgency.value,
             "provider": self.provider,
             "account": self.account,
@@ -195,6 +236,9 @@ class UseOrLoseAlert:
             "source": self.source,
             "score": self.score,
         }
+        if self.flexibility_profile:
+            d["consumption_analysis"] = self.flexibility_profile.to_dict()
+        return d
 
 
 @dataclass
