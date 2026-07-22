@@ -7,12 +7,14 @@ import sys
 from datetime import datetime
 from typing import Any, TextIO
 
+from ai.analysis.use_or_lose import _classify_flexibility, _compute_value_at_risk
 from ai.models import (
     AccountUsage,
     CrossCheck,
     Snapshot,
     Urgency,
     UseOrLoseAlert,
+    classify_window_minutes,
     provider_display_name,
 )
 
@@ -89,7 +91,6 @@ def render_report(
     *,
     config: dict[str, Any] | None = None,
     color: bool | None = None,
-    show_consumption: bool = False,
     traditional_summary: bool = False,
 ) -> str:
     """
@@ -121,7 +122,7 @@ def render_report(
     accounts = _sorted_accounts(snapshot.accounts)
     if accounts:
         for acc in accounts:
-            lines.extend(_render_account(acc, s, show_consumption=show_consumption))
+            lines.extend(_render_account(acc, s, config=config))
     else:
         lines.append(s.dim("  (no provider data collected)"))
 
@@ -436,8 +437,14 @@ def _sorted_accounts(accounts: list[AccountUsage]) -> list[AccountUsage]:
     )
 
 
-def _render_account(acc: AccountUsage, s: _Style, *, show_consumption: bool = False) -> list[str]:
+def _render_account(acc: AccountUsage, s: _Style, *, config: dict[str, Any] | None = None) -> list[str]:
     lines: list[str] = []
+    cfg = config or {}
+    raw_plans = cfg.get("plans")
+    raw_analysis = cfg.get("analysis")
+    plans: dict[str, Any] = raw_plans if isinstance(raw_plans, dict) else {}
+    analysis: dict[str, Any] = raw_analysis if isinstance(raw_analysis, dict) else {}
+
     head = s.bold(provider_display_name(acc.provider))
     if acc.account:
         head += f" · account={acc.account}"
@@ -466,9 +473,6 @@ def _render_account(acc: AccountUsage, s: _Style, *, show_consumption: bool = Fa
         else:
             reset_s = "reset unknown"
         bar = _colored_bar(rem if rem is not None else 0, s)
-        # Pad the plain text to a fixed width first, then colorize — colorizing
-        # first would bake invisible ANSI codes into the string that the `:10`
-        # width spec counts as visible characters, breaking column alignment.
         rem_padded = f"{rem_s:10}"
         rem_colored = rem_padded
         if rem is not None:
@@ -481,8 +485,10 @@ def _render_account(acc: AccountUsage, s: _Style, *, show_consumption: bool = Fa
         lines.append(f"  quota: {w.label}")
         lines.append(f"    {bar} {rem_colored} {used_s:10} {s.dim(reset_s)}")
 
-        if show_consumption and rem is not None and w.window_minutes:
-            lines.extend(_consumption_detail(w, rem, acc, s))
+        if rem is not None and w.window_minutes:
+            detail = _consumption_line(w, rem, acc.provider, plans, analysis, s)
+            if detail:
+                lines.append(s.dim(f"    {detail}"))
 
     for note in acc.notes:
         lines.append(s.dim(f"  · {note}"))
@@ -541,48 +547,54 @@ def _source_description(source: str) -> str:
     }.get(source, f"source: {source}")
 
 
-def _flex_bar(remaining_percent: float, flexibility: float, s: _Style, width: int = 10) -> str:
-    filled = int(round((1.0 - flexibility) * (width - 1)))
-    bar = "=" * filled + "-" * (width - filled)
-    if flexibility <= 0.1:
-        char = "░" * width
-        return s.dim(f"[{char}]")
-    return s.dim(f"[{bar}]")
+def _consumption_line(
+    window: Any, remaining: float, provider: str, plans: dict[str, Any], analysis: dict[str, Any], s: _Style
+) -> str | None:
+    if not window.window_minutes:
+        return None
 
+    aliases = {"antigravity": "gemini", "opencode-go": "opencode"}
+    provider_key = aliases.get(provider.lower().replace(" ", "-"), provider.lower().replace(" ", "-"))
+    plan_meta: dict[str, Any] = {}
+    meta = plans.get(provider_key)
+    if isinstance(meta, dict):
+        plan_meta = meta
 
-def _consumption_detail(window: Any, remaining: float, acc: Any, s: _Style) -> list[str]:
-    lines: list[str] = []
+    monthly_price = plan_meta.get("monthly_price")
+    value_multipliers = plan_meta.get("value_multiplier")
+    waking = float(analysis.get("waking_hours_per_day", 16))
+    duration_kind = classify_window_minutes(window.window_minutes)
 
-    duration_hint = ""
-    if window.window_minutes:
-        if window.window_minutes <= 360:
-            duration_hint = "5h"
-        elif window.window_minutes <= 10080:
-            duration_hint = "weekly"
-        elif window.window_minutes <= 44640:
-            duration_hint = "monthly"
+    flex_class, flex_score = _classify_flexibility(
+        window_minutes=window.window_minutes, provider=provider, config=analysis
+    )
 
-    flex_label = "? burstable"
-    if duration_hint == "5h":
-        flex_label = "throttled"
-    elif duration_hint == "weekly":
-        flex_label = "semi-throttled"
-    elif duration_hint == "monthly":
-        flex_label = "burstable"
+    value_usd: float | None = None
+    if monthly_price is not None and window.window_minutes:
+        window_mult = 1.0
+        if isinstance(value_multipliers, dict) and duration_kind:
+            window_mult = float(value_multipliers.get(duration_kind, 1.0))
+        value_usd = round(
+            _compute_value_at_risk(
+                remaining=remaining,
+                window_minutes=window.window_minutes,
+                monthly_price=float(monthly_price),
+                waking_hours_per_day=waking,
+                value_multiplier=window_mult,
+            ),
+            2,
+        )
 
-    flex_bar = _flex_bar(remaining, 0.0 if duration_hint == "5h" else 1.0, s)
-    clock_days = window.days_until_reset()
-    if clock_days is not None and clock_days > 0:
-        clock_urgency = max(0, min(100, 100 - (clock_days / 14) * 100))
-        clock_filled = int(round((clock_urgency / 100) * 10))
-        clock_bar = s.dim(f"[{'=' * clock_filled}{'-' * (10 - clock_filled)}]")
-    else:
-        clock_bar = s.dim(f"[{'-' * 10}]")
+    flex_bar = "░" if flex_score <= 0.1 else "▓" if flex_score >= 0.9 else "▒"
+    class_label = flex_class.value
 
-    value_bar = _colored_bar(remaining, s, width=10)
+    parts: list[str] = []
+    if value_usd is not None:
+        parts.append(f"${value_usd:.2f}")
+    parts.append(f"flex:{flex_bar} {class_label}")
 
-    lines.append(s.dim(f"    value {value_bar} at stake"))
-    lines.append(s.dim(f"    flex  {flex_bar} {flex_label}"))
-    lines.append(s.dim(f"    clock {clock_bar} urgency"))
+    if window.refill_capacity and window.window_minutes:
+        unit = window.refill_capacity_unit or ""
+        parts.append(f"{window.refill_capacity:.0f}{unit}/cycle")
 
-    return lines
+    return " · ".join(parts)

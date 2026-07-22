@@ -99,11 +99,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="Also write JSON snapshot to PATH (independent of stdout format)",
     )
     p.add_argument(
-        "--show-consumption",
-        action="store_true",
-        help="Show per-window consumption flexibility analysis in pretty report",
-    )
-    p.add_argument(
         "--traditional-summary",
         action="store_true",
         help="Use legacy flat summary format instead of the unified action plan",
@@ -181,7 +176,6 @@ def main(argv: list[str] | None = None) -> int:
             alerts,
             config=config,
             color=color,
-            show_consumption=args.show_consumption,
             traditional_summary=args.traditional_summary,
         )
     )
