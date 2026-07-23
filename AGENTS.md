@@ -112,8 +112,10 @@ full description, install steps, CLI flags, and config.
 - This repo shells out to three external tools that must already be
   installed/authenticated (`cswap`, `codexbar`, `tokscale`) — do not attempt
   to install, configure, or authenticate them as part of a code change.
-- **Commit early and often.** Prefer a commit at any opportune moment (green
-  tests after a coherent change, end of a plan step, finished investigation
-  docs) over holding a large uncommitted pile. More commits are better than
-  fewer. When the operator has authorized pushes for the session or says
-  “push,” push after commits rather than batching for later.
+- **Commit early and often; push after every commit.** Prefer a commit at any
+  opportune moment (green tests after a coherent change, end of a plan step,
+  finished investigation docs) over holding a large uncommitted pile. More
+  commits are better than fewer. After each commit, `git push` to the remote
+  unless there is a concrete reason not to (e.g. the operator said not to, or
+  the branch is deliberately local-only). Do not wait for separate push
+  authorization.

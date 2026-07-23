@@ -51,18 +51,27 @@ def run_json(
     except json.JSONDecodeError:
         pass
 
-    # Some tools print banners before JSON or trailing text after JSON.
-    # Use raw_decode to stop at end of first complete JSON value.
+    # Some tools print banners before JSON, or more than one JSON value.
+    # Prefer the candidate that consumes the most of stdout; if one cleanly
+    # consumes to end-of-string, that is the payload (avoids returning a short
+    # false positive like `[1]` from "Fetched [1] provider\n[{...}]").
     start_candidates = [i for i, ch in enumerate(stdout) if ch in "{["]
     if not start_candidates:
         raise CollectorError(f"no JSON object or array found in output from {' '.join(argv)}")
     decoder = json.JSONDecoder()
+    best_obj: Any = None
+    best_consumed = -1
     last_err: Exception | None = None
-    for start in start_candidates[:5]:
+    for start in start_candidates:
         try:
-            obj, _ = decoder.raw_decode(stdout[start:])
-            return obj
+            obj, end = decoder.raw_decode(stdout[start:])
         except json.JSONDecodeError as err:
             last_err = err
             continue
+        if not stdout[start + end :].strip():
+            return obj
+        if end > best_consumed:
+            best_obj, best_consumed = obj, end
+    if best_obj is not None:
+        return best_obj
     raise CollectorError(f"invalid JSON from {' '.join(argv)}: {last_err or 'parse failed'}") from last_err
