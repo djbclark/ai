@@ -6,11 +6,11 @@ it names exact files/functions, states the bug, states the fix precisely enough 
 it does not need to be re-derived, and ends with a concrete test gate.
 
 **Background reading** (do not re-derive what's already investigated):
+- `docs/code-review-2026-07-23.html` — the full review report this plan is derived from
+  (open the file directly in a browser for the styled version; GitHub's file viewer
+  renders it as source, not HTML). Every step below traces back to a finding or design
+  section in that report.
 - `docs/consumption-flexibility-plan.md` — design rationale for the existing multi-dimensional scoring.
-- Full review data (45 findings, adversarially verified) and a completed rating-algorithm
-  design proposal: `~/.claude/projects/-Users-djbclark-src-ai/memory/checkpoint-ai-review-data.json`
-  (JSON; only read this if a step below is unclear — it has more raw detail per finding
-  than is repeated here).
 
 ## Operating rules for every step
 

@@ -168,4 +168,7 @@ of those corresponding inputs.
 
 ## Related reading
 
+- [`docs/consumption-flexibility-plan.md`](docs/consumption-flexibility-plan.md) — design rationale for the multi-dimensional scoring model.
+- [`docs/code-review-2026-07-23.html`](docs/code-review-2026-07-23.html) — a 79-agent adversarial code review (45 findings) plus design proposals for containing tokscale's collector timeouts and fixing the rating algorithm. Open it directly in a browser for the styled version; GitHub's file viewer only shows the source.
+- [`docs/fix-implementation-plan.md`](docs/fix-implementation-plan.md) — the ordered, step-by-step plan for fixing everything the review above found, phased as showstopper bugs → rating-algorithm redesign → everything else.
 - Local quota dashboards in the same category as OpenUsage / CodexBar menu bar tools

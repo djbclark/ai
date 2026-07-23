@@ -1,5 +1,13 @@
 # Multi-Dimensional Use-It-or-Lose-It Scoring
 
+> **Status update (2026-07-23):** a code review found several correctness bugs in
+> this design's implementation — most importantly, a self-cancelling formula that
+> pins throttled windows (e.g. Claude's 5-hour quota) at maximum urgency regardless
+> of actual usage. See `docs/code-review-2026-07-23.html` (§1–2) for the findings and
+> `docs/fix-implementation-plan.md` (Phase 2) for the pace-based scoring redesign
+> that supersedes the model below. The problem framing here is still accurate
+> background; the scoring mechanics it led to are being replaced.
+
 ## Problem
 
 Current scoring (`use_or_lose.py:_score`) is one-dimensional — it weights **deadline
