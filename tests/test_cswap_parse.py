@@ -6,6 +6,19 @@ from ai.collectors.cswap import _account_from_item
 from ai.models import BillingKind
 
 
+def test_missing_number_does_not_mark_slot_active():
+    account = _account_from_item(
+        {
+            "email": "a@example.com",
+            "usageStatus": "ok",
+            "usage": {"fiveHour": {"pct": 1}},
+        },
+        None,
+    )
+    assert any("cswap slot None" in n or "cswap slot" in n for n in account.notes)
+    assert not any("; active" in n for n in account.notes)
+
+
 def test_pct_is_parsed_as_used_percentage():
     account = _account_from_item(
         {

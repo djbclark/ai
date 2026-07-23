@@ -72,7 +72,9 @@ def _account_from_item(
 ) -> AccountUsage:
     email = item.get("email")
     number = item.get("number")
-    active = bool(item.get("active")) or number == active_number
+    active = bool(item.get("active")) or (
+        number is not None and active_number is not None and number == active_number
+    )
     usage_status = str(item.get("usageStatus") or "unavailable")
     usage = item.get("usage") if isinstance(item.get("usage"), dict) else None
 

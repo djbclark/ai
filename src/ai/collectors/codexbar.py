@@ -214,15 +214,15 @@ def _from_row(row: dict[str, Any]) -> AccountUsage:
             extra_windows.append(window)
     windows.extend(extra_windows)
 
-    has_named_balance_blob = bool(usage.get("openRouterUsage") or usage.get("openAIAPIUsage"))
     for index, key in enumerate(("primary", "secondary", "tertiary"), start=1):
         block = usage.get(key)
         if not isinstance(block, dict):
             continue
-        if provider in PREPAID_HINTS and has_named_balance_blob:
-            continue
         label = _slot_label(provider, index, block)
         window = _window(label, block)
+        # Skip only when this slot is the same measurement as an already-parsed
+        # extra/named window — do not drop real subscription slots just because
+        # a prepaid balance blob also exists.
         if window and not any(window.same_measurement(extra) for extra in extra_windows):
             windows.append(window)
 

@@ -169,12 +169,13 @@ def _compute_flexibility_profile(
         burn_minutes = capacity / max(rate, 0.001)
         burn_minutes = round(burn_minutes, 1)
 
-        burn_minutes_for_remaining = burn_minutes * (remaining / 100.0)
+        burn_minutes_for_remaining = round(burn_minutes * (remaining / 100.0), 1)
         cycles_needed = max(1, int(-(-burn_minutes_for_remaining // window.window_minutes)))
 
         now_dt = now or utcnow()
         if window.resets_at and isinstance(window.resets_at, type(now_dt)):
             earliest = window.resets_at - timedelta(minutes=burn_minutes_for_remaining)
+        burn_minutes = burn_minutes_for_remaining
 
     burn_text = _burn_estimate_text(
         burn_minutes=burn_minutes,

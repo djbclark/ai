@@ -76,6 +76,31 @@ def test_cli_timeout_flag_sets_force(monkeypatch):
     assert captured["timeouts"]["force"] == 45.0
 
 
+def test_no_tokscale_works_when_collector_is_boolean_true(monkeypatch):
+    captured = {}
+
+    def fake_collectors(config):
+        captured["tokscale"] = config.get("collectors", {}).get("tokscale")
+        return Snapshot(collected_at=utcnow())
+
+    monkeypatch.setattr(cli, "run_collectors", fake_collectors)
+    monkeypatch.setattr(cli, "analyze_use_or_lose", lambda *_a, **_k: [])
+    monkeypatch.setattr(cli, "load_config", lambda _p=None: {"collectors": {"tokscale": True}, "analysis": {}, "timeouts": {}})
+    assert cli.main(["--no-tokscale", "--json", "--alerts-only"]) == 0
+    assert captured["tokscale"] == {"enabled": False}
+
+
+def test_main_exits_1_when_all_collectors_fail(monkeypatch):
+    def empty_failing(_config):
+        snap = Snapshot(collected_at=utcnow())
+        snap.collector_errors = ["cswap: boom", "codexbar: boom", "tokscale: boom"]
+        return snap
+
+    monkeypatch.setattr(cli, "run_collectors", empty_failing)
+    monkeypatch.setattr(cli, "analyze_use_or_lose", lambda *_a, **_k: [])
+    assert cli.main(["--json", "--alerts-only"]) == 1
+
+
 def test_generate_config_creates_files_and_refuses_overwrite(monkeypatch, tmp_path, capsys):
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
     assert cli.main(["--generate-config"]) == 0

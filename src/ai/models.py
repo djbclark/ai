@@ -206,6 +206,7 @@ class QuotaWindow:
         return (
             self.resets_at == other.resets_at
             and self.used_percent == other.used_percent
+            and self.remaining_percent == other.remaining_percent
             and self.window_minutes == other.window_minutes
         )
 

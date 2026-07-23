@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from ai.models import (
@@ -102,7 +103,10 @@ def _infer_window_minutes(provider: str, raw_label: str, display_label: str) -> 
     # Copilot label vocabulary only — do not apply to other providers.
     if provider_key == "copilot" and key in ("chat", "completions", "premium"):
         return WINDOW_NOMINAL_MINUTES["monthly"]
-    if key in ("session", "5h", "5-hour", "5 hour") or "5h" in key or "5-hour" in key or "5 hour" in key:
+    if key in ("session", "5h", "5-hour", "5 hour") or "5-hour" in key or "5 hour" in key:
+        return WINDOW_NOMINAL_MINUTES["5h"]
+    # Avoid matching "15h" / "45h" via bare "5h" substring.
+    if re.search(r"(?<![0-9])5h(?![0-9a-z])", key):
         return WINDOW_NOMINAL_MINUTES["5h"]
     if key in ("weekly",) or "week" in key:
         return WINDOW_NOMINAL_MINUTES["weekly"]

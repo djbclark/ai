@@ -187,6 +187,8 @@ def main(argv: list[str] | None = None) -> int:
             )
         else:
             print(json.dumps(payload, indent=2, default=str))
+        if snapshot.collector_errors and not snapshot.accounts:
+            return 1
         return 0
 
     # Pretty human-readable (default)
@@ -204,6 +206,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"[{a.urgency.value}] {a.message}")
         if not alerts and not cross_check_warnings:
             print("No use-or-lose alerts or cross-check warnings.")
+        if snapshot.collector_errors and not snapshot.accounts:
+            return 1
         return 0
 
     print(
@@ -215,6 +219,8 @@ def main(argv: list[str] | None = None) -> int:
             traditional_summary=args.traditional_summary,
         )
     )
+    if snapshot.collector_errors and not snapshot.accounts:
+        return 1
     return 0
 
 
@@ -256,11 +262,11 @@ def _run_generate_config() -> int:
 def _apply_cli_overrides(config: dict[str, Any], args: argparse.Namespace) -> None:
     collectors = config.setdefault("collectors", {})
     if args.no_tokscale:
-        collectors.setdefault("tokscale", {})["enabled"] = False
+        collectors["tokscale"] = {"enabled": False}
     if args.no_cswap:
-        collectors.setdefault("cswap", {})["enabled"] = False
+        collectors["cswap"] = {"enabled": False}
     if args.no_codexbar:
-        collectors.setdefault("codexbar", {})["enabled"] = False
+        collectors["codexbar"] = {"enabled": False}
     if args.providers:
         collectors.setdefault("codexbar", {})["providers"] = args.providers
     analysis = config.setdefault("analysis", {})
