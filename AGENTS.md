@@ -9,6 +9,32 @@ find what it needs in one hop instead of re-discovering the repo's shape.
 to each other, each near the top of the file, so landing on any one of the
 three gets you to the other two immediately.
 
+## Persistence policy: durable project knowledge goes in this git repo
+
+**If you are an AI agent — any tool, not just Claude Code — and you produce
+something about this project that a *future* agent session or a *different*
+tool should be able to find, put it under version control here, not in your
+own tool's private local state.** That means not Claude Code's per-machine
+memory store, not `.cursor/`, not `.aider.chat.history.md`, not `.copilot/`,
+not any other tool-specific cache/history/rules directory — those live
+outside git, are invisible to collaborators and to every other tool, and
+(per an explicit ask on 2026-07-23) are not where this project wants anything
+load-bearing to live. Concretely:
+
+- Findings, designs, plans, decisions → a file under `docs/`, linked from
+  `AGENTS.md`'s table above and from `README.md`'s "Related reading".
+- A reusable script/tool config that produced a checked-in doc (e.g. the
+  workflow that generated a review) → check the script in next to what it
+  produced (see `docs/review-workflow.js`), not just in whatever ran it.
+- If your own tool's persistent-memory feature is where you'd normally jot
+  this down (Claude Code memory, Cursor rules, etc.) — still write the
+  durable version into this repo. Local tool memory can be a *working*
+  notepad for a single session, but treat anything meant to outlive that
+  session as belonging in git first.
+- `docs/agent-memory-snapshot.md` exists because this was retrofitted after
+  the fact once for Claude Code's memory specifically — don't let that debt
+  reaccumulate; check things in as you go instead of needing another sweep.
+
 ## What this project is
 
 `ai` is a CLI that aggregates live AI-subscription quota data (Claude, Codex,
