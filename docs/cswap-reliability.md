@@ -102,7 +102,8 @@ Deferred work lives at the **tail** of
   (`feat(json): expose display-grade last-good usage`) already proposes additive
   `lastGoodUsage` / `lastGoodFetchedAt` / `lastGoodAgeSeconds` while keeping
   decision-grade `usage`/`usageStatus`. Once merged, prefer those fields and
-  keep cache-file hydration only as a fallback for older cswap.
+  keep cache-file hydration only as a fallback for older cswap. Consumer work
+  tracked in this repo: [djbclark/ai#1](https://github.com/djbclark/ai/issues/1).
 - **Step 34 (usage credits):** landed in this repo — cswap `usage.spend` →
   structured `AccountUsage.usage_credits` + pretty report section.
 - **Step 35 (local ccusage burn):** still deferred; not plan quota.

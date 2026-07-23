@@ -11,15 +11,26 @@ three gets you to the other two immediately.
 
 ## Active priorities (what to do next)
 
-1. Follow [`docs/fix-implementation-plan.md`](docs/fix-implementation-plan.md)
-   (one step at a time, full pytest before/after). When asking “what next?”
-   without a more specific goal, start at **Step 1**.
-2. **cswap reliability** — initial fix landed (cache hydrate, countdown
-   recompute, selection fallback). Design:
-   [`docs/cswap-reliability.md`](docs/cswap-reliability.md). Optional tail
-   items are **Phase 7 / Steps 33–35** of the fix plan (upstream JSON fields,
-   usage-credits, optional ccusage burn section) — do not start unless
-   prioritized after Steps 1–32.
+**Status (2026-07-23):** fix-plan Steps **1–32** and **34** are done. There is
+no mandatory numbered step left. When the operator asks “what next?” without a
+more specific goal, **do not restart at Step 1** — offer choices from the list
+below (or ask what they want to work on).
+
+1. **Blocked / wait on upstream (Step 33).** When
+   [realiti4/claude-swap#170](https://github.com/realiti4/claude-swap/issues/170)
+   merges, consume official `lastGoodUsage` fields in `collectors/cswap.py`
+   (cache hydration becomes fallback). Tracked here:
+   [djbclark/ai#1](https://github.com/djbclark/ai/issues/1). Design notes:
+   [`docs/cswap-reliability.md`](docs/cswap-reliability.md).
+2. **Operator-driven product work** — polish, UX, packaging, docs, live smoke,
+   new features. Nothing is queued until the operator picks an item.
+3. **Parked optional (do not start unless asked):**
+   - **Step 35** — local ccusage / stats-cache burn section (activity only; not
+     plan 5h/7d authority). See plan Phase 7 and
+     [`docs/claude-local-usage.md`](docs/claude-local-usage.md).
+4. **Historical:** full step list and rationale remain in
+   [`docs/fix-implementation-plan.md`](docs/fix-implementation-plan.md) and
+   [`docs/code-review-2026-07-23.html`](docs/code-review-2026-07-23.html).
 
 ## Persistence policy: durable project knowledge goes in this git repo
 
@@ -82,7 +93,8 @@ full description, install steps, CLI flags, and config.
 | --- | --- | --- |
 | `README.md` | Project overview: install, usage, CLI flags, config, output format. | First, for "what does this tool do / how do I run it." |
 | `AGENTS.md` (this file) | Agent orientation, doc map, persistence policy, **active priorities**. | First, for "where is everything / what next." |
-| `docs/fix-implementation-plan.md` | Step-by-step task list from the 2026-07-23 review (32 steps / 6 phases). | Before bug-fix or feature work already scoped there. |
+| `docs/fix-implementation-plan.md` | Review-derived task list (Steps 1–32 + Phase 7 optional 33–35). **1–32 and 34 done.** | Historical scope / remaining optional steps only. |
+| `https://github.com/djbclark/ai/issues/1` | Tracks consuming cswap#170 last-good JSON (Step 33). | When #170 merges or when checking upstream status. |
 | `docs/cswap-reliability.md` | Claude/cswap reliability: decision-stale JSON, cache hydration, fallbacks. | When Claude rows go missing or multi-account looks wrong. |
 | `docs/claude-local-usage.md` | Local `stats-cache` / JSONL / ccusage vs subscription 5h/7d %. | When someone proposes parsing `~/.claude` instead of cswap. |
 | `docs/code-review-2026-07-23.html` | Adversarial code review (45 findings) that the plan was derived from. Open in a browser. | For the *why* behind a plan step. |
@@ -95,15 +107,16 @@ full description, install steps, CLI flags, and config.
 
 ## If you were asked to fix a bug or implement a feature here
 
-1. Check **Active priorities** above — if the ask is open-ended “what next,”
-   start at **Step 1** of the fix plan (unless the operator re-opens cswap
-   follow-ups listed at the plan tail).
-2. Check `docs/fix-implementation-plan.md` — the task is often already scoped
-   there with exact fix and test.
-3. If it isn't in the plan, check `docs/code-review-2026-07-23.html` before
-   starting fresh analysis.
-4. Follow the plan's operating rules when working a numbered step: one step at
-   a time, full test suite before and after, don't skip ahead.
+1. Check **Active priorities** above. Open-ended “what next?” → summarize status
+   and offer choices (upstream Step 33 when unblocked, product polish, or
+   parked Step 35). Do **not** restart the completed Steps 1–32.
+2. For remaining optional plan work (33, 35), read the matching section in
+   `docs/fix-implementation-plan.md` and any linked issue (ai#1 for 33).
+3. If the task is not in the plan, check `docs/code-review-2026-07-23.html` and
+   existing `docs/` before starting fresh analysis.
+4. When implementing: full pytest before and after (`.venv/bin/python -m pytest
+   -q`); one coherent change at a time; commit early and push (see
+   Conventions).
 
 ## Conventions
 
