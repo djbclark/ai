@@ -205,7 +205,8 @@ def _claude_cross_checks(
                 sources=["cswap", "CodexBar", "tokscale"],
                 message=(
                     "cswap returned no Claude Code account rows, so Claude cannot "
-                    "be reported from its canonical multi-account source."
+                    "be reported from its canonical multi-account source. "
+                    "Check `cswap list` / `ai doctor` (auth and PATH), not CodexBar alone."
                 ),
             )
         ]
@@ -227,7 +228,8 @@ def _claude_cross_checks(
                         message=(
                             f"cswap could not read canonical usage for Claude Code account "
                             f"{cswap_row.account}, while {other} reported Claude data. "
-                            "Do not substitute that non-canonical measurement for this account."
+                            f"Often expected when cswap JSON is decision-stale or that slot "
+                            f"is idle — do not replace this account with {other}'s single-session view."
                         ),
                     )
                 )
@@ -289,7 +291,8 @@ def _claude_cross_checks(
                     sources=["cswap", "CodexBar"],
                     message=(
                         f"CodexBar reported Claude account {row.account or 'unknown'}, "
-                        "but it did not match either canonical cswap account."
+                        "but it did not match a cswap account. Often expected: CodexBar "
+                        "usually sees only the active session, not every cswap email."
                     ),
                 )
             )
@@ -303,7 +306,8 @@ def _claude_cross_checks(
                     sources=["cswap", "tokscale"],
                     message=(
                         f"tokscale reported Claude account {row.account or 'unknown'}, "
-                        "but it did not match either canonical cswap account."
+                        "but it did not match a cswap account. Often expected for "
+                        "single-session measurements vs multi-account cswap."
                     ),
                 )
             )
@@ -419,7 +423,13 @@ def _compare_live_rows(left: AccountUsage, right: AccountUsage) -> CrossCheck:
             account=account,
             status="warning",
             sources=sources,
-            message="Possible reporting inconsistency: " + "; ".join(issues) + ".",
+            message=(
+                "Tools disagree on some live quota figures: "
+                + "; ".join(issues)
+                + ". Small gaps are often expected (poll timing, last-good hydrate, "
+                "or single-session vs multi-account views) and do not mean both "
+                "sources are wrong — cswap stays authoritative for Claude."
+            ),
         )
     return CrossCheck(
         provider=left.provider,
@@ -427,7 +437,7 @@ def _compare_live_rows(left: AccountUsage, right: AccountUsage) -> CrossCheck:
         status="consistent",
         sources=sources,
         message=(
-            f"The tools agree on {matched_count} overlapping live quota "
+            f"Agree on {matched_count} overlapping live quota "
             f"measurement{'s' if matched_count != 1 else ''} within tolerance."
         ),
     )

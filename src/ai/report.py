@@ -97,42 +97,67 @@ def render_report(
     traditional_summary: bool = False,
 ) -> str:
     """
-    Report order:
-      1. Tips
-      2. Per-provider live quota detail
-      3. Cross-checks between overlapping live tools
-      4. Summary — what to use, by when, so paid allotment is not wasted
+    Report order (action-first for daily use):
+      1. Header
+      2. Action plan — what to burn / conserve before reset
+      3. Per-provider live quota detail
+      4. Cross-checks (informational; not alert authority)
+      5. Collector errors (if any)
+      6. Short tips + re-run hints
     """
     s = _Style(use_color(force=color))
     lines: list[str] = []
     width = 72
+    accounts = _sorted_accounts(snapshot.accounts)
+    n_accounts = len(accounts)
+    n_actionable = sum(
+        1 for a in alerts if a.urgency not in (Urgency.INFO, Urgency.NONE)
+    )
 
     lines.append(s.bold("=" * width))
     lines.append(s.bold(s.cyan("AI USAGE — USE IT OR LOSE IT")))
-    lines.append(s.dim(f"Collected at {snapshot.collected_at.isoformat()}"))
+    meta = f"Collected at {snapshot.collected_at.isoformat()}"
+    meta += f" · {n_accounts} account{'s' if n_accounts != 1 else ''}"
+    if n_actionable:
+        meta += f" · {n_actionable} alert{'s' if n_actionable != 1 else ''}"
+    else:
+        meta += " · no burn/conserve alerts"
+    lines.append(s.dim(meta))
     lines.append(s.bold("=" * width))
 
-    # 1) Tips first
+    # 1) Action plan first — the reason you ran the tool
     lines.append("")
-    lines.append(s.bold("## Tips"))
+    lines.append(s.bold("## Action plan — use these before they reset"))
     lines.append(s.dim("-" * width))
-    lines.extend(_tips_lines(s))
+    if traditional_summary:
+        lines.extend(_render_traditional_summary(alerts, s, width=width))
+    else:
+        analysis_cfg = (config or {}).get("analysis") or {}
+        waking_hours = float(analysis_cfg.get("waking_hours_per_day", 16))
+        lines.extend(
+            _render_action_plan(alerts, s, width=width, waking_hours_per_day=waking_hours)
+        )
 
     # 2) Per-provider live quota detail
     lines.append("")
     lines.append(s.bold("## Per-provider usage"))
     lines.append(s.dim("-" * width))
-    accounts = _sorted_accounts(snapshot.accounts)
     if accounts:
         for acc in accounts:
             lines.extend(_render_account(acc, s, config=config))
     else:
         lines.append(s.dim("  (no provider data collected)"))
 
-    # 3) Independent live-source consistency checks
+    # 3) Independent live-source consistency checks (informational)
     lines.append("")
-    lines.append(s.bold("## Cross-checks between live tools"))
+    lines.append(s.bold("## Cross-checks (informational)"))
     lines.append(s.dim("-" * width))
+    lines.append(
+        s.dim(
+            "  Tools poll at different times; multi-account Claude is cswap-only. "
+            "Gaps rarely mean both tools are wrong."
+        )
+    )
     if snapshot.cross_checks:
         lines.extend(_render_cross_checks(snapshot.cross_checks, s))
     else:
@@ -146,31 +171,20 @@ def render_report(
             lines.append(s.red(f"  - {err}"))
         lines.append("")
 
-    # 4) Summary — use within timeframe or lose subscription capacity
-    lines.append(s.bold("## Summary — use these before they reset"))
+    # 4) Short tips last
+    lines.append(s.bold("## Tips"))
     lines.append(s.dim("-" * width))
-    if traditional_summary:
-        lines.extend(_render_traditional_summary(alerts, s, width=width))
-    else:
-        analysis_cfg = (config or {}).get("analysis") or {}
-        waking_hours = float(analysis_cfg.get("waking_hours_per_day", 16))
-        lines.extend(
-            _render_action_plan(alerts, s, width=width, waking_hours_per_day=waking_hours)
-        )
+    lines.extend(_tips_lines(s))
 
     return "\n".join(lines)
 
 
 def _tips_lines(s: _Style) -> list[str]:
     return [
-        s.dim("  • Subscription windows (weekly/monthly) expire unused — burn them on real work."),
-        s.dim("  • Prepaid API balances usually roll; no rush unless a promo credit has an expiry."),
-        s.dim("  • Claude Code accounts come only from cswap, the canonical Claude source."),
-        s.dim("  • Each Claude Code email is reported as a separate account."),
-        s.dim("  • Overlapping tools are cross-checked; only one copy drives alerts."),
-        s.dim("  • Re-run:  ai              (pretty human report, default)"),
-        s.dim("  • JSON:    ai --json       or  ai --format json"),
-        s.dim("  • Config:  $XDG_CONFIG_HOME/ai/services.yaml (default ~/.config/ai/services.yaml)"),
+        s.dim("  • Unused subscription windows expire at reset — burn on real work."),
+        s.dim("  • Prepaid API balances usually roll; no rush unless a promo expires."),
+        s.dim("  • Claude multi-account: cswap is canonical (CodexBar/tokscale ≈ active session)."),
+        s.dim("  • Re-run: ai · JSON: ai --json · quiet: ai -q · setup: ai doctor · ai --help"),
     ]
 
 
@@ -567,18 +581,45 @@ def _render_cross_checks(checks: list[CrossCheck], s: _Style) -> list[str]:
             (item.account or "").casefold(),
         ),
     ):
-        status = {
-            "warning": s.red("WARNING"),
-            "unavailable": s.yellow("UNAVAILABLE"),
-            "consistent": s.green("CONSISTENT"),
-        }.get(check.status, check.status.upper())
+        # Soft labels: disagreements are expected with poll lag / hydrate / multi-account
+        if check.status == "warning":
+            status = s.yellow("NOTE")
+            body = s.dim(check.message) if _looks_soft_cross_check(check.message) else check.message
+        elif check.status == "unavailable":
+            status = s.dim("SKIP")
+            body = s.dim(check.message)
+        elif check.status == "consistent":
+            status = s.dim("OK")
+            body = s.dim(check.message)
+        else:
+            status = check.status.upper()
+            body = check.message
         subject = provider_display_name(check.provider)
         if check.account:
             subject += f" · account={check.account}"
-        sources = " versus ".join(check.sources)
+        sources = " vs ".join(check.sources)
         lines.append(f"  [{status}] {s.bold(subject)} · {sources}")
-        lines.append(f"    {check.message}")
+        lines.append(f"    {body}")
     return lines
+
+
+def _looks_soft_cross_check(message: str) -> bool:
+    """True when copy already frames the gap as expected / non-fatal."""
+    lower = message.casefold()
+    soft_markers = (
+        "normal when",
+        "often expected",
+        "does not mean",
+        "poll",
+        "last-good",
+        "hydrate",
+        "stale",
+        "single-session",
+        "did not match",
+        "no independent",
+        "two-tool cross-check is unavailable",
+    )
+    return any(m in lower for m in soft_markers)
 
 
 def _colored_bar(remaining_percent: float, s: _Style, width: int = 12) -> str:

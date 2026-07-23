@@ -105,7 +105,7 @@ def test_alerts_only_includes_cross_check_warnings(monkeypatch, capsys):
 
     assert cli.main(["--alerts-only", "--no-color"]) == 0
     output = capsys.readouterr().out
-    assert "[cross-check warning] GitHub Copilot" in output
+    assert "[cross-check] GitHub Copilot" in output
     assert "user@example.com" in output
     assert "percentages disagree" in output
 
@@ -185,6 +185,98 @@ def test_main_exits_1_when_all_collectors_fail(monkeypatch):
     monkeypatch.setattr(cli, "run_collectors", empty_failing)
     monkeypatch.setattr(cli, "analyze_use_or_lose", lambda *_a, **_k: [])
     assert cli.main(["--json", "--alerts-only"]) == 1
+
+
+def test_main_exits_2_when_actionable_alerts(monkeypatch):
+    from ai.models import Urgency, UseOrLoseAlert
+
+    snap = Snapshot(collected_at=utcnow())
+    alert = UseOrLoseAlert(
+        urgency=Urgency.HIGH,
+        provider="codex",
+        account=None,
+        window_label="Weekly",
+        remaining_percent=90.0,
+        days_until_reset=1.0,
+        plan=None,
+        message="burn",
+        source="codexbar",
+        score=80.0,
+        kind="burn",
+    )
+    monkeypatch.setattr(cli, "run_collectors", lambda _c: snap)
+    monkeypatch.setattr(cli, "analyze_use_or_lose", lambda *_a, **_k: [alert])
+    assert cli.main(["--json", "--alerts-only", "--quiet"]) == 2
+
+
+def test_main_exits_0_when_no_actionable_alerts(monkeypatch):
+    from ai.models import AccountUsage, Urgency, UseOrLoseAlert
+
+    snap = Snapshot(
+        collected_at=utcnow(),
+        accounts=[AccountUsage(provider="codex", source="codexbar")],
+    )
+    info = UseOrLoseAlert(
+        urgency=Urgency.INFO,
+        provider="codex",
+        account=None,
+        window_label="Weekly",
+        remaining_percent=10.0,
+        days_until_reset=20.0,
+        plan=None,
+        message="advisory",
+        source="codexbar",
+        score=1.0,
+    )
+    monkeypatch.setattr(cli, "run_collectors", lambda _c: snap)
+    monkeypatch.setattr(cli, "analyze_use_or_lose", lambda *_a, **_k: [info])
+    assert cli.main(["--json", "--alerts-only", "-q"]) == 0
+
+
+def test_quiet_suppresses_progress_on_stderr(monkeypatch, capsys):
+    snap = Snapshot(collected_at=utcnow())
+    monkeypatch.setattr(cli, "run_collectors", lambda _c: snap)
+    monkeypatch.setattr(cli, "analyze_use_or_lose", lambda *_a, **_k: [])
+    assert cli.main(["--json", "--alerts-only", "--quiet"]) == 0
+    err = capsys.readouterr().err
+    assert "Collecting" not in err
+
+
+def test_without_quiet_prints_progress(monkeypatch, capsys):
+    snap = Snapshot(collected_at=utcnow())
+    monkeypatch.setattr(cli, "run_collectors", lambda _c: snap)
+    monkeypatch.setattr(cli, "analyze_use_or_lose", lambda *_a, **_k: [])
+    assert cli.main(["--json", "--alerts-only"]) == 0
+    err = capsys.readouterr().err
+    assert "Collecting usage" in err
+
+
+def test_collect_exit_code_helper():
+    from ai.models import Urgency, UseOrLoseAlert
+
+    empty = Snapshot(collected_at=utcnow())
+    assert cli.collect_exit_code(empty, []) == 0
+    fail = Snapshot(collected_at=utcnow())
+    fail.collector_errors = ["x"]
+    assert cli.collect_exit_code(fail, []) == 1
+    alert = UseOrLoseAlert(
+        urgency=Urgency.MEDIUM,
+        provider="x",
+        account=None,
+        window_label="w",
+        remaining_percent=50,
+        days_until_reset=1,
+        plan=None,
+        message="m",
+        source="s",
+        score=1,
+    )
+    ok_with_data = Snapshot(
+        collected_at=utcnow(),
+        accounts=[],
+    )
+    # No accounts but no errors either → 2 if alert present
+    assert cli.collect_exit_code(ok_with_data, [alert]) == 2
 
 
 def test_generate_config_creates_files_and_refuses_overwrite(monkeypatch, tmp_path, capsys):

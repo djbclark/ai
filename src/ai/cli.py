@@ -26,7 +26,7 @@ from ai.config import (
     load_config,
     timeout_for,
 )
-from ai.models import provider_display_name
+from ai.models import Snapshot, Urgency, UseOrLoseAlert, provider_display_name
 from ai.report import render_report
 
 # External CLIs this project shells out to (must already be installed/auth'd).
@@ -36,6 +36,12 @@ _EXTERNAL_TOOLS: tuple[tuple[str, str], ...] = (
     ("tokscale", "tokscale"),
 )
 
+# Exit codes for collect runs (doctor / generate-config use their own rules).
+# 0 = ok, no actionable alerts · 1 = hard failure · 2 = ok, actionable alerts
+EXIT_OK = 0
+EXIT_FAILURE = 1
+EXIT_ALERTS = 2
+
 _HELP_EPILOG = f"""\
 config & setup:
   ai --generate-config     write defaults under ~/.config/ai/ (never overwrites)
@@ -43,6 +49,12 @@ config & setup:
   ai doctor                check tools on PATH, config files, effective timeouts
   ai -t / --timeout SEC    force subprocess timeout for all tools this run
                            (default {DEFAULT_SUBPROCESS_TIMEOUT:g}s; also [timeouts] in config.toml)
+  ai -q / --quiet          no progress on stderr (JSON stdout stays clean either way)
+
+exit codes (collect runs):
+  0  success, no burn/conserve alerts
+  1  hard failure (collectors failed and no accounts)
+  2  success, but at least one burn/conserve alert
 
 Credentials stay with cswap / CodexBar / tokscale — this CLI never stores tokens.
 """
@@ -112,6 +124,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--no-color",
         action="store_true",
         help="Disable ANSI colors in pretty output",
+    )
+    p.add_argument(
+        "-q",
+        "--quiet",
+        action="store_true",
+        help="Suppress progress messages on stderr (collecting…, snapshot saved, wrote path)",
     )
     p.add_argument(
         "--alerts-only",
@@ -190,9 +208,14 @@ def main(argv: list[str] | None = None) -> int:
     _apply_cli_overrides(config, args)
 
     as_json = bool(args.json) or args.format == "json"
+    quiet = bool(args.quiet)
+
+    def _progress(msg: str) -> None:
+        if not quiet:
+            print(msg, file=sys.stderr)
 
     # Progress stays on stderr so --json stdout is clean for piping
-    print("Collecting usage from local tools…", file=sys.stderr)
+    _progress("Collecting usage from local tools…")
     snapshot = run_collectors(config)
     alerts = analyze_use_or_lose(snapshot, config)
 
@@ -200,8 +223,9 @@ def main(argv: list[str] | None = None) -> int:
     if analysis_cfg.get("learn_from_history"):
         try:
             snapshot_path = save_snapshot(snapshot, alerts)
-            print(f"Saved snapshot to {snapshot_path}", file=sys.stderr)
+            _progress(f"Saved snapshot to {snapshot_path}")
         except OSError as exc:
+            # Errors still surface even in quiet mode
             print(f"Warning: could not save snapshot: {exc}", file=sys.stderr)
 
     payload = {
@@ -217,7 +241,9 @@ def main(argv: list[str] | None = None) -> int:
             json.dumps(payload, indent=2, default=str) + "\n",
             encoding="utf-8",
         )
-        print(f"Wrote {path}", file=sys.stderr)
+        _progress(f"Wrote {path}")
+
+    exit_code = collect_exit_code(snapshot, alerts)
 
     if as_json:
         if args.alerts_only:
@@ -233,9 +259,7 @@ def main(argv: list[str] | None = None) -> int:
             )
         else:
             print(json.dumps(payload, indent=2, default=str))
-        if snapshot.collector_errors and not snapshot.accounts:
-            return 1
-        return 0
+        return exit_code
 
     # Pretty human-readable (default)
     color = False if args.no_color else None
@@ -244,17 +268,15 @@ def main(argv: list[str] | None = None) -> int:
             account = f" · account={warning['account']}" if warning["account"] else ""
             sources = " versus ".join(warning["sources"])
             print(
-                f"[cross-check warning] {provider_display_name(str(warning['provider']))}"
+                f"[cross-check] {provider_display_name(str(warning['provider']))}"
                 f"{account} · "
                 f"{sources}: {warning['message']}"
             )
         for a in alerts:
             print(f"[{a.urgency.value}] {a.message}")
         if not alerts and not cross_check_warnings:
-            print("No use-or-lose alerts or cross-check warnings.")
-        if snapshot.collector_errors and not snapshot.accounts:
-            return 1
-        return 0
+            print("No use-or-lose alerts or cross-check notes.")
+        return exit_code
 
     print(
         render_report(
@@ -265,9 +287,25 @@ def main(argv: list[str] | None = None) -> int:
             traditional_summary=args.traditional_summary,
         )
     )
+    return exit_code
+
+
+def collect_exit_code(snapshot: Snapshot, alerts: list[UseOrLoseAlert]) -> int:
+    """Exit code for a completed collect + analyze run.
+
+    * **0** — data collected (or empty without errors); no actionable alerts
+    * **1** — hard failure: collectors reported errors and produced no accounts
+    * **2** — success with at least one burn/conserve alert (not INFO/NONE)
+
+    Cross-check disagreements alone do **not** change the exit code.
+    """
     if snapshot.collector_errors and not snapshot.accounts:
-        return 1
-    return 0
+        return EXIT_FAILURE
+    if any(
+        a.urgency not in (Urgency.INFO, Urgency.NONE) for a in alerts
+    ):
+        return EXIT_ALERTS
+    return EXIT_OK
 
 
 def _run_generate_config() -> int:

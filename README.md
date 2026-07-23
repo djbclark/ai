@@ -52,6 +52,27 @@ missing parent dirs (`~/.config`, `~/.config/ai`) and writes defaults; if a file
 already exists it is left alone and reported on stderr. Provider credentials stay
 with cswap, CodexBar, and tokscale — these files do not hold tokens or emails.
 
+## Daily workflow
+
+```bash
+# Once: create defaults under ~/.config/ai/ (never overwrites)
+ai --generate-config
+ai doctor                 # PATH tools + config presence + timeouts
+
+# Morning / before a long coding block
+ai                        # action plan first, then per-provider detail
+ai -q                     # same report, no “Collecting…” on stderr
+
+# Scripting / cron (JSON on stdout; use exit codes)
+ai -q --json
+# exit 0 = ok, no burn/conserve alerts
+# exit 1 = hard failure (collectors failed, no accounts)
+# exit 2 = success with at least one burn/conserve alert
+
+# Tighter thresholds for “only what resets soon”
+ai --min-remaining 50 --max-days 7
+```
+
 ## Usage
 
 ```bash
@@ -59,11 +80,12 @@ with cswap, CodexBar, and tokscale — these files do not hold tokens or emails.
 ai
 ai --format pretty
 ai --no-color          # plain text, no ANSI
+ai -q / --quiet        # suppress progress on stderr
 
 # or without install:
 PYTHONPATH=src python -m ai
 
-# Machine-readable JSON on stdout (progress still on stderr)
+# Machine-readable JSON on stdout (progress on stderr unless -q)
 ai --json
 ai --format json
 ai --json --alerts-only
@@ -88,6 +110,7 @@ ai --doctor
 | _(none)_ / `--format pretty`                     | Colorized terminal report with time-bucketed action plan (default) |
 | `--json` / `--format json`                       | Full snapshot + alerts as JSON                                     |
 | `--no-color`                                     | Disable ANSI colors in pretty mode                                 |
+| `-q` / `--quiet`                                 | Suppress progress messages on stderr                               |
 | `--alerts-only`                                  | Recommendations only (respects pretty vs json)                     |
 | `--traditional-summary`                          | Legacy flat summary format instead of unified action plan          |
 | `--no-tokscale` / `--no-cswap` / `--no-codexbar` | Skip specific collectors                                           |
@@ -99,7 +122,15 @@ ai --doctor
 | `--min-remaining 50 --max-days 10`               | Override alert thresholds                                          |
 | `--save PATH`                                    | Also write full JSON snapshot to PATH                              |
 
-`ai doctor` exits **0** when every **enabled** collector’s CLI is on `PATH`, and **1** if any enabled tool is missing (disabled collectors are reported but do not fail). It does not call usage APIs or check authentication — only local discoverability.
+### Exit codes
+
+| Code | When |
+| --- | --- |
+| **0** | Collect succeeded (or nothing to report) and there are **no** burn/conserve alerts. INFO-only notes still count as 0. |
+| **1** | Hard failure: collectors reported errors and **no** accounts were collected. Also used by `ai doctor` when an **enabled** tool is missing from `PATH`, and by `--generate-config` when nothing was written / overwrite refused. |
+| **2** | Collect succeeded and at least one **burn** or **conserve** alert is present. Cross-check disagreements alone do **not** set 2. Bad `--timeout` values also use 2. |
+
+`ai doctor` does not call usage APIs or check authentication — only local discoverability.
 
 ## What “use it or lose it” means
 
@@ -122,7 +153,15 @@ API-equivalent cost estimates.
 ```
 ========================================================================
 AI USAGE — USE IT OR LOSE IT
+Collected at … · 3 accounts · 2 alerts
 ========================================================================
+
+## Action plan — use these before they reset
+------------------------------------------------------------------------
+  THIS WEEK (start now — capacity will reset or needs lead time)
+  ────────────────────────────────────────────────────────────────────
+  !!  Codex · you@example.com · Weekly: 90% left · use within 2.0 days · $5.00 at risk
+      Burstable — one heavy session will cover it.
 
 ## Per-provider usage
 ------------------------------------------------------------------------
@@ -131,7 +170,9 @@ Codex · account=you@example.com · plan=plus · selected live source: CodexBar
     [============] 100% left   0% used   resets in 6.4d (Jul 28 21:59 UTC)
     $6.90 · flex:▒ semi
 
-## Summary — use these before they reset
+## Cross-checks (informational)
+------------------------------------------------------------------------
+  Tools poll at different times; multi-account Claude is cswap-only. …
 ------------------------------------------------------------------------
   Available capacity this cycle: $35.65 across 6 windows (5 providers).
 

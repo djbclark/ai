@@ -2,6 +2,7 @@ from datetime import datetime, timedelta, timezone
 
 from ai.models import (
     AccountUsage,
+    CrossCheck,
     FlexibilityClass,
     FlexibilityProfile,
     PaceProfile,
@@ -205,6 +206,68 @@ def test_action_plan_line_includes_pace_fragment():
     line = _action_plan_line(alert, _Style(False))
     assert "pace 0.4x" in line
     assert "projected 60% unused" in line
+
+
+def test_render_report_action_plan_before_tips_and_usage():
+    now = utcnow()
+    burn = UseOrLoseAlert(
+        urgency=Urgency.HIGH,
+        provider="codex",
+        account="a@example.com",
+        window_label="Weekly",
+        remaining_percent=90.0,
+        days_until_reset=2.0,
+        plan=None,
+        message="burn me",
+        source="codexbar",
+        score=80.0,
+        kind="burn",
+        flexibility_profile=FlexibilityProfile(
+            flexibility_class=FlexibilityClass.BURSTABLE,
+            consumption_flexibility=1.0,
+            value_at_risk_usd=5.0,
+        ),
+    )
+    acc = AccountUsage(provider="codex", source="codexbar", account="a@example.com")
+    text = render_report(
+        Snapshot(collected_at=now, accounts=[acc]),
+        [burn],
+        config={},
+        color=False,
+    )
+    assert text.index("## Action plan") < text.index("## Per-provider usage")
+    assert text.index("## Per-provider usage") < text.index("## Cross-checks")
+    assert text.index("## Cross-checks") < text.index("## Tips")
+    assert "1 alert" in text or "alerts" in text
+
+
+def test_render_cross_checks_use_soft_labels():
+    now = utcnow()
+    snap = Snapshot(
+        collected_at=now,
+        cross_checks=[
+            CrossCheck(
+                provider="claude",
+                account="a@x.com",
+                status="warning",
+                sources=["cswap", "CodexBar"],
+                message="Tools disagree on some live quota figures: weekly differs. Small gaps are often expected.",
+            ),
+            CrossCheck(
+                provider="codex",
+                account=None,
+                status="consistent",
+                sources=["CodexBar", "tokscale"],
+                message="Agree on 1 overlapping live quota measurement within tolerance.",
+            ),
+        ],
+    )
+    text = render_report(snap, [], config={}, color=False)
+    assert "[NOTE]" in text
+    assert "[OK]" in text
+    assert "WARNING" not in text
+    assert "informational" in text.lower()
+    assert "cswap-only" in text or "poll" in text.lower()
 
 
 def test_throttled_monthly_waste_stays_near_plan_scale_for_realistic_value():

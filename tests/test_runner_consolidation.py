@@ -228,5 +228,7 @@ def test_errored_cswap_with_matching_codexbar_email_gets_specific_warning():
     messages = [c.message for c in checks if c.account == "user@example.com"]
     assert messages, checks
     assert any("could not read canonical usage" in m for m in messages)
-    assert any("do not substitute" in m.lower() for m in messages)
+    assert any(
+        "do not replace" in m.lower() or "do not substitute" in m.lower() for m in messages
+    )
     assert not any("reporting inconsistency" in m.lower() for m in messages)
