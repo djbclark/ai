@@ -11,15 +11,15 @@ three gets you to the other two immediately.
 
 ## Active priorities (what to do next)
 
-1. **cswap reliability / alternate Claude quota source (highest).** Live Claude
-   usage from `cswap` has been unreliable. Investigate adding another way to
-   obtain the same info (Python API, official Anthropic usage endpoints, or
-   another local tool already on `PATH`), then decide how it should fit beside
-   or instead of `cswap` in `src/ai/collectors/`. Do **not** start this until
-   the operator asks for handoff wrap-up *or* explicitly picks this item —
-   when they ask “what next?” in this repo, this is #1.
-2. Otherwise follow [`docs/fix-implementation-plan.md`](docs/fix-implementation-plan.md)
-   (one step at a time, full pytest before/after).
+1. Follow [`docs/fix-implementation-plan.md`](docs/fix-implementation-plan.md)
+   (one step at a time, full pytest before/after). When asking “what next?”
+   without a more specific goal, start at **Step 1**.
+2. **cswap reliability** — initial fix landed (cache hydrate, countdown
+   recompute, selection fallback). Design:
+   [`docs/cswap-reliability.md`](docs/cswap-reliability.md). Optional tail
+   items are **Phase 7 / Steps 33–35** of the fix plan (upstream JSON fields,
+   usage-credits, optional ccusage burn section) — do not start unless
+   prioritized after Steps 1–32.
 
 ## Persistence policy: durable project knowledge goes in this git repo
 
@@ -83,6 +83,8 @@ full description, install steps, CLI flags, and config.
 | `README.md` | Project overview: install, usage, CLI flags, config, output format. | First, for "what does this tool do / how do I run it." |
 | `AGENTS.md` (this file) | Agent orientation, doc map, persistence policy, **active priorities**. | First, for "where is everything / what next." |
 | `docs/fix-implementation-plan.md` | Step-by-step task list from the 2026-07-23 review (32 steps / 6 phases). | Before bug-fix or feature work already scoped there. |
+| `docs/cswap-reliability.md` | Claude/cswap reliability: decision-stale JSON, cache hydration, fallbacks. | When Claude rows go missing or multi-account looks wrong. |
+| `docs/claude-local-usage.md` | Local `stats-cache` / JSONL / ccusage vs subscription 5h/7d %. | When someone proposes parsing `~/.claude` instead of cswap. |
 | `docs/code-review-2026-07-23.html` | Adversarial code review (45 findings) that the plan was derived from. Open in a browser. | For the *why* behind a plan step. |
 | `docs/consumption-flexibility-plan.md` | Original scoring design. **Superseded** by pace-based scoring in the fix plan Phase 2. | Historical context only. |
 | `docs/review-workflow.js` | Workflow script that generated the review. | Methodology / re-run. |
@@ -94,7 +96,8 @@ full description, install steps, CLI flags, and config.
 ## If you were asked to fix a bug or implement a feature here
 
 1. Check **Active priorities** above — if the ask is open-ended “what next,”
-   cswap reliability is #1.
+   start at **Step 1** of the fix plan (unless the operator re-opens cswap
+   follow-ups listed at the plan tail).
 2. Check `docs/fix-implementation-plan.md` — the task is often already scoped
    there with exact fix and test.
 3. If it isn't in the plan, check `docs/code-review-2026-07-23.html` before
@@ -109,3 +112,8 @@ full description, install steps, CLI flags, and config.
 - This repo shells out to three external tools that must already be
   installed/authenticated (`cswap`, `codexbar`, `tokscale`) — do not attempt
   to install, configure, or authenticate them as part of a code change.
+- **Commit early and often.** Prefer a commit at any opportune moment (green
+  tests after a coherent change, end of a plan step, finished investigation
+  docs) over holding a large uncommitted pile. More commits are better than
+  fewer. When the operator has authorized pushes for the session or says
+  “push,” push after commits rather than batching for later.

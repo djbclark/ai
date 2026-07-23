@@ -1425,3 +1425,67 @@ anything) gets implemented.
 testing rigor of Step 2/Phase-1 collector tests: per-provider isolation, timeout
 handling, fallback to the bundled call), or a written investigation note exists
 explaining why it isn't currently possible.
+
+---
+
+# Phase 7 — Deferred / optional (after Steps 1–32)
+
+Park items that are useful but **not** required for the review-derived correctness
+pass. Do these only after Phase 6, or when the operator explicitly prioritizes them.
+
+Background for Steps 33–34: [`cswap-reliability.md`](cswap-reliability.md) and
+[`claude-local-usage.md`](claude-local-usage.md) (cswap multi-account reliability
+already landed: cache hydrate, countdown recompute, CodexBar/tokscale fallback).
+
+## Step 33 — Upstream: richer cswap JSON for display-grade usage (optional)
+
+**Why:** `ai` currently reads `~/.claude-swap-backup/cache/usage.json` (or XDG
+equivalent) when `cswap list --json` marks a slot `unavailable` after
+decision-grade trust expires. That couples us to an internal cache path.
+
+**Work:**
+
+1. File (or contribute) an upstream claude-swap change so `cswap list --json`
+   can expose display-grade data without a private cache read — e.g. additive
+   `usageLastGood` / `usageAgeSeconds` while `usageStatus` stays decision-grade,
+   or a documented `"stale"` status with non-null `usage`.
+2. Once available on a released cswap, prefer that field in `collectors/cswap.py`
+   and keep cache-file hydration only as a fallback for older cswap versions.
+3. Document the minimum cswap version in README if we depend on the new field.
+
+**Done when:** either the upstream field is consumed with tests + README note, or
+a short note here records that upstream declined / stalled and cache hydration
+remains the standing approach.
+
+## Step 34 — Surface Claude usage-credits / pay-as-you-go more fully (optional)
+
+**Why:** Website Settings → Usage shows spend, balance, and monthly credit
+limits. cswap sometimes carries a `spend` block (notes-only today). Local
+JSONL/ccusage measure tokens, not plan credits.
+
+**Work:**
+
+1. Inventory what cswap JSON and CodexBar already return for extra-usage /
+   credits on Pro/Max accounts.
+2. If structured enough, model as windows or a small prepaid-style section in
+   the report (without inventing numbers from ccusage cost estimates).
+3. Tests with fixture payloads; do not scrape the website.
+
+**Done when:** credits appear in pretty/JSON report when the source provides
+them, or a written note explains the data is insufficient.
+
+## Step 35 — Optional local burn section via ccusage / stats-cache (optional)
+
+**Why:** Token burn on this machine is interesting for activity, but it is **not**
+subscription 5h/7d %. Do not use it for use-or-lose alert authority.
+
+**Work (only if product wants activity metrics):**
+
+1. Shell out to `ccusage claude daily --json` (Homebrew/bun/npm all fine) **or**
+   parse `~/.claude/stats-cache.json` in pure Python.
+2. Render a clearly labeled “local Claude Code burn (this machine)” note or
+   section — never as `used_percent` on plan windows.
+3. Multi-account is out of scope for this path (active `~/.claude` only).
+
+**Done when:** optional collector behind a flag or config default-off, with tests
+using fixtures (no live dependency in CI).

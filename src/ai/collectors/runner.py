@@ -98,8 +98,37 @@ def _select_and_cross_check(
         if provider == "claude" and cswap_authoritative:
             cswap_rows = [account for account in rows if account.source == "cswap"]
             codexbar_rows = [account for account in rows if account.source == "codexbar"]
-            selected.extend(cswap_rows)
-            checks.extend(_claude_cross_checks(cswap_rows, codexbar_rows))
+            tokscale_rows = [account for account in rows if account.source == "tokscale"]
+            cswap_live = [account for account in cswap_rows if _has_live_data(account)]
+
+            if cswap_live:
+                # Prefer all cswap rows (live + any remaining error placeholders)
+                # so multi-account identity stays visible even when one slot fails.
+                selected.extend(cswap_rows)
+                checks.extend(_claude_cross_checks(cswap_rows, codexbar_rows, tokscale_rows))
+            else:
+                codexbar_live = [account for account in codexbar_rows if _has_live_data(account)]
+                tokscale_live = [account for account in tokscale_rows if _has_live_data(account)]
+                if codexbar_live:
+                    selected.extend(codexbar_live)
+                elif tokscale_live:
+                    selected.extend(tokscale_live)
+                else:
+                    selected.extend(cswap_rows)
+                checks.append(
+                    CrossCheck(
+                        provider="claude",
+                        account=None,
+                        status="warning",
+                        sources=["cswap", "CodexBar", "tokscale"],
+                        message=(
+                            "cswap (the canonical multi-account Claude source) produced no "
+                            "usable data this run; falling back to a non-canonical source. "
+                            "Multi-account Claude Code data may be incomplete or attributed "
+                            "to the wrong account."
+                        ),
+                    )
+                )
             continue
 
         codexbar_rows = [account for account in rows if account.source == "codexbar"]
@@ -140,10 +169,18 @@ def _has_live_data(account: AccountUsage) -> bool:
     )
 
 
-def _claude_cross_checks(cswap_rows: list[AccountUsage], codexbar_rows: list[AccountUsage]) -> list[CrossCheck]:
+def _claude_cross_checks(
+    cswap_rows: list[AccountUsage],
+    codexbar_rows: list[AccountUsage],
+    tokscale_rows: list[AccountUsage] | None = None,
+) -> list[CrossCheck]:
+    """Compare cswap Claude rows against CodexBar and tokscale when present."""
     checks: list[CrossCheck] = []
+    tokscale_rows = tokscale_rows or []
     live_codexbar = [row for row in codexbar_rows if _has_live_data(row)]
+    live_tokscale = [row for row in tokscale_rows if _has_live_data(row)]
     codexbar_errors = [row.error for row in codexbar_rows if row.error]
+    cswap_live = [row for row in cswap_rows if _has_live_data(row)]
 
     if not cswap_rows:
         return [
@@ -151,7 +188,7 @@ def _claude_cross_checks(cswap_rows: list[AccountUsage], codexbar_rows: list[Acc
                 provider="claude",
                 account=None,
                 status="warning",
-                sources=["cswap", "CodexBar"],
+                sources=["cswap", "CodexBar", "tokscale"],
                 message=(
                     "cswap returned no Claude Code account rows, so Claude cannot "
                     "be reported from its canonical multi-account source."
@@ -160,48 +197,71 @@ def _claude_cross_checks(cswap_rows: list[AccountUsage], codexbar_rows: list[Acc
         ]
 
     matched_codexbar_ids: set[int] = set()
+    matched_tokscale_ids: set[int] = set()
     for cswap_row in cswap_rows:
-        match = next(
-            (
-                row
-                for row in live_codexbar
-                if row.account and cswap_row.account and row.account.lower() == cswap_row.account.lower()
-            ),
-            None,
-        )
-        if match is not None:
-            matched_codexbar_ids.add(id(match))
-            checks.append(_compare_live_rows(cswap_row, match))
+        if not _has_live_data(cswap_row):
+            # Errored cswap slot: do not invent a substitute from another tool's
+            # single-account view; still warn when others reported something.
+            if live_codexbar or live_tokscale:
+                other = "CodexBar" if live_codexbar else "tokscale"
+                checks.append(
+                    CrossCheck(
+                        provider="claude",
+                        account=cswap_row.account,
+                        status="warning",
+                        sources=["cswap", "CodexBar", "tokscale"],
+                        message=(
+                            f"cswap could not read canonical usage for Claude Code account "
+                            f"{cswap_row.account}, while {other} reported Claude data. "
+                            "Do not substitute that non-canonical measurement for this account."
+                        ),
+                    )
+                )
+            else:
+                checks.append(
+                    CrossCheck(
+                        provider="claude",
+                        account=cswap_row.account,
+                        status="unavailable",
+                        sources=["cswap", "CodexBar", "tokscale"],
+                        message=(
+                            f"No independent Claude quota cross-check is available for "
+                            f"{cswap_row.account}."
+                        ),
+                    )
+                )
             continue
 
-        if cswap_row.error and live_codexbar:
-            checks.append(
-                CrossCheck(
-                    provider="claude",
-                    account=cswap_row.account,
-                    status="warning",
-                    sources=["cswap", "CodexBar"],
-                    message=(
-                        f"cswap could not read canonical usage for Claude Code account "
-                        f"{cswap_row.account}, while CodexBar reported Claude data for "
-                        "a different or unidentified account. Do not substitute that "
-                        "CodexBar measurement for this account."
-                    ),
-                )
-            )
-        else:
-            reason = (
-                f"CodexBar also failed: {codexbar_errors[0]}"
-                if codexbar_errors
-                else "CodexBar did not report this Claude Code account."
-            )
+        compared = False
+        codex_match = _match_peer_by_account(cswap_row, live_codexbar, cswap_live_count=len(cswap_live))
+        if codex_match is not None:
+            matched_codexbar_ids.add(id(codex_match))
+            checks.append(_compare_live_rows(cswap_row, codex_match))
+            compared = True
+
+        tok_match = _match_peer_by_account(cswap_row, live_tokscale, cswap_live_count=len(cswap_live))
+        if tok_match is not None:
+            matched_tokscale_ids.add(id(tok_match))
+            checks.append(_compare_live_rows(cswap_row, tok_match))
+            compared = True
+
+        if not compared:
+            if codexbar_errors:
+                reason = f"CodexBar also failed: {codexbar_errors[0]}"
+            elif live_codexbar or live_tokscale:
+                reason = "No peer row matched this Claude Code account by email."
+            else:
+                reason = "CodexBar and tokscale did not report this Claude Code account."
             checks.append(
                 CrossCheck(
                     provider="claude",
                     account=cswap_row.account,
                     status="unavailable",
-                    sources=["cswap", "CodexBar"],
-                    message=(f"No independent Claude quota cross-check is available for {cswap_row.account}. {reason}"),
+                    sources=["cswap", "CodexBar", "tokscale"],
+                    message=(
+                        f"No independent Claude quota cross-check is available for "
+                        f"{cswap_row.account}. {reason}"
+                    ),
                 )
             )
 
@@ -219,7 +279,49 @@ def _claude_cross_checks(cswap_rows: list[AccountUsage], codexbar_rows: list[Acc
                     ),
                 )
             )
+    for row in live_tokscale:
+        if id(row) not in matched_tokscale_ids:
+            checks.append(
+                CrossCheck(
+                    provider="claude",
+                    account=row.account,
+                    status="warning",
+                    sources=["cswap", "tokscale"],
+                    message=(
+                        f"tokscale reported Claude account {row.account or 'unknown'}, "
+                        "but it did not match either canonical cswap account."
+                    ),
+                )
+            )
     return checks
+
+
+def _match_peer_by_account(
+    cswap_row: AccountUsage,
+    peers: list[AccountUsage],
+    *,
+    cswap_live_count: int,
+) -> AccountUsage | None:
+    """Match a peer Claude row to a cswap account.
+
+    Prefer case-insensitive email equality. Allow a single anonymous peer only
+    when there is exactly one live cswap account (avoids binding one CodexBar
+    row to every multi-account cswap slot).
+    """
+    if cswap_row.account:
+        email_match = next(
+            (
+                row
+                for row in peers
+                if row.account and row.account.lower() == cswap_row.account.lower()
+            ),
+            None,
+        )
+        if email_match is not None:
+            return email_match
+    if cswap_live_count == 1 and len(peers) == 1 and not peers[0].account:
+        return peers[0]
+    return None
 
 
 def _provider_cross_check(

@@ -7,18 +7,19 @@ reset** (use-it-or-lose-it).
 CLI command: **`ai`**
 
 > **AI agents:** start at [`AGENTS.md`](AGENTS.md) for a map of this repo,
-> active priorities (cswap reliability is #1 when asking “what next?”), and,
-> for review-derived fixes, [`docs/fix-implementation-plan.md`](docs/fix-implementation-plan.md).
+> active priorities, Claude/cswap reliability notes
+> ([`docs/cswap-reliability.md`](docs/cswap-reliability.md)), and
+> review-derived fixes in [`docs/fix-implementation-plan.md`](docs/fix-implementation-plan.md).
 
 ## Data sources
 
 | Tool                                                               | Purpose                                                   | Authority                                                                         |
 | ------------------------------------------------------------------ | --------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| [**cswap**](https://github.com/) `cswap list --json`               | Live Claude Code quota for every configured email/account | Canonical for Claude; CodexBar is only an account-aware cross-check               |
-| [**CodexBar**](https://github.com/) `codexbar usage --format json` | Live quotas and balances for enabled providers            | Preferred for non-Claude providers                                                |
-| [**tokscale**](https://www.npmjs.com/) `tokscale usage --json`     | Independent live subscription quota measurement           | Cross-checked against CodexBar; selected for alerts when CodexBar has no live row |
+| [**cswap**](https://github.com/realiti4/claude-swap) `cswap list --json` | Live Claude Code quota for every configured email/account | Canonical multi-account Claude source; may hydrate from cswap’s local usage cache when JSON is decision-stale |
+| [**CodexBar**](https://github.com/) `codexbar usage --format json` | Live quotas and balances for enabled providers            | Preferred for non-Claude providers; Claude fallback if cswap has no live rows     |
+| [**tokscale**](https://www.npmjs.com/) `tokscale usage --json`     | Independent live subscription quota measurement           | Cross-checked against CodexBar (and Claude/cswap); selected when preferred source has no live row |
 
-This project shells out to tools already on your `PATH`; it does not scrape billing dashboards itself.
+This project shells out to tools already on your `PATH`; it does not scrape billing dashboards itself. For Claude multi-account reliability (stale JSON vs cache), see [`docs/cswap-reliability.md`](docs/cswap-reliability.md).
 
 ## Install
 
@@ -175,6 +176,8 @@ of those corresponding inputs.
 - [`docs/consumption-flexibility-plan.md`](docs/consumption-flexibility-plan.md) — design rationale for the multi-dimensional scoring model.
 - [`docs/code-review-2026-07-23.html`](docs/code-review-2026-07-23.html) — a 79-agent adversarial code review (45 findings) plus design proposals for containing tokscale's collector timeouts and fixing the rating algorithm. Open it directly in a browser for the styled version; GitHub's file viewer only shows the source.
 - [`docs/fix-implementation-plan.md`](docs/fix-implementation-plan.md) — the ordered, step-by-step plan for fixing everything the review above found, phased as showstopper bugs → rating-algorithm redesign → everything else.
+- [`docs/cswap-reliability.md`](docs/cswap-reliability.md) — Claude multi-account reliability: why `cswap list --json` can drop usable quota, and how cache hydration + fallbacks work.
+- [`docs/claude-local-usage.md`](docs/claude-local-usage.md) — Local Claude Code files / ccusage (token burn) vs subscription 5h/7d % from the OAuth usage API.
 - [`docs/review-workflow.js`](docs/review-workflow.js) — the Claude Code Workflow script that generated the review, checked in for reproducibility.
 - [`docs/memory/`](docs/memory/) — thin Claude symlink target for this project; see `AGENTS.md` for persistence policy and links to `~/ops/site-private` generic memory.
 - Local quota dashboards in the same category as OpenUsage / CodexBar menu bar tools

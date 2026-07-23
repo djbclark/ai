@@ -1,5 +1,7 @@
 """Regression tests for cswap's canonical schema-v1 Claude data."""
 
+import time
+
 from ai.collectors.cswap import _account_from_item
 from ai.models import BillingKind
 
@@ -119,3 +121,103 @@ def test_description_only_block_is_retained_not_discarded():
         2,
     )
     assert account.windows[0].reset_description == "resets in 2 days"
+
+
+def test_unavailable_json_row_hydrates_from_cswap_usage_cache():
+    """`cswap list --json` drops decision-stale lastGood; we recover it for reports."""
+    fetched_at = time.time() - 7200  # 2h old — past cswap TRUST_MAX_AGE_S
+    cache = {
+        "accounts": {
+            "2": {
+                "email": "personal-account@example.com",
+                "lastGood": {
+                    "five_hour": {"pct": 0.0},
+                    "seven_day": {
+                        "pct": 100.0,
+                        "resets_at": "2099-01-02T00:00:00+00:00",
+                        "countdown": "1d",
+                    },
+                },
+                "fetchedAt": fetched_at,
+            }
+        }
+    }
+    account = _account_from_item(
+        {
+            "number": 2,
+            "email": "personal-account@example.com",
+            "usageStatus": "unavailable",
+            "usage": None,
+        },
+        1,
+        cache=cache,
+    )
+    assert account.error is None
+    assert [window.label for window in account.windows] == [
+        "Claude Code 5-hour",
+        "Claude Code weekly",
+    ]
+    assert account.windows[0].used_percent == 0.0
+    assert account.windows[1].used_percent == 100.0
+    assert any("last-known quota" in note for note in account.notes)
+    assert any("decision-stale" in note for note in account.notes)
+
+
+def test_unavailable_without_cache_still_errors():
+    account = _account_from_item(
+        {
+            "number": 2,
+            "email": "personal-account@example.com",
+            "usageStatus": "unavailable",
+            "usage": None,
+        },
+        1,
+        cache={"accounts": {}},
+    )
+    assert account.error is not None
+    assert account.windows == []
+    assert "live Claude quota could not be fetched" in account.error
+
+
+def test_cache_hydration_matches_by_email_when_slot_number_missing_in_cache():
+    cache = {
+        "accounts": {
+            "9": {
+                "email": "work-account@example.org",
+                "lastGood": {"five_hour": {"pct": 12.0}},
+                "fetchedAt": time.time() - 600,
+            }
+        }
+    }
+    account = _account_from_item(
+        {
+            "number": 2,
+            "email": "Work-Account@example.org",
+            "usageStatus": "unavailable",
+            "usage": None,
+        },
+        1,
+        cache=cache,
+    )
+    assert account.error is None
+    assert account.windows[0].used_percent == 12.0
+
+
+def test_stale_cached_countdown_is_recomputed_from_resets_at():
+    """lastGood freezes countdown at fetch; we must not report a 17h string ~2h later."""
+    from datetime import datetime, timedelta, timezone
+
+    from ai.collectors.cswap import _countdown_from_reset, _window_from_block
+
+    now = datetime(2026, 7, 23, 18, 50, 0, tzinfo=timezone.utc)
+    resets = now + timedelta(hours=15, minutes=10)
+    frozen = "17h 8m"  # what cswap stored when the row was ~2h younger
+    window = _window_from_block(
+        "Claude Code weekly",
+        {"pct": 100.0, "resets_at": resets.isoformat(), "countdown": frozen},
+        now=now,
+    )
+    assert window is not None
+    assert window.reset_description != frozen
+    assert window.reset_description == _countdown_from_reset(resets, now=now)
+    assert window.reset_description == "15h 10m"

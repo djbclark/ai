@@ -156,3 +156,54 @@ def test_more_than_two_cswap_claude_accounts_all_survive_selection():
     assert {account.account for account in selected} == {f"user{i}@example.com" for i in range(4)}
     # Each account gets its own cross-check note (no CodexBar row to match against).
     assert len(checks) == 4
+
+
+def test_claude_falls_back_to_codexbar_when_cswap_has_no_live_data():
+    cswap_err = _account("cswap", "claude", error="cswap empty")
+    cswap_err.account = "a@example.com"
+    codexbar = _account("codexbar", "claude")
+    codexbar.account = "a@example.com"
+    codexbar.windows[0].label = "Claude Code weekly"
+
+    selected, checks = _select_and_cross_check([cswap_err, codexbar], cswap_authoritative=True)
+
+    assert [account.source for account in selected] == ["codexbar"]
+    assert any(check.status == "warning" and "falling back" in check.message for check in checks)
+
+
+def test_claude_falls_back_to_tokscale_when_cswap_and_codexbar_empty():
+    cswap_err = _account("cswap", "claude", error="no data")
+    tokscale = _account("tokscale", "claude")
+    tokscale.windows[0].label = "Session"
+
+    selected, checks = _select_and_cross_check([cswap_err, tokscale], cswap_authoritative=True)
+
+    assert [account.source for account in selected] == ["tokscale"]
+    assert any("falling back" in check.message for check in checks)
+
+
+def test_claude_keeps_cswap_error_when_no_alternate_live_source():
+    cswap_err = _account("cswap", "claude", error="no data")
+    selected, checks = _select_and_cross_check([cswap_err], cswap_authoritative=True)
+    assert [account.source for account in selected] == ["cswap"]
+    assert any("falling back" in check.message for check in checks)
+
+
+def test_claude_cross_check_includes_tokscale_when_cswap_live():
+    cswap_row = _account("cswap", "claude")
+    cswap_row.account = "user@example.com"
+    cswap_row.windows[0].label = "Claude Code weekly"
+    cswap_row.windows[0].used_percent = 10
+    tokscale_row = _account("tokscale", "claude")
+    tokscale_row.account = "user@example.com"
+    tokscale_row.windows[0].label = "Claude Code weekly"
+    tokscale_row.windows[0].used_percent = 40
+
+    _selected, checks = _select_and_cross_check([cswap_row, tokscale_row], cswap_authoritative=True)
+
+    assert any(
+        check.status == "warning"
+        and "percentage points" in check.message
+        and "tokscale" in check.sources
+        for check in checks
+    )

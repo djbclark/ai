@@ -1,7 +1,25 @@
-"""Collect canonical, multi-account Claude Code quota status from cswap."""
+"""Collect multi-account Claude Code quota status from cswap.
+
+Primary path: ``cswap list --json`` (schema v1).
+
+Reliability path: when JSON marks a slot ``usageStatus: unavailable`` with no
+``usage`` payload, hydrate from cswap's on-disk usage cache
+(``cache/usage.json`` under the claude-swap data dir). That cache still holds
+``lastGood`` measurements the human ``cswap list`` view shows with an age note,
+but which the JSON contract deliberately omits once the measurement ages past
+decision-grade trust (``STALE_OK_S`` / ``TRUST_MAX_AGE_S``). Exhausted accounts
+are especially affected: cswap postpones the next poll until reset, so the JSON
+view can report ``unavailable`` for hours while the last-known 100% figure is
+still correct for reporting.
+"""
 
 from __future__ import annotations
 
+import json
+import os
+import time
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 from ai.models import (
@@ -29,10 +47,11 @@ def collect_cswap() -> list[AccountUsage]:
     if data.get("schemaVersion") not in (None, 1):
         raise CollectorError(f"unsupported cswap JSON schema version: {data.get('schemaVersion')}")
 
+    cache = _load_usage_cache()
     accounts: list[AccountUsage] = []
     for item in data.get("accounts") or []:
         if isinstance(item, dict):
-            accounts.append(_account_from_item(item, data.get("activeAccountNumber")))
+            accounts.append(_account_from_item(item, data.get("activeAccountNumber"), cache=cache))
     if not accounts:
         accounts.append(
             AccountUsage(
@@ -45,7 +64,12 @@ def collect_cswap() -> list[AccountUsage]:
     return accounts
 
 
-def _account_from_item(item: dict[str, Any], active_number: Any) -> AccountUsage:
+def _account_from_item(
+    item: dict[str, Any],
+    active_number: Any,
+    *,
+    cache: dict[str, Any] | None = None,
+) -> AccountUsage:
     email = item.get("email")
     number = item.get("number")
     active = bool(item.get("active")) or number == active_number
@@ -84,36 +108,31 @@ def _account_from_item(item: dict[str, Any], active_number: Any) -> AccountUsage
             error = f"Canonical Claude usage unavailable: {detail}."
 
     if usage:
-        windows.extend(_named_window(usage, ("fiveHour", "five_hour"), "Claude Code 5-hour"))
-        windows.extend(_named_window(usage, ("sevenDay", "seven_day", "weekly"), "Claude Code weekly"))
-        windows.extend(_named_window(usage, ("monthly",), "Claude Code monthly"))
+        windows.extend(_windows_from_usage(usage))
+        _append_spend_note(notes, usage)
 
-        for index, key in enumerate(("primary", "secondary", "tertiary"), start=1):
-            block = usage.get(key)
-            if not isinstance(block, dict):
-                continue
-            label = _generic_label(block, index)
-            window = _window_from_block(label, block)
-            if window and not _same_window_present(windows, window):
-                windows.append(window)
-
-        scoped = usage.get("scoped")
-        if isinstance(scoped, list):
-            for block in scoped:
-                if not isinstance(block, dict):
-                    continue
-                model_name = str(block.get("name") or "unnamed model")
-                window = _window_from_block(f"Claude Code weekly — {model_name}", block)
-                if window and not _same_window_present(windows, window):
-                    windows.append(window)
-
-        spend = usage.get("spend")
-        if isinstance(spend, dict):
-            used = _number(spend.get("used"))
-            limit = _number(spend.get("limit"))
-            currency = str(spend.get("currency") or "currency units")
-            if used is not None and limit is not None:
-                notes.append(f"Current Claude pay-as-you-go spend limit: {used:g} of {limit:g} {currency}.")
+    # Display-grade recovery: when decision-grade JSON omitted usage, reuse the
+    # same lastGood row the human `cswap list` view would show with an age note.
+    if not windows and usage_status not in ("ok", "api_key"):
+        hydrated = _hydrate_from_cache(cache, number=number, email=email)
+        if hydrated is not None:
+            cache_usage, age_s, fetched_at = hydrated
+            windows.extend(_windows_from_usage(cache_usage))
+            _append_spend_note(notes, cache_usage)
+            if windows:
+                error = None  # usable for reporting; age is called out in notes
+                if age_s is not None:
+                    notes.append(
+                        f"Using cswap's last-known quota from local cache "
+                        f"(≈{age_s:.0f}s old"
+                        + (f", fetched {fetched_at}" if fetched_at else "")
+                        + "); `cswap list --json` omitted it as decision-stale."
+                    )
+                else:
+                    notes.append(
+                        "Using cswap's last-known quota from local cache; "
+                        "`cswap list --json` omitted it as decision-stale."
+                    )
 
     account_name = str(email) if email else f"cswap-slot-{number}"
     return AccountUsage(
@@ -128,6 +147,45 @@ def _account_from_item(item: dict[str, Any], active_number: Any) -> AccountUsage
     )
 
 
+def _windows_from_usage(usage: dict[str, Any]) -> list[QuotaWindow]:
+    windows: list[QuotaWindow] = []
+    windows.extend(_named_window(usage, ("fiveHour", "five_hour"), "Claude Code 5-hour"))
+    windows.extend(_named_window(usage, ("sevenDay", "seven_day", "weekly"), "Claude Code weekly"))
+    windows.extend(_named_window(usage, ("monthly",), "Claude Code monthly"))
+
+    for index, key in enumerate(("primary", "secondary", "tertiary"), start=1):
+        block = usage.get(key)
+        if not isinstance(block, dict):
+            continue
+        label = _generic_label(block, index)
+        window = _window_from_block(label, block)
+        if window and not _same_window_present(windows, window):
+            windows.append(window)
+
+    scoped = usage.get("scoped")
+    if isinstance(scoped, list):
+        for block in scoped:
+            if not isinstance(block, dict):
+                continue
+            model_name = str(block.get("name") or "unnamed model")
+            window = _window_from_block(f"Claude Code weekly — {model_name}", block)
+            if window and not _same_window_present(windows, window):
+                windows.append(window)
+
+    return windows
+
+
+def _append_spend_note(notes: list[str], usage: dict[str, Any]) -> None:
+    spend = usage.get("spend")
+    if not isinstance(spend, dict):
+        return
+    used = _number(spend.get("used"))
+    limit = _number(spend.get("limit"))
+    currency = str(spend.get("currency") or "currency units")
+    if used is not None and limit is not None:
+        notes.append(f"Current Claude pay-as-you-go spend limit: {used:g} of {limit:g} {currency}.")
+
+
 def _named_window(usage: dict[str, Any], keys: tuple[str, ...], label: str) -> list[QuotaWindow]:
     for key in keys:
         block = usage.get(key)
@@ -139,9 +197,15 @@ def _named_window(usage: dict[str, Any], keys: tuple[str, ...], label: str) -> l
     return []
 
 
-def _window_from_block(label: str, block: dict[str, Any]) -> QuotaWindow | None:
+def _window_from_block(
+    label: str,
+    block: dict[str, Any],
+    *,
+    now: datetime | None = None,
+) -> QuotaWindow | None:
     # cswap schema v1 uses `pct`; the other spellings keep compatibility with
-    # older/future adapters without weakening cswap's authority.
+    # older/future adapters without weakening cswap's authority. Cache lastGood
+    # uses the internal snake_case shape (`pct` + `resets_at`).
     used = _number(
         block.get("pct")
         if block.get("pct") is not None
@@ -160,7 +224,15 @@ def _window_from_block(label: str, block: dict[str, Any]) -> QuotaWindow | None:
         remaining = max(0.0, 100.0 - used)
 
     resets = parse_dt(block.get("resetsAt") or block.get("resets_at") or block.get("resetAt") or block.get("reset_at"))
-    description = block.get("countdown") or block.get("resetDescription") or block.get("reset_description")
+    # Prefer a live countdown from resets_at. Cached lastGood freezes countdown
+    # at fetch time (e.g. "17h 8m" still present two hours later); human cswap
+    # list recomputes at render — match that for reporting.
+    description: str | None
+    if resets is not None:
+        description = _countdown_from_reset(resets, now=now)
+    else:
+        raw_desc = block.get("countdown") or block.get("resetDescription") or block.get("reset_description")
+        description = str(raw_desc) if raw_desc else None
     if used is None and remaining is None and resets is None and not description:
         return None
     return QuotaWindow(
@@ -172,6 +244,22 @@ def _window_from_block(label: str, block: dict[str, Any]) -> QuotaWindow | None:
         reset_description=description,
         raw=block,
     )
+
+
+def _countdown_from_reset(resets_at: datetime, *, now: datetime | None = None) -> str:
+    """Human-style remaining time, same shape as cswap's format_reset countdown."""
+    now = now or datetime.now(timezone.utc)
+    if resets_at.tzinfo is None:
+        resets_at = resets_at.replace(tzinfo=timezone.utc)
+    total_seconds = max(0, int((resets_at - now).total_seconds()))
+    days, remainder = divmod(total_seconds, 86400)
+    hours, remainder = divmod(remainder, 3600)
+    minutes = remainder // 60
+    if days > 0:
+        return f"{days}d {hours}h"
+    if hours > 0:
+        return f"{hours}h {minutes}m"
+    return f"{minutes}m"
 
 
 def _generic_label(block: dict[str, Any], index: int) -> str:
@@ -188,3 +276,87 @@ def _generic_label(block: dict[str, Any], index: int) -> str:
 
 def _same_window_present(windows: list[QuotaWindow], candidate: QuotaWindow) -> bool:
     return any(window.same_measurement(candidate) for window in windows)
+
+
+# ---------------------------------------------------------------------------
+# Local usage-cache recovery (display-grade, same data human `cswap list` shows)
+# ---------------------------------------------------------------------------
+
+
+def _cswap_data_dirs() -> list[Path]:
+    """Candidate claude-swap data roots (same layout as cswap's paths.py)."""
+    dirs: list[Path] = []
+    xdg = (os.environ.get("XDG_DATA_HOME") or "").strip()
+    if xdg:
+        dirs.append(Path(xdg) / "claude-swap")
+    # Linux/WSL default under XDG; harmless to probe on macOS.
+    dirs.append(Path.home() / ".local" / "share" / "claude-swap")
+    # macOS / Windows legacy root (and current default on this machine).
+    dirs.append(Path.home() / ".claude-swap-backup")
+    # De-dupe while preserving order.
+    seen: set[Path] = set()
+    out: list[Path] = []
+    for path in dirs:
+        resolved = path.expanduser()
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        out.append(resolved)
+    return out
+
+
+def _load_usage_cache() -> dict[str, Any] | None:
+    """Load ``cache/usage.json`` if present; never raises into the collector."""
+    for root in _cswap_data_dirs():
+        path = root / "cache" / "usage.json"
+        if not path.is_file():
+            continue
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+            continue
+        if isinstance(data, dict):
+            return data
+    return None
+
+
+def _hydrate_from_cache(
+    cache: dict[str, Any] | None,
+    *,
+    number: Any,
+    email: Any,
+) -> tuple[dict[str, Any], float | None, str | None] | None:
+    """Return ``(usage_dict, age_seconds, fetched_at_iso)`` from lastGood, if any."""
+    if not cache:
+        return None
+    accounts = cache.get("accounts")
+    if not isinstance(accounts, dict):
+        return None
+
+    row: dict[str, Any] | None = None
+    if number is not None and str(number) in accounts and isinstance(accounts[str(number)], dict):
+        row = accounts[str(number)]
+    elif email:
+        email_l = str(email).lower()
+        for candidate in accounts.values():
+            if isinstance(candidate, dict) and str(candidate.get("email") or "").lower() == email_l:
+                row = candidate
+                break
+    if row is None:
+        return None
+
+    last_good = row.get("lastGood") or row.get("last_good")
+    if not isinstance(last_good, dict) or not last_good:
+        return None
+
+    fetched_at = row.get("fetchedAt") if row.get("fetchedAt") is not None else row.get("fetched_at")
+    age_s: float | None = None
+    fetched_iso: str | None = None
+    if isinstance(fetched_at, (int, float)):
+        age_s = max(0.0, time.time() - float(fetched_at))
+        try:
+            fetched_iso = datetime.fromtimestamp(float(fetched_at), tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        except (OverflowError, OSError, ValueError):
+            fetched_iso = None
+
+    return last_good, age_s, fetched_iso
