@@ -203,6 +203,40 @@ def test_cache_hydration_matches_by_email_when_slot_number_missing_in_cache():
     assert account.windows[0].used_percent == 12.0
 
 
+def test_named_five_hour_block_gets_nominal_window_minutes():
+    account = _account_from_item(
+        {
+            "number": 1,
+            "email": "a@example.com",
+            "usageStatus": "ok",
+            "usage": {"fiveHour": {"pct": 10, "resetsAt": "2099-01-01T00:00:00Z"}},
+        },
+        1,
+    )
+    assert account.windows[0].label == "Claude Code 5-hour"
+    assert account.windows[0].window_minutes == 300
+
+
+def test_named_seven_day_keeps_explicit_window_minutes():
+    account = _account_from_item(
+        {
+            "number": 1,
+            "email": "a@example.com",
+            "usageStatus": "ok",
+            "usage": {
+                "sevenDay": {
+                    "pct": 20,
+                    "windowMinutes": 10079,
+                    "resetsAt": "2099-01-02T00:00:00Z",
+                }
+            },
+        },
+        1,
+    )
+    assert account.windows[0].label == "Claude Code weekly"
+    assert account.windows[0].window_minutes == 10079
+
+
 def test_stale_cached_countdown_is_recomputed_from_resets_at():
     """lastGood freezes countdown at fetch; we must not report a 17h string ~2h later."""
     from datetime import datetime, timedelta, timezone

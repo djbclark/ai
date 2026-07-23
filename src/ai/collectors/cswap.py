@@ -186,14 +186,29 @@ def _append_spend_note(notes: list[str], usage: dict[str, Any]) -> None:
         notes.append(f"Current Claude pay-as-you-go spend limit: {used:g} of {limit:g} {currency}.")
 
 
+_NOMINAL_MINUTES = {
+    "Claude Code 5-hour": 300,
+    "Claude Code weekly": 10080,
+    "Claude Code monthly": 43800,
+}
+
+
 def _named_window(usage: dict[str, Any], keys: tuple[str, ...], label: str) -> list[QuotaWindow]:
     for key in keys:
         block = usage.get(key)
         if isinstance(block, dict):
             window = _window_from_block(label, block)
+            if window and window.window_minutes is None:
+                window.window_minutes = _NOMINAL_MINUTES.get(label)
             return [window] if window else []
         if isinstance(block, (int, float)):
-            return [QuotaWindow(label=label, used_percent=float(block))]
+            return [
+                QuotaWindow(
+                    label=label,
+                    used_percent=float(block),
+                    window_minutes=_NOMINAL_MINUTES.get(label),
+                )
+            ]
     return []
 
 
