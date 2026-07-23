@@ -7,6 +7,7 @@ import sys
 from datetime import datetime
 from typing import Any, TextIO
 
+from ai.analysis.pace import compute_pace
 from ai.analysis.use_or_lose import DAYS_PER_MONTH, _classify_flexibility, _compute_value_at_risk
 from ai.models import (
     AccountUsage,
@@ -16,6 +17,7 @@ from ai.models import (
     UseOrLoseAlert,
     classify_window_minutes,
     provider_display_name,
+    utcnow,
 )
 
 URGENCY_ICON = {
@@ -178,10 +180,12 @@ def _render_traditional_summary(
     width: int,
 ) -> list[str]:
     action = [a for a in alerts if a.urgency not in (Urgency.INFO, Urgency.NONE)]
+    conserve = [a for a in action if a.kind == "conserve"]
+    action = [a for a in action if a.kind != "conserve"]
     info = [a for a in alerts if a.urgency == Urgency.INFO]
     lines: list[str] = []
 
-    if not action:
+    if not action and not conserve:
         lines.append(s.green("  Nothing urgent: no large unused subscription windows"))
         lines.append(s.green("  are about to reset under your current thresholds."))
         lines.append(s.dim("  (Quotas may be well-used, resets far out, or live quota data missing"))
@@ -190,6 +194,13 @@ def _render_traditional_summary(
         lines.append(s.dim("  Paid plan capacity that goes unused when the window resets is gone forever."))
         lines.append(s.dim("  Prefer these providers/accounts soon so you do not leave tokens on the table."))
         lines.append("")
+
+        if conserve:
+            lines.append(s.bold("  Conserve — pace until reset"))
+            lines.append(s.dim("  " + "-" * (width - 4)))
+            for alert in sorted(conserve, key=lambda a: (-a.score,)):
+                lines.append(_summary_alert_line(alert, s))
+            lines.append("")
 
         # Group by time bucket for a clear "within X" narrative
         buckets: dict[str, list[UseOrLoseAlert]] = {
@@ -216,27 +227,28 @@ def _render_traditional_summary(
                 lines.append(_summary_alert_line(alert, s))
             lines.append("")
 
-        # One-line action plan
-        lines.append(s.bold("  Action plan"))
-        lines.append(s.dim("  " + "-" * (width - 4)))
-        for i, alert in enumerate(
-            sorted(
-                action,
-                key=lambda a: (
-                    a.days_until_reset if a.days_until_reset is not None else 999,
-                    -a.score,
+        # One-line action plan (burn only)
+        if action:
+            lines.append(s.bold("  Action plan"))
+            lines.append(s.dim("  " + "-" * (width - 4)))
+            for i, alert in enumerate(
+                sorted(
+                    action,
+                    key=lambda a: (
+                        a.days_until_reset if a.days_until_reset is not None else 999,
+                        -a.score,
+                    ),
                 ),
-            ),
-            start=1,
-        ):
-            when = _human_deadline(alert.days_until_reset)
-            who = alert.account or "default account"
-            lines.append(
-                f"  {i}. {s.bold(provider_display_name(alert.provider))} ({who}): burn "
-                f"{s.yellow(f'{alert.remaining_percent:.0f}%')} of "
-                f"{alert.window_label} {when}"
-            )
-        lines.append("")
+                start=1,
+            ):
+                when = _human_deadline(alert.days_until_reset)
+                who = alert.account or "default account"
+                lines.append(
+                    f"  {i}. {s.bold(provider_display_name(alert.provider))} ({who}): burn "
+                    f"{s.yellow(f'{alert.remaining_percent:.0f}%')} of "
+                    f"{alert.window_label} {when}"
+                )
+            lines.append("")
 
     if info:
         lines.append(s.bold("  Advisory / low urgency (no hard deadline)"))
@@ -256,6 +268,8 @@ def _render_action_plan(
     waking_hours_per_day: float = 16.0,
 ) -> list[str]:
     action = [a for a in alerts if a.urgency not in (Urgency.INFO, Urgency.NONE)]
+    conserve = [a for a in action if a.kind == "conserve"]
+    action = [a for a in action if a.kind != "conserve"]  # burn-only buckets below
     info = [a for a in alerts if a.urgency == Urgency.INFO]
     lines: list[str] = []
 
@@ -264,14 +278,21 @@ def _render_action_plan(
         for a in action
         if a.flexibility_profile and a.flexibility_profile.value_at_risk_usd is not None
     )
-    providers = len({a.provider for a in action})
+    providers = len({a.provider for a in action} | {a.provider for a in conserve})
 
-    if not action and not info:
+    if not action and not conserve and not info:
         lines.append(s.green("  Nothing urgent: no large unused subscription windows"))
         lines.append(s.green("  are about to reset under your current thresholds."))
         lines.append(s.dim("  (Quotas may be well-used, resets far out, or live quota data missing"))
         lines.append(s.dim("   — check per-provider detail above.)"))
         return lines
+
+    if conserve:
+        lines.append(f"  {s.bold('CONSERVE — pace yourself, avoid lockout before reset')}")
+        lines.append(s.dim(f"  {'─' * (width - 4)}"))
+        for alert in sorted(conserve, key=lambda a: (-a.score,)):
+            lines.append(_conserve_line(alert, s))
+        lines.append("")
 
     if action:
         if total_value_usd > 0:
@@ -348,6 +369,21 @@ def _action_buckets(alerts: list[UseOrLoseAlert]) -> dict[str, list[UseOrLoseAle
     return buckets
 
 
+def _conserve_line(alert: UseOrLoseAlert, s: _Style) -> str:
+    icon = URGENCY_ICON.get(alert.urgency, "   ")
+    who = alert.account or "default"
+    when = _human_deadline(alert.days_until_reset)
+    pace = alert.pace
+    lockout = ""
+    if pace and pace.projected_exhaust_at:
+        lockout = f", locked out ~{pace.projected_exhaust_at.strftime('%a %H:%M UTC')}"
+    return (
+        f"  {s.urgency(alert.urgency, icon)} {s.bold(provider_display_name(alert.provider))} · "
+        f"{who} · {alert.window_label}: {alert.remaining_percent:.0f}% left · resets {when}{lockout}\n"
+        f"      {s.dim(alert.message)}"
+    )
+
+
 def _action_plan_line(alert: UseOrLoseAlert, s: _Style) -> str:
     icon = URGENCY_ICON.get(alert.urgency, "   ")
     badge = s.urgency(alert.urgency, f"{icon}")
@@ -368,6 +404,14 @@ def _action_plan_line(alert: UseOrLoseAlert, s: _Style) -> str:
             flex_note = "Throttled — single shot, use it or accept losing it."
         if profile.burn_estimate:
             flex_note = f"{flex_note} ({profile.burn_estimate})"
+
+    pace = alert.pace
+    if pace is not None and pace.pace_ratio is not None:
+        waste = pace.projected_waste_fraction
+        if waste is not None:
+            value_part += f" · pace {pace.pace_ratio:.1f}x — projected {waste:.0%} unused"
+        else:
+            value_part += f" · pace {pace.pace_ratio:.1f}x"
 
     return (
         f"  {badge} {s.bold(provider_display_name(alert.provider))} · "
@@ -623,4 +667,12 @@ def _consumption_line(
         unit = capacity_unit or ""
         parts.append(f"{capacity:.0f}{unit}/cycle")
 
-    return " · ".join(parts)
+    # Pace fragment for detail view (on-pace windows still show here).
+    try:
+        pace_profile = compute_pace(window, now=utcnow())
+    except Exception:  # noqa: BLE001
+        pace_profile = None
+    if pace_profile is not None and pace_profile.pace_ratio is not None:
+        parts.append(f"pace {pace_profile.pace_ratio:.1f}x")
+
+    return " · ".join(parts) if parts else None
