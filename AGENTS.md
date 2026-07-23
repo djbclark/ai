@@ -9,6 +9,18 @@ find what it needs in one hop instead of re-discovering the repo's shape.
 to each other, each near the top of the file, so landing on any one of the
 three gets you to the other two immediately.
 
+## Active priorities (what to do next)
+
+1. **cswap reliability / alternate Claude quota source (highest).** Live Claude
+   usage from `cswap` has been unreliable. Investigate adding another way to
+   obtain the same info (Python API, official Anthropic usage endpoints, or
+   another local tool already on `PATH`), then decide how it should fit beside
+   or instead of `cswap` in `src/ai/collectors/`. Do **not** start this until
+   the operator asks for handoff wrap-up *or* explicitly picks this item —
+   when they ask “what next?” in this repo, this is #1.
+2. Otherwise follow [`docs/fix-implementation-plan.md`](docs/fix-implementation-plan.md)
+   (one step at a time, full pytest before/after).
+
 ## Persistence policy: durable project knowledge goes in this git repo
 
 **If you are an AI agent — any tool, not just Claude Code — and you produce
@@ -16,33 +28,45 @@ something about this project that a *future* agent session or a *different*
 tool should be able to find, put it under version control here, not in your
 own tool's private local state.** That means not Claude Code's per-machine
 memory store, not `.cursor/`, not `.aider.chat.history.md`, not `.copilot/`,
-not any other tool-specific cache/history/rules directory — those live
-outside git, are invisible to collaborators and to every other tool, and
-(per an explicit ask on 2026-07-23) are not where this project wants anything
-load-bearing to live. Concretely:
+not any other tool-specific cache/history/rules directory. Concretely:
 
 - Findings, designs, plans, decisions → a file under `docs/`, linked from
-  `AGENTS.md`'s table above and from `README.md`'s "Related reading".
-- A reusable script/tool config that produced a checked-in doc (e.g. the
-  workflow that generated a review) → check the script in next to what it
-  produced (see `docs/review-workflow.js`), not just in whatever ran it.
-- If your own tool's persistent-memory feature is where you'd normally jot
-  this down (Claude Code memory, Cursor rules, etc.) — still write the
-  durable version into this repo. Local tool memory can be a *working*
-  notepad for a single session, but treat anything meant to outlive that
-  session as belonging in git first.
-- **`docs/memory/` is a live target, not a snapshot.** Claude Code's memory
-  directory for this project (`~/.claude/projects/<hash>/memory/`) is a
-  **symlink** to `docs/memory/` in this repo (converted 2026-07-23, resolved
-  via `~/src/ai` on this machine). Writing a Claude memory *is* committing to
-  this repo — there's no separate export step, and no drift risk the way a
-  point-in-time snapshot would have. (An earlier `docs/agent-memory-snapshot.md`
-  did the snapshot thing before this symlink existed; it's gone now, superseded.)
-  This mirrors a broader cross-machine convention the operator is rolling out
-  project-by-project — independent projects like this one keep their memory
-  content in their own repo (as here); it's specifically the shared `~/ops/*`
-  repos that split memory content three ways. Not this project's concern
-  beyond the symlink itself.
+  this file and from `README.md`'s "Related reading".
+- A reusable script/tool config that produced a checked-in doc → check the
+  script in next to what it produced (see `docs/review-workflow.js`).
+- Claude / vendor memory is fine as a *working* scratchpad inside one session;
+  before ending a task, promote anything durable into a repo-tracked file.
+  Prefer **not** duplicating long essays under `docs/memory/` when
+  `AGENTS.md` or another doc already states the rule (token cost for agents
+  that load both).
+
+### Claude memory symlink (this project)
+
+`~/.claude/projects/-Users-djbclark-src-ai/memory` is a **symlink** to
+[`docs/memory/`](docs/memory/) in this repo. Keep that directory thin
+([`MEMORY.md`](docs/memory/MEMORY.md) index only unless a short pointer is
+truly needed). Writing a Claude memory for this project *is* writing into this
+git tree — commit it if it should persist.
+
+### Generic / private memory (sibling ops repo — not a symlink from here)
+
+Cross-project private notes live in `~/ops/site-private` (Claude home-scoped
+memory symlinks there). From this repo, **document** both forms — do not add
+an in-repo symlink:
+
+- Filesystem: `~/ops/site-private/memory/` and
+  `~/ops/site-private/AGENTS.md`
+- HTTPS:
+  [memory/MEMORY.md](https://github.com/djbclark/site-private/blob/master/memory/MEMORY.md),
+  [AGENTS.md](https://github.com/djbclark/site-private/blob/master/AGENTS.md)
+
+Broader three-way ops policy (stayturgid / site-`<name>` / site-private) starts
+at
+[stayturgid AGENTS.md](https://github.com/djbclark/stayturgid/blob/master/AGENTS.md)
+(`~/ops/stayturgid/AGENTS.md`). Independent projects like this one keep
+project knowledge in **their own** repo.
+
+**Never commit passwords or secrets.** IPs/hostnames are fine.
 
 ## What this project is
 
@@ -57,25 +81,26 @@ full description, install steps, CLI flags, and config.
 | Path | What it is | When to read it |
 | --- | --- | --- |
 | `README.md` | Project overview: install, usage, CLI flags, config, output format. | First, for "what does this tool do / how do I run it." |
-| `AGENTS.md` (this file) | Agent orientation and doc map. | First, for "where is everything." |
-| `docs/fix-implementation-plan.md` | **The current, actionable, step-by-step task list.** 32 steps across 6 phases (showstopper bugs → rating-algorithm redesign → everything else), each with exact files/functions, the bug, the fix, and a test gate. | Before doing any bug-fix or feature work in this repo — check whether the task is already scoped as a step here. |
-| `docs/code-review-2026-07-23.html` | The adversarial code review (45 findings, 79 agents) that `fix-implementation-plan.md` was derived from. Open directly in a browser — GitHub's file viewer shows it as source, not rendered HTML. | For the *why* and full evidence behind a specific plan step, or before adding a new finding (check it isn't already documented here). |
-| `docs/consumption-flexibility-plan.md` | Original design doc for the multi-dimensional scoring model. **Superseded** — the review found bugs in this design's implementation, and `fix-implementation-plan.md` Phase 2 replaces its scoring mechanics with pace-based scoring. Still accurate as problem-framing background. | For historical context on why scoring has a value/flexibility/deadline split at all. |
-| `docs/review-workflow.js` | The Claude Code Workflow script that generated the review — not runnable outside that tool, checked in for methodology transparency/reproducibility. | If you need to know exactly what each review agent was asked, or want to re-run/extend the review. |
-| `docs/memory/` | This project's Claude Code memory — a **live symlink target**, not a snapshot. `~/.claude/projects/<hash>/memory/` on this machine points here directly. | If a prior session's memory notes are referenced; also where you write a new Claude memory for this project (it lands here automatically). |
-| `src/ai/` | Source: `collectors/` (cswap, CodexBar, tokscale, plus `runner.py` orchestration), `analysis/` (`use_or_lose.py` scoring, `history.py` snapshot learning), `report.py`, `cli.py`, `config.py`, `models.py`. | When implementing. |
-| `tests/` | Pytest suite, one file per module roughly mirroring `src/ai/`. | Run `.venv/bin/python -m pytest -q` before and after any change. |
-| `config/services.example.yaml` | Example user config (copy to `$XDG_CONFIG_HOME/ai/services.yaml`). | When touching `config.py`'s `DEFAULT_CONFIG` — keep this example in sync. |
+| `AGENTS.md` (this file) | Agent orientation, doc map, persistence policy, **active priorities**. | First, for "where is everything / what next." |
+| `docs/fix-implementation-plan.md` | Step-by-step task list from the 2026-07-23 review (32 steps / 6 phases). | Before bug-fix or feature work already scoped there. |
+| `docs/code-review-2026-07-23.html` | Adversarial code review (45 findings) that the plan was derived from. Open in a browser. | For the *why* behind a plan step. |
+| `docs/consumption-flexibility-plan.md` | Original scoring design. **Superseded** by pace-based scoring in the fix plan Phase 2. | Historical context only. |
+| `docs/review-workflow.js` | Workflow script that generated the review. | Methodology / re-run. |
+| `docs/memory/` | Thin Claude memory symlink target for this project (`MEMORY.md` index). | Rarely — prefer this file and `docs/` prose. |
+| `src/ai/` | Source: collectors, analysis, report, cli, config, models. | When implementing. |
+| `tests/` | Pytest suite. | Run `.venv/bin/python -m pytest -q` before and after any change. |
+| `config/services.example.yaml` | Example user config. | Keep in sync with `config.py`'s `DEFAULT_CONFIG`. |
 
 ## If you were asked to fix a bug or implement a feature here
 
-1. Check `docs/fix-implementation-plan.md` first — the task is very likely
-   already scoped there as a numbered step, with the exact fix and test
-   specified, so implementing it should not require re-deriving anything.
-2. If it isn't in the plan, check `docs/code-review-2026-07-23.html` for
-   related findings before starting fresh analysis.
-3. Follow the plan's own operating rules (top of that file): one step at a
-   time, run the full test suite before and after, don't skip ahead.
+1. Check **Active priorities** above — if the ask is open-ended “what next,”
+   cswap reliability is #1.
+2. Check `docs/fix-implementation-plan.md` — the task is often already scoped
+   there with exact fix and test.
+3. If it isn't in the plan, check `docs/code-review-2026-07-23.html` before
+   starting fresh analysis.
+4. Follow the plan's operating rules when working a numbered step: one step at
+   a time, full test suite before and after, don't skip ahead.
 
 ## Conventions
 

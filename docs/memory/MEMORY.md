@@ -1,2 +1,9 @@
-- [ai project review — resolved](checkpoint-ai-project-review.md) — 2026-07-23 review/plan complete, checked into ~/src/ai repo (docs/, AGENTS.md); not pending work
-- [Feedback: git over memory](feedback_git_over_memory.md) — for ~/src/ai, durable knowledge goes in the repo (docs/, AGENTS.md), not this memory store
+# Memory Index
+
+Project policy and priorities live in [`../AGENTS.md`](../AGENTS.md) — do not
+restate them here (avoids duplicate token load). This directory is only the
+Claude Code symlink target for `~/src/ai`.
+
+Generic / private cross-project memory:
+`~/ops/site-private/memory/` —
+[GitHub](https://github.com/djbclark/site-private/blob/master/memory/MEMORY.md).

@@ -6,9 +6,9 @@ reset** (use-it-or-lose-it).
 
 CLI command: **`ai`**
 
-> **AI agents:** start at [`AGENTS.md`](AGENTS.md) for a map of this repo and,
-> if you're here to fix a bug or add a feature, [`docs/fix-implementation-plan.md`](docs/fix-implementation-plan.md)
-> for the current step-by-step task list.
+> **AI agents:** start at [`AGENTS.md`](AGENTS.md) for a map of this repo,
+> active priorities (cswap reliability is #1 when asking “what next?”), and,
+> for review-derived fixes, [`docs/fix-implementation-plan.md`](docs/fix-implementation-plan.md).
 
 ## Data sources
 
@@ -176,5 +176,5 @@ of those corresponding inputs.
 - [`docs/code-review-2026-07-23.html`](docs/code-review-2026-07-23.html) — a 79-agent adversarial code review (45 findings) plus design proposals for containing tokscale's collector timeouts and fixing the rating algorithm. Open it directly in a browser for the styled version; GitHub's file viewer only shows the source.
 - [`docs/fix-implementation-plan.md`](docs/fix-implementation-plan.md) — the ordered, step-by-step plan for fixing everything the review above found, phased as showstopper bugs → rating-algorithm redesign → everything else.
 - [`docs/review-workflow.js`](docs/review-workflow.js) — the Claude Code Workflow script that generated the review, checked in for reproducibility.
-- [`docs/memory/`](docs/memory/) — this project's AI-agent persistent memory; a live symlink target (`~/.claude/projects/<hash>/memory/` points here), not a snapshot.
+- [`docs/memory/`](docs/memory/) — thin Claude symlink target for this project; see `AGENTS.md` for persistence policy and links to `~/ops/site-private` generic memory.
 - Local quota dashboards in the same category as OpenUsage / CodexBar menu bar tools
