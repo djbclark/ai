@@ -77,6 +77,10 @@ ai --min-remaining 50 --max-days 10
 # Subprocess timeout for external tools (default 45s; also in config.toml)
 ai --timeout 45
 ai -t45
+
+# Environment check (tools on PATH, config files, timeouts) — no usage collection
+ai doctor
+ai --doctor
 ```
 
 | Flag                                             | Effect                                                             |
@@ -91,8 +95,11 @@ ai -t45
 | `-t` / `--timeout SECONDS`                       | Force subprocess timeout for all external tools (default **45**)   |
 | `--generate-config`                              | Write default `~/.config/ai/*` files; never overwrites existing    |
 | `--show-config-path`                             | Print services.yaml and config.toml paths                          |
+| `doctor` / `--doctor`                            | Check tools on PATH, config presence, effective timeouts; no collect |
 | `--min-remaining 50 --max-days 10`               | Override alert thresholds                                          |
 | `--save PATH`                                    | Also write full JSON snapshot to PATH                              |
+
+`ai doctor` exits **0** when every **enabled** collector’s CLI is on `PATH`, and **1** if any enabled tool is missing (disabled collectors are reported but do not fail). It does not call usage APIs or check authentication — only local discoverability.
 
 ## What “use it or lose it” means
 

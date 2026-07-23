@@ -2,6 +2,92 @@ from ai import cli
 from ai.models import CrossCheck, Snapshot, utcnow
 
 
+def test_help_epilog_mentions_setup_flags(capsys):
+    try:
+        cli.main(["--help"])
+    except SystemExit as exc:
+        assert exc.code == 0
+    out = capsys.readouterr().out
+    assert "--generate-config" in out
+    assert "doctor" in out
+    assert "--timeout" in out or "-t" in out
+    assert "config.toml" in out
+
+
+def test_doctor_exits_without_collecting(monkeypatch, tmp_path, capsys):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+
+    def fail_if_called(_config):
+        raise AssertionError("collectors should not run")
+
+    monkeypatch.setattr(cli, "run_collectors", fail_if_called)
+    monkeypatch.setattr(cli, "which", lambda _cmd: "/usr/bin/fake")
+
+    assert cli.main(["--doctor"]) == 0
+    out = capsys.readouterr().out
+    assert "ai doctor" in out
+    assert "No problems detected" in out
+    assert str(tmp_path / "ai") in out
+
+
+def test_doctor_subcommand_synonym(monkeypatch, tmp_path, capsys):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    monkeypatch.setattr(cli, "which", lambda _cmd: "/bin/tool")
+    monkeypatch.setattr(cli, "run_collectors", lambda _c: (_ for _ in ()).throw(AssertionError("no collect")))
+    assert cli.main(["doctor"]) == 0
+    assert "ai doctor" in capsys.readouterr().out
+
+
+def test_doctor_missing_enabled_tool_exits_1(monkeypatch, tmp_path, capsys):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+
+    def fake_which(cmd: str):
+        if cmd == "tokscale":
+            return None
+        return f"/usr/bin/{cmd}"
+
+    monkeypatch.setattr(cli, "which", fake_which)
+    code = cli.main(["--doctor"])
+    out = capsys.readouterr().out
+    assert code == 1
+    assert "MISSING" in out
+    assert "tokscale" in out
+    assert "Problems:" in out
+
+
+def test_doctor_disabled_missing_tool_is_ok(monkeypatch, tmp_path, capsys):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    monkeypatch.setattr(
+        cli,
+        "load_config",
+        lambda _p=None: {
+            "collectors": {"tokscale": {"enabled": False}, "cswap": True, "codexbar": True},
+            "timeouts": {"default": 45},
+        },
+    )
+
+    def fake_which(cmd: str):
+        if cmd == "tokscale":
+            return None
+        return f"/usr/bin/{cmd}"
+
+    monkeypatch.setattr(cli, "which", fake_which)
+    assert cli.main(["--doctor"]) == 0
+    out = capsys.readouterr().out
+    assert "tokscale" in out
+    assert "disabled in config" in out
+    assert "No problems detected" in out
+
+
+def test_diagnose_respects_timeout_force():
+    config = {"timeouts": {"force": 12.0, "default": 45.0}, "collectors": {}}
+    code, lines = cli.diagnose(config, which_fn=lambda _c: "/x")
+    assert code == 0
+    text = "\n".join(lines)
+    assert "force:   12.0" in text
+    assert "cswap: 12" in text
+
+
 def test_alerts_only_includes_cross_check_warnings(monkeypatch, capsys):
     snapshot = Snapshot(
         collected_at=utcnow(),
