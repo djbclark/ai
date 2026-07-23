@@ -14,6 +14,12 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "urgent_remaining_percent": 70,
         "urgent_days_until_reset": 7,
         "use_multi_dim_scoring": True,
+        "scoring_mode": "pace",
+        "pace": {
+            "waste_alert_fraction": 0.30,
+            "min_elapsed_fraction": 0.15,
+            "conserve_min_lead_hours": 4.0,
+        },
         "learn_from_history": False,
         "snapshot_retention_days": 90,
         "waking_hours_per_day": 16,

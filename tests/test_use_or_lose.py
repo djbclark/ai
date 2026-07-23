@@ -55,6 +55,8 @@ def test_flags_nearly_unused_weekly_window():
         snap,
         {
             "analysis": {
+                "scoring_mode": "legacy",
+                "use_multi_dim_scoring": False,
                 "min_remaining_percent": 40,
                 "max_days_until_reset": 14,
                 "urgent_remaining_percent": 70,
@@ -88,7 +90,10 @@ def test_ignores_short_5h_window():
             )
         ],
     )
-    alerts = analyze_use_or_lose(snap, {"analysis": {"min_remaining_percent": 40}})
+    alerts = analyze_use_or_lose(
+        snap,
+        {"analysis": {"scoring_mode": "legacy", "use_multi_dim_scoring": False, "min_remaining_percent": 40}},
+    )
     assert not any(a.window_label == "5-hour" for a in alerts)
 
 
@@ -128,7 +133,10 @@ def test_well_used_window_not_flagged():
             )
         ],
     )
-    alerts = analyze_use_or_lose(snap, {"analysis": {"min_remaining_percent": 40}})
+    alerts = analyze_use_or_lose(
+        snap,
+        {"analysis": {"scoring_mode": "legacy", "use_multi_dim_scoring": False, "min_remaining_percent": 40}},
+    )
     assert alerts == []
 
 
@@ -155,6 +163,8 @@ def test_max_days_override_allows_later_window():
         snap,
         {
             "analysis": {
+                "scoring_mode": "legacy",
+                "use_multi_dim_scoring": False,
                 "min_remaining_percent": 40,
                 "max_days_until_reset": 30,
                 "urgent_remaining_percent": 101,
@@ -209,7 +219,10 @@ def test_alert_has_no_dollar_value_estimate():
     )
     alert = analyze_use_or_lose(
         snap,
-        {"plans": {"codex": {"name": "Codex Plus", "monthly_usd": 20}}},
+        {
+            "analysis": {"scoring_mode": "legacy", "use_multi_dim_scoring": False},
+            "plans": {"codex": {"name": "Codex Plus", "monthly_usd": 20}},
+        },
     )[0]
     assert "monthly_usd" not in alert.to_dict()
     assert "$" not in alert.message
@@ -461,6 +474,7 @@ def test_multi_dim_does_not_drop_low_remaining_weekly_window():
         snap,
         {
             "analysis": {
+                "scoring_mode": "multi_dim",
                 "use_multi_dim_scoring": True,
                 "min_remaining_percent": 40,
                 "max_days_until_reset": 14,
@@ -499,6 +513,7 @@ def test_multi_dim_includes_throttled_5h():
         snap,
         {
             "analysis": {
+                "scoring_mode": "multi_dim",
                 "use_multi_dim_scoring": True,
                 "min_value_at_risk_usd": 0.0,
                 "min_value_fraction": 0.0,
@@ -534,6 +549,7 @@ def test_multi_dim_filters_tiny_value():
         snap,
         {
             "analysis": {
+                "scoring_mode": "multi_dim",
                 "use_multi_dim_scoring": True,
                 "min_value_at_risk_usd": 10.0,
             },
@@ -542,3 +558,125 @@ def test_multi_dim_filters_tiny_value():
     )
     # 5h window value is ~$0.11, below $10 threshold
     assert not any("5-hour" in a.window_label for a in alerts)
+
+
+def _pace_cfg(**overrides: object) -> dict:
+    analysis = {
+        "scoring_mode": "pace",
+        "pace": {
+            "waste_alert_fraction": 0.30,
+            "min_elapsed_fraction": 0.15,
+            "conserve_min_lead_hours": 4.0,
+        },
+        "max_days_until_reset": 14,
+        "min_value_at_risk_usd": 0.0,
+        "min_value_fraction": 0.0,
+        "waking_hours_per_day": 16,
+    }
+    analysis.update(overrides)
+    return {"analysis": analysis, "plans": {"claude": {"monthly_price": 20}}}
+
+
+def test_pace_mode_on_pace_weekly_produces_no_alert():
+    now = _now()
+    snap = Snapshot(
+        collected_at=now,
+        accounts=[
+            AccountUsage(
+                source="tokscale",
+                provider="claude",
+                billing_kind=BillingKind.SUBSCRIPTION_WINDOW,
+                windows=[
+                    QuotaWindow(
+                        label="Weekly",
+                        used_percent=64.0,
+                        remaining_percent=36.0,
+                        resets_at=now + timedelta(days=2),
+                        window_minutes=10080,
+                    )
+                ],
+            )
+        ],
+    )
+    assert analyze_use_or_lose(snap, _pace_cfg()) == []
+
+
+def test_pace_mode_conserve_weekly():
+    now = _now()
+    snap = Snapshot(
+        collected_at=now,
+        accounts=[
+            AccountUsage(
+                source="tokscale",
+                provider="claude",
+                billing_kind=BillingKind.SUBSCRIPTION_WINDOW,
+                windows=[
+                    QuotaWindow(
+                        label="Weekly",
+                        used_percent=90.0,
+                        remaining_percent=10.0,
+                        resets_at=now + timedelta(days=3),
+                        window_minutes=10080,
+                    )
+                ],
+            )
+        ],
+    )
+    alerts = analyze_use_or_lose(snap, _pace_cfg())
+    assert len(alerts) == 1
+    assert alerts[0].kind == "conserve"
+    assert alerts[0].pace is not None
+
+
+def test_pace_mode_burn_weekly():
+    now = _now()
+    snap = Snapshot(
+        collected_at=now,
+        accounts=[
+            AccountUsage(
+                source="tokscale",
+                provider="claude",
+                billing_kind=BillingKind.SUBSCRIPTION_WINDOW,
+                windows=[
+                    QuotaWindow(
+                        label="Weekly",
+                        used_percent=10.0,
+                        remaining_percent=90.0,
+                        resets_at=now + timedelta(days=3.5),
+                        window_minutes=10080,
+                    )
+                ],
+            )
+        ],
+    )
+    alerts = analyze_use_or_lose(snap, _pace_cfg())
+    assert len(alerts) == 1
+    assert alerts[0].kind == "burn"
+
+
+def test_legacy_mode_via_use_multi_dim_false():
+    snap = Snapshot(
+        collected_at=_now(),
+        accounts=[
+            AccountUsage(
+                source="codexbar",
+                provider="codex",
+                billing_kind=BillingKind.SUBSCRIPTION_WINDOW,
+                windows=[
+                    QuotaWindow(
+                        label="Weekly",
+                        used_percent=0,
+                        remaining_percent=100,
+                        resets_at=_now() + timedelta(days=3),
+                        window_minutes=10080,
+                    )
+                ],
+            )
+        ],
+    )
+    alerts = analyze_use_or_lose(
+        snap,
+        {"analysis": {"use_multi_dim_scoring": False, "min_remaining_percent": 40}},
+    )
+    assert len(alerts) >= 1
+    assert all(a.kind == "burn" for a in alerts)  # default kind; no pace path

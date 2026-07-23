@@ -10,6 +10,7 @@ from ai.analysis.history import (
     compute_learned_flexibility,
     merge_learned_flexibility,
 )
+from ai.analysis.pace import classify_pace, compute_pace
 from ai.models import (
     WINDOW_5H_MAX_MINUTES,
     AccountUsage,
@@ -225,9 +226,13 @@ def analyze_use_or_lose(
     alerts: list[UseOrLoseAlert] = []
     seen: set[tuple[str, str, str]] = set()
     analysis_cfg = cfg
-    multi_dim = bool(analysis_cfg.get("use_multi_dim_scoring", False))
+    mode = analysis_cfg.get("scoring_mode")
+    if mode is None:
+        mode = "legacy" if analysis_cfg.get("use_multi_dim_scoring", True) is False else "pace"
+    multi_dim = mode == "multi_dim"
     min_value_usd = float(analysis_cfg.get("min_value_at_risk_usd", 0.50))
     min_value_fraction = float(analysis_cfg.get("min_value_fraction", 0.05))
+    waking = float(analysis_cfg.get("waking_hours_per_day", _DEFAULT_WAKING_HOURS))
 
     learned_flex: dict[str, float] = {}
     if analysis_cfg.get("learn_from_history"):
@@ -267,7 +272,7 @@ def analyze_use_or_lose(
         value_multipliers = plan_meta.get("value_multiplier")
 
         for window in account.windows:
-            if not multi_dim and _is_short_window(window):
+            if mode == "legacy" and _is_short_window(window):
                 continue
 
             remaining = window.remaining()
@@ -302,6 +307,99 @@ def analyze_use_or_lose(
                 now=now,
                 learned=learned_flex if learned_flex else None,
             )
+
+            if mode == "pace":
+                pace_cfg = analysis_cfg.get("pace") or {}
+                pace = compute_pace(
+                    window,
+                    now=now,
+                    learned_rate_per_day=None,
+                    learned_sample_count=0,
+                )
+                if pace is None:
+                    continue
+                verdict = classify_pace(
+                    pace,
+                    resets_at=window.resets_at,
+                    waste_alert_fraction=float(pace_cfg.get("waste_alert_fraction", 0.30)),
+                    min_elapsed_fraction=float(pace_cfg.get("min_elapsed_fraction", 0.15)),
+                    conserve_min_lead_hours=float(pace_cfg.get("conserve_min_lead_hours", 4.0)),
+                    has_learned_rate=False,
+                )
+                if verdict in ("on_pace", "unknown"):
+                    continue
+                if days is not None and days > max_days and verdict != "conserve":
+                    continue
+
+                v_cycle = 0.0
+                if monthly_price and window.window_minutes:
+                    v_cycle = _compute_value_at_risk(
+                        remaining=100.0,
+                        window_minutes=window.window_minutes,
+                        monthly_price=float(monthly_price),
+                        waking_hours_per_day=waking,
+                        value_multiplier=window_value_mult,
+                    )
+                if pace.projected_waste_fraction is not None:
+                    pace.projected_waste_usd = round(
+                        (pace.projected_waste_fraction or 0.0) * v_cycle, 2
+                    )
+
+                if verdict == "burn":
+                    if pace.projected_waste_usd is not None and pace.projected_waste_usd < min_value_usd:
+                        plan_price = float(monthly_price or 0)
+                        if plan_price <= 0 or (pace.projected_waste_usd / plan_price) < min_value_fraction:
+                            continue
+                    score = min(100.0, 30.0 + 70.0 * (pace.projected_waste_fraction or 0.0))
+                    if score >= 90:
+                        urgency = Urgency.CRITICAL
+                    elif score >= 75:
+                        urgency = Urgency.HIGH
+                    elif score >= 50:
+                        urgency = Urgency.MEDIUM
+                    else:
+                        urgency = Urgency.LOW
+                    kind = "burn"
+                else:  # conserve
+                    t_left = window.days_until_reset(now) or 0.0
+                    t_ex = (
+                        (pace.projected_exhaust_at - now).total_seconds() / 86400.0
+                        if pace.projected_exhaust_at
+                        else t_left
+                    )
+                    if t_left > 0:
+                        score = 60.0 + 40.0 * max(0.0, min(1.0, (t_left - t_ex) / t_left))
+                    else:
+                        score = 60.0
+                    urgency = Urgency.HIGH if (t_left - t_ex) >= 1.0 else Urgency.MEDIUM
+                    kind = "conserve"
+
+                message = _pace_message(
+                    account=account,
+                    window=window,
+                    verdict=verdict,
+                    pace=pace,
+                    days=days,
+                )
+                alerts.append(
+                    UseOrLoseAlert(
+                        urgency=urgency,
+                        provider=account.provider,
+                        account=account.account,
+                        window_label=window.label,
+                        remaining_percent=remaining,
+                        days_until_reset=days,
+                        plan=account.plan or plan_meta.get("name"),
+                        message=message,
+                        source=account.source,
+                        score=score,
+                        flexibility_profile=flex_profile,
+                        window_minutes=window.window_minutes,
+                        kind=kind,
+                        pace=pace,
+                    )
+                )
+                continue
 
             if multi_dim:
                 if flex_profile is None:
@@ -584,6 +682,39 @@ def _score_multi_dimension(
         urgency = Urgency.NONE
 
     return urgency, score
+
+
+def _pace_message(
+    *,
+    account: AccountUsage,
+    window: QuotaWindow,
+    verdict: str,
+    pace: Any,
+    days: float | None,
+) -> str:
+    who = account.account or "default"
+    when = _human_when(days)
+    remaining = window.remaining()
+    rem_s = f"{remaining:.0f}%" if remaining is not None else "some"
+    if verdict == "conserve":
+        return (
+            f"{provider_display_name(account.provider)} · {who} · {window.label}: "
+            f"pace yourself — projected to run out before reset ({rem_s} left, resets {when})"
+        )
+    return (
+        f"{provider_display_name(account.provider)} · {who} · {window.label}: "
+        f"{rem_s} left may go unused if you stay at this pace (resets {when})"
+    )
+
+
+def _human_when(days: float | None) -> str:
+    if days is None:
+        return "on an unknown schedule"
+    if days < 1:
+        return f"in {days * 24:.0f}h"
+    if days < 2:
+        return "tomorrow"
+    return f"in {days:.1f} days"
 
 
 def _message(
