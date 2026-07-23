@@ -153,7 +153,6 @@ def _compute_flexibility_profile(
                     capacity_unit = window_overrides.get("refill_capacity_unit")
 
     if capacity is not None and capacity > 0 and window.window_minutes:
-        cycles_needed = max(1, int(round((remaining / 100.0) * capacity / capacity)))
         if capacity_unit == "tokens":
             rate = float(cfg.get("max_sustained_tokens_per_minute", _DEFAULT_MAX_TOKENS_PER_MINUTE))
         elif capacity_unit == "requests":
@@ -162,12 +161,17 @@ def _compute_flexibility_profile(
             rate = float(cfg.get("max_usd_per_minute", _DEFAULT_MAX_USD_PER_MINUTE))
         else:
             rate = 1.0
+        # Full-window burn time at configured rate; remaining fraction scales it.
+        # (Previously cycles_needed canceled capacity/capacity → always ~1.)
         burn_minutes = capacity / max(rate, 0.001)
         burn_minutes = round(burn_minutes, 1)
 
+        burn_minutes_for_remaining = burn_minutes * (remaining / 100.0)
+        cycles_needed = max(1, int(-(-burn_minutes_for_remaining // window.window_minutes)))
+
         now_dt = now or utcnow()
         if window.resets_at and isinstance(window.resets_at, type(now_dt)):
-            earliest = window.resets_at - timedelta(minutes=cycles_needed * window.window_minutes)
+            earliest = window.resets_at - timedelta(minutes=burn_minutes_for_remaining)
 
     burn_text = _burn_estimate_text(
         burn_minutes=burn_minutes,

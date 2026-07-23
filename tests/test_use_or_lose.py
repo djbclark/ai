@@ -4,8 +4,11 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
+import pytest
+
 from ai.analysis.use_or_lose import (
     _classify_flexibility,
+    _compute_flexibility_profile,
     _compute_value_at_risk,
     _redistribute_weights,
     _score_multi_dimension,
@@ -302,6 +305,90 @@ def test_compute_value_at_risk_5h():
     )
     expected = 0.80 * (20.0 / (16 * 30.44 * 60 / 300))
     assert abs(val - expected) < 0.01
+
+
+def test_cycles_needed_varies_with_capacity_for_same_remaining():
+    now = _now()
+    resets = now + timedelta(minutes=295)
+    cfg = {
+        "max_requests_per_minute": 0.5,
+        "provider_overrides": {"claude": {"5h": {"flexibility": 0.0}}},
+    }
+    cycles = []
+    for capacity in (1, 45, 100_000):
+        window = QuotaWindow(
+            label="Claude Code 5-hour",
+            remaining_percent=95.0,
+            resets_at=resets,
+            window_minutes=300,
+            refill_capacity=float(capacity),
+            refill_capacity_unit="requests",
+        )
+        profile = _compute_flexibility_profile(
+            window=window,
+            provider="claude",
+            config=cfg,
+            monthly_price=20.0,
+            now=now,
+        )
+        assert profile is not None
+        cycles.append(profile.cycles_needed)
+    assert cycles[0] != cycles[2]
+    assert cycles[1] != cycles[2]
+    assert len(set(cycles)) >= 2
+
+
+def test_claude_5h_flexibility_urgency_not_pinned_at_100():
+    """Interim fix for cycles_needed canceling capacity; full redesign is Phase 2."""
+    now = _now()
+    resets = now + timedelta(minutes=295)
+    window = QuotaWindow(
+        label="Claude Code 5-hour",
+        remaining_percent=95.0,
+        resets_at=resets,
+        window_minutes=300,
+        refill_capacity=45.0,
+        refill_capacity_unit="requests",
+    )
+    cfg = {
+        "waking_hours_per_day": 16,
+        "max_requests_per_minute": 0.5,
+        "provider_overrides": {
+            "claude": {
+                "5h": {
+                    "flexibility": 0.0,
+                    "refill_capacity": 45,
+                    "refill_capacity_unit": "requests",
+                }
+            }
+        },
+        "plans": {"claude": {"monthly_price": 20}},
+    }
+    profile = _compute_flexibility_profile(
+        window=window,
+        provider="claude",
+        config=cfg,
+        monthly_price=20.0,
+        now=now,
+    )
+    assert profile is not None
+    assert profile.earliest_start_calendar is not None
+    # Earliest start for remaining burn is still in the future (not one full
+    # cycle before reset, which would always already be past).
+    assert profile.earliest_start_calendar > now
+
+    urgency, score = _score_multi_dimension(
+        profile=profile,
+        remaining=95.0,
+        days=295 / 1440,
+        config=cfg,
+    )
+    # Broken formula pinned flexibility_urgency at 100 → score ≈ 71.8 MEDIUM.
+    assert score < 65.0
+    assert score == pytest.approx(58.99, abs=1.5)
+    assert urgency in (Urgency.LOW, Urgency.INFO, Urgency.MEDIUM)
+    # Must not be the old always-MEDIUM-from-pin path alone.
+    assert not (urgency == Urgency.MEDIUM and score > 70)
 
 
 def test_score_multi_dim_burstable_imminent_is_critical():
