@@ -102,25 +102,14 @@ requires a `--provider` flag tokscale's CLI does not currently have (confirmed v
 `tokscale usage --help`; only `--json`/`--light`/`--home` exist). True per-provider
 fan-out is deferred to Phase 6. This step is the safe, immediate mitigation.
 
-**Fix:** raise the timeout from 120 to 180 to match `codexbar.py`'s own bundled-fallback
-budget (`_query_provider`'s `timeout = 180.0` for its "all providers" case), so tokscale
-isn't held to a tighter bar than codexbar holds itself to for the same kind of call.
+**Fix (superseded):** the 2026-07-23 review suggested 180s to match an old CodexBar
+bundled budget. That number was **not** empirically justified (warm tokscale ~1s).
+Current code uses a shared **45s** default for all tools, overridable via CLI
+``--timeout`` / ``-t`` and optional ``config.toml`` ``[timeouts]`` (see
+``ai.config.timeout_for``). Step 2's "raise timeout" intent is closed by that
+unified budget rather than by matching 180s.
 
-```python
-payload = run_json(["tokscale", "usage", "--json"], timeout=180)
-```
-
-**Do not** attempt to modify the `tokscale` shell wrapper on `$PATH`
-(`~/.local/bin/tokscale`, currently `exec npx tokscale@latest "$@"`) — that's outside
-this repository and outside this step's scope. Leave a one-line code comment noting
-that an unpinned `@latest` npx resolution can itself consume part of this timeout on a
-cold cache, so the timeout has to absorb that too.
-
-**Test:** none needed for a constant change; confirm no test currently asserts
-`timeout=120` for this call (grep `tests/` for `"120"` near tokscale) and update it to
-180 if one exists.
-
-**Done when:** full suite green.
+**Done when:** full suite green (timeouts unified at 45s + configurable).
 
 ---
 

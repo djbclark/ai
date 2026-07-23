@@ -16,7 +16,12 @@ from ai.__init__ import __version__
 from ai.analysis.history import save_snapshot
 from ai.analysis.use_or_lose import analyze_use_or_lose
 from ai.collectors.runner import run_collectors
-from ai.config import default_config_path, load_config
+from ai.config import (
+    DEFAULT_SUBPROCESS_TIMEOUT,
+    default_config_path,
+    default_toml_config_path,
+    load_config,
+)
 from ai.models import provider_display_name
 from ai.report import render_report
 
@@ -39,7 +44,17 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--show-config-path",
         action="store_true",
-        help="Print the default per-user configuration path and exit",
+        help="Print default config paths (services.yaml and config.toml) and exit",
+    )
+    p.add_argument(
+        "-t",
+        "--timeout",
+        type=float,
+        metavar="SECONDS",
+        help=(
+            f"Default subprocess timeout in seconds for external tools "
+            f"(default: {DEFAULT_SUBPROCESS_TIMEOUT:g}; also set in config.toml [timeouts])"
+        ),
     )
     fmt = p.add_mutually_exclusive_group()
     fmt.add_argument(
@@ -111,7 +126,8 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.show_config_path:
-        print(default_config_path())
+        print(f"services: {default_config_path()}")
+        print(f"settings: {default_toml_config_path()}")
         return 0
     config = load_config(args.config)
     _apply_cli_overrides(config, args)
@@ -206,6 +222,13 @@ def _apply_cli_overrides(config: dict[str, Any], args: argparse.Namespace) -> No
         analysis["min_remaining_percent"] = args.min_remaining
     if args.max_days is not None:
         analysis["max_days_until_reset"] = args.max_days
+    if getattr(args, "timeout", None) is not None:
+        if args.timeout <= 0:
+            raise SystemExit("--timeout / -t must be a positive number of seconds")
+        timeouts = config.setdefault("timeouts", {})
+        # CLI wins over config.toml per-tool keys (see timeout_for precedence).
+        timeouts["force"] = float(args.timeout)
+        timeouts["default"] = float(args.timeout)
 
 
 if __name__ == "__main__":

@@ -35,11 +35,11 @@ from ai.models import coerce_int as _int_or_none
 from .base import CollectorError, run_json, which
 
 
-def collect_cswap() -> list[AccountUsage]:
+def collect_cswap(*, timeout: float = 45.0) -> list[AccountUsage]:
     if not which("cswap"):
         raise CollectorError("cswap not found on PATH")
 
-    data = run_json(["cswap", "list", "--json"], timeout=60)
+    data = run_json(["cswap", "list", "--json"], timeout=timeout)
     if not isinstance(data, dict):
         raise CollectorError("unexpected cswap list JSON shape")
     if isinstance(data.get("error"), dict):

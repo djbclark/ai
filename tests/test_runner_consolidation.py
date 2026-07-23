@@ -103,15 +103,15 @@ def test_claude_gets_cross_checked_when_cswap_disabled():
 
 
 def test_run_collectors_runs_sources_concurrently_not_sequentially(monkeypatch):
-    def slow_cswap():
+    def slow_cswap(**_kwargs):
         time.sleep(0.1)
         return [_account("cswap", "claude")]
 
-    def slow_codexbar(*, providers=None):
+    def slow_codexbar(**_kwargs):
         time.sleep(0.1)
         return [_account("codexbar", "codex")]
 
-    def slow_tokscale():
+    def slow_tokscale(**_kwargs):
         time.sleep(0.1)
         return [_account("tokscale", "grok")]
 
@@ -130,7 +130,7 @@ def test_run_collectors_runs_sources_concurrently_not_sequentially(monkeypatch):
 
 
 def test_run_collectors_keeps_other_sources_when_one_raises(monkeypatch):
-    def failing_cswap():
+    def failing_cswap(**_kwargs):
         raise RuntimeError("boom")
 
     monkeypatch.setattr("ai.collectors.runner.collect_cswap", failing_cswap)
@@ -138,8 +138,10 @@ def test_run_collectors_keeps_other_sources_when_one_raises(monkeypatch):
         "ai.collectors.runner.collect_codexbar",
         lambda **_kwargs: [_account("codexbar", "codex")],
     )
-    monkeypatch.setattr("ai.collectors.runner.collect_tokscale", lambda: [_account("tokscale", "grok")])
-
+    monkeypatch.setattr(
+        "ai.collectors.runner.collect_tokscale",
+        lambda **_kwargs: [_account("tokscale", "grok")],
+    )
     snapshot = run_collectors({})
 
     assert {account.provider for account in snapshot.accounts} == {"codex", "grok"}

@@ -342,10 +342,10 @@ def test_discovery_failure_via_non_collector_error_falls_back_gracefully(monkeyp
     assert {account.provider for account in accounts} == {"codex"}
 
 
-def test_single_discovered_provider_gets_the_bundled_call_timeout_floor(monkeypatch):
+def test_single_discovered_provider_uses_configured_timeout(monkeypatch):
     captured_timeouts = []
 
-    def fake_run_json(argv, *, timeout=90.0, allow_empty=False):
+    def fake_run_json(argv, *, timeout=45.0, allow_empty=False):
         if "config" in argv:
             return [{"provider": "openrouter", "enabled": True}]
         captured_timeouts.append(timeout)
@@ -356,6 +356,6 @@ def test_single_discovered_provider_gets_the_bundled_call_timeout_floor(monkeypa
 
     from ai.collectors.codexbar import collect_codexbar
 
-    collect_codexbar()
+    collect_codexbar(timeout=45.0, discovery_timeout=45.0)
 
-    assert captured_timeouts == [180.0]
+    assert captured_timeouts == [45.0]

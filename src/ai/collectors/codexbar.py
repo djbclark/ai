@@ -52,28 +52,28 @@ _SLOT_LABELS: dict[str, tuple[str, str, str]] = {
 }
 
 
-def collect_codexbar(*, providers: str | list[str] | None = "enabled") -> list[AccountUsage]:
+def collect_codexbar(
+    *,
+    providers: str | list[str] | None = "enabled",
+    timeout: float = 45.0,
+    discovery_timeout: float | None = None,
+) -> list[AccountUsage]:
     if not which("codexbar"):
         raise CollectorError("codexbar not found on PATH")
 
     provider_list = _normalize_providers(providers)
-    # A single discovered provider stands in for what used to be one bundled,
-    # more generously timed call; give it at least that same time ceiling.
-    min_timeout: float | None = None
     if provider_list == [None]:
         # Discover the actual enabled-provider list ourselves so each can be
         # queried as its own concurrent subprocess, instead of asking CodexBar
         # for "enabled providers" in one call that it resolves serially.
-        discovered = _discover_enabled_providers()
+        discovered = _discover_enabled_providers(timeout=discovery_timeout if discovery_timeout is not None else timeout)
         if discovered:
             provider_list = discovered
-            if len(provider_list) == 1:
-                min_timeout = 180.0
 
     accounts: list[AccountUsage] = []
     errors: list[str] = []
 
-    for provider_arg, outcome in _query_providers(provider_list, min_timeout=min_timeout):
+    for provider_arg, outcome in _query_providers(provider_list, timeout=timeout):
         if isinstance(outcome, CollectorError):
             name = provider_arg or "enabled providers"
             errors.append(f"{name}: {outcome}")
@@ -113,7 +113,7 @@ def _normalize_providers(providers: str | list[str] | None) -> list[str | None]:
     return list(items) if items else [None]
 
 
-def _discover_enabled_providers() -> list[str | None] | None:
+def _discover_enabled_providers(*, timeout: float = 45.0) -> list[str | None] | None:
     """Ask CodexBar's own fast, documented config lookup which providers are
     enabled (`codexbar config providers`, a local read that takes milliseconds),
     so the caller can query each one independently instead of via the slow
@@ -122,7 +122,7 @@ def _discover_enabled_providers() -> list[str | None] | None:
     than propagate, since discovery is a best-effort optimization.
     """
     try:
-        payload = run_json(["codexbar", "config", "providers", "--format", "json"], timeout=5.0)
+        payload = run_json(["codexbar", "config", "providers", "--format", "json"], timeout=timeout)
     except Exception:  # noqa: BLE001
         return None
     return _parse_enabled_providers(payload)
@@ -142,7 +142,7 @@ def _parse_enabled_providers(payload: Any) -> list[str | None] | None:
 def _query_providers(
     provider_list: list[str | None],
     *,
-    min_timeout: float | None = None,
+    timeout: float = 45.0,
 ) -> list[tuple[str | None, Any]]:
     """Run one `codexbar usage` call per entry in provider_list, concurrently.
 
@@ -154,13 +154,12 @@ def _query_providers(
     """
     deduped: list[str | None] = list(dict.fromkeys(provider_list))
     if len(deduped) <= 1:
-        return [(provider_arg, _query_provider(provider_arg, min_timeout=min_timeout)) for provider_arg in deduped]
+        return [(provider_arg, _query_provider(provider_arg, timeout=timeout)) for provider_arg in deduped]
 
     workers = min(len(deduped), _MAX_CONCURRENT_PROVIDER_QUERIES)
     with ThreadPoolExecutor(max_workers=workers) as pool:
         futures = {
-            pool.submit(_query_provider, provider_arg, min_timeout=min_timeout): provider_arg
-            for provider_arg in deduped
+            pool.submit(_query_provider, provider_arg, timeout=timeout): provider_arg for provider_arg in deduped
         }
         outcomes: dict[str | None, Any] = {}
         for future in as_completed(futures):
@@ -168,15 +167,12 @@ def _query_providers(
     return [(provider_arg, outcomes[provider_arg]) for provider_arg in deduped]
 
 
-def _query_provider(provider_arg: str | None, *, min_timeout: float | None = None) -> Any:
+def _query_provider(provider_arg: str | None, *, timeout: float = 45.0) -> Any:
     # Omitting --provider asks CodexBar for its enabled-provider list and data
     # (only reached as a fallback if _discover_enabled_providers() fails).
     argv = ["codexbar", "usage", "--format", "json"]
     if provider_arg is not None:
         argv.extend(["--provider", provider_arg])
-    timeout = 180.0 if provider_arg in (None, "all", "both") else 90.0
-    if min_timeout is not None:
-        timeout = max(timeout, min_timeout)
     try:
         return run_json(argv, timeout=timeout)
     except CollectorError as exc:

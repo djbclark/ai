@@ -54,4 +54,23 @@ def test_show_config_path_exits_without_collecting(monkeypatch, tmp_path, capsys
     monkeypatch.setattr(cli, "run_collectors", fail_if_called)
 
     assert cli.main(["--show-config-path"]) == 0
-    assert capsys.readouterr().out.strip() == str(tmp_path / "ai" / "services.yaml")
+    out = capsys.readouterr().out
+    assert f"services: {tmp_path / 'ai' / 'services.yaml'}" in out
+    assert f"settings: {tmp_path / 'ai' / 'config.toml'}" in out
+
+
+def test_cli_timeout_flag_sets_force(monkeypatch):
+    captured = {}
+
+    def fake_collectors(config):
+        captured["timeouts"] = dict(config.get("timeouts") or {})
+        return Snapshot(collected_at=utcnow())
+
+    monkeypatch.setattr(cli, "run_collectors", fake_collectors)
+    monkeypatch.setattr(cli, "analyze_use_or_lose", lambda *_a, **_k: [])
+    assert cli.main(["--timeout", "12", "--json", "--alerts-only"]) == 0
+    assert captured["timeouts"]["force"] == 12.0
+    assert captured["timeouts"]["default"] == 12.0
+
+    assert cli.main(["-t45", "--json", "--alerts-only"]) == 0
+    assert captured["timeouts"]["force"] == 45.0

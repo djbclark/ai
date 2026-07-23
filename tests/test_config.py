@@ -1,12 +1,19 @@
 from pathlib import Path
 
-from ai.config import default_config_path, load_config
+from ai.config import (
+    DEFAULT_SUBPROCESS_TIMEOUT,
+    default_config_path,
+    default_toml_config_path,
+    load_config,
+    timeout_for,
+)
 
 
 def test_default_config_path_uses_xdg_config_home(monkeypatch, tmp_path):
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
 
     assert default_config_path() == tmp_path / "ai" / "services.yaml"
+    assert default_toml_config_path() == tmp_path / "ai" / "config.toml"
 
 
 def test_load_config_reads_xdg_ai_directory(monkeypatch, tmp_path):
@@ -24,3 +31,32 @@ def test_relative_xdg_config_home_is_ignored(monkeypatch):
     monkeypatch.setenv("XDG_CONFIG_HOME", "relative/path")
 
     assert default_config_path() == Path.home() / ".config" / "ai" / "services.yaml"
+
+
+def test_default_timeouts_are_45s():
+    assert DEFAULT_SUBPROCESS_TIMEOUT == 45.0
+    assert timeout_for({}, "tokscale") == 45.0
+    assert timeout_for({"timeouts": {"default": 45}}, "cswap") == 45.0
+
+
+def test_timeout_for_per_tool_and_force_precedence():
+    cfg = {"timeouts": {"default": 45, "tokscale": 20, "force": 10}}
+    assert timeout_for(cfg, "tokscale") == 10.0  # force wins
+    cfg_no_force = {"timeouts": {"default": 45, "tokscale": 20}}
+    assert timeout_for(cfg_no_force, "tokscale") == 20.0
+    assert timeout_for(cfg_no_force, "cswap") == 45.0
+
+
+def test_load_config_merges_toml_timeouts(monkeypatch, tmp_path):
+    ai_dir = tmp_path / "ai"
+    ai_dir.mkdir()
+    (ai_dir / "config.toml").write_text(
+        "[timeouts]\ndefault = 30\ntokscale = 12\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+
+    config = load_config()
+
+    assert timeout_for(config, "cswap") == 30.0
+    assert timeout_for(config, "tokscale") == 12.0

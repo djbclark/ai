@@ -12,6 +12,11 @@ class CollectorError(RuntimeError):
     pass
 
 
+# Keep in sync with ai.config.DEFAULT_SUBPROCESS_TIMEOUT (import avoided to
+# keep this module free of config load side effects for unit tests).
+DEFAULT_RUN_TIMEOUT = 45.0
+
+
 def which(cmd: str) -> str | None:
     return shutil.which(cmd)
 
@@ -19,7 +24,7 @@ def which(cmd: str) -> str | None:
 def run_json(
     argv: list[str],
     *,
-    timeout: float = 120.0,
+    timeout: float = DEFAULT_RUN_TIMEOUT,
     allow_empty: bool = False,
 ) -> Any:
     """Run a command and parse JSON from stdout."""

@@ -18,14 +18,11 @@ from ai.models import (
 from .base import CollectorError, run_json, which
 
 
-def collect_tokscale() -> list[AccountUsage]:
+def collect_tokscale(*, timeout: float = 45.0) -> list[AccountUsage]:
     if not which("tokscale"):
         raise CollectorError("tokscale not found on PATH")
 
-    # Match codexbar's bundled-fallback budget (180s). An unpinned
-    # `npx tokscale@latest` wrapper on PATH can burn part of this on a cold
-    # cache, so the timeout must absorb that as well as tokscale's own work.
-    payload = run_json(["tokscale", "usage", "--json"], timeout=180)
+    payload = run_json(["tokscale", "usage", "--json"], timeout=timeout)
     rows = payload if isinstance(payload, list) else [payload]
     accounts: list[AccountUsage] = []
     for row in rows:

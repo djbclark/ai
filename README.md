@@ -36,13 +36,18 @@ Optional config:
 mkdir -p "${XDG_CONFIG_HOME:-$HOME/.config}/ai"
 cp config/services.example.yaml "${XDG_CONFIG_HOME:-$HOME/.config}/ai/services.yaml"
 # edit plan notes / analysis thresholds
+
+# Optional tool settings (timeouts, future knobs):
+cp config/config.example.toml "${XDG_CONFIG_HOME:-$HOME/.config}/ai/config.toml"
 ```
 
-The default user config is `$XDG_CONFIG_HOME/ai/services.yaml`, falling back to
-`~/.config/ai/services.yaml` when `XDG_CONFIG_HOME` is unset. Run
-`ai --show-config-path` to print the resolved path. Provider credentials and
-account identities remain owned by cswap, CodexBar, and tokscale; this config
-does not duplicate email addresses, access tokens, or other provider state.
+| File | Purpose |
+| --- | --- |
+| `$XDG_CONFIG_HOME/ai/services.yaml` (or `~/.config/ai/…`) | Plans, analysis thresholds, which collectors are enabled |
+| `$XDG_CONFIG_HOME/ai/config.toml` | Tool settings: subprocess **timeouts** (default **45s**), room for more later |
+
+Run `ai --show-config-path` to print both paths. Provider credentials stay with
+cswap, CodexBar, and tokscale — these files do not hold tokens or emails.
 
 ## Usage
 
@@ -65,6 +70,10 @@ ai --save ~/tmp/ai-snapshot.json   # also write JSON file
 ai --providers copilot,grok,codex   # query these separately
 ai --no-tokscale
 ai --min-remaining 50 --max-days 10
+
+# Subprocess timeout for external tools (default 45s; also in config.toml)
+ai --timeout 45
+ai -t45
 ```
 
 | Flag                                             | Effect                                                             |
@@ -76,6 +85,7 @@ ai --min-remaining 50 --max-days 10
 | `--traditional-summary`                          | Legacy flat summary format instead of unified action plan          |
 | `--no-tokscale` / `--no-cswap` / `--no-codexbar` | Skip specific collectors                                           |
 | `--providers copilot,grok`                       | Query specific CodexBar providers (CSV, one per subprocess)        |
+| `-t` / `--timeout SECONDS`                       | Force subprocess timeout for all external tools (default **45**)   |
 | `--min-remaining 50 --max-days 10`               | Override alert thresholds                                          |
 | `--save PATH`                                    | Also write full JSON snapshot to PATH                              |
 

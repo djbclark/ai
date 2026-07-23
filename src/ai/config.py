@@ -1,13 +1,33 @@
-"""Load YAML/JSON config with defaults."""
+"""Load YAML/JSON/TOML config with defaults.
+
+User config layers (later wins on deep-merge where keys overlap):
+
+1. Built-in ``DEFAULT_CONFIG``
+2. Optional ``~/.config/ai/config.toml`` (or ``$XDG_CONFIG_HOME/ai/config.toml``)
+   — preferred home for tool settings (timeouts, future knobs)
+3. Optional services file (``services.yaml`` / JSON via ``--config`` or default
+   path) — plans, analysis thresholds, collector enable flags
+"""
 
 from __future__ import annotations
 
 import json
 import os
+import sys
 from pathlib import Path
 from typing import Any
 
+# Default wall-clock budget for every external CLI subprocess. Tools either
+# return within tens of seconds or hang; long budgets only delay failure.
+DEFAULT_SUBPROCESS_TIMEOUT = 45.0
+
 DEFAULT_CONFIG: dict[str, Any] = {
+    # Subprocess timeouts (seconds). ``default`` applies to any tool that does
+    # not set its own key. Known keys: cswap, codexbar, codexbar_discovery,
+    # tokscale. Override via config.toml or CLI ``--timeout`` / ``-t``.
+    "timeouts": {
+        "default": DEFAULT_SUBPROCESS_TIMEOUT,
+    },
     "analysis": {
         "min_remaining_percent": 40,
         "max_days_until_reset": 14,
@@ -86,8 +106,34 @@ DEFAULT_CONFIG: dict[str, Any] = {
 }
 
 
+def timeout_for(config: dict[str, Any] | None, name: str) -> float:
+    """Resolve subprocess timeout (seconds) for a named tool.
+
+    Precedence:
+
+    1. ``timeouts.force`` — set by CLI ``--timeout`` / ``-t`` (wins over everything)
+    2. ``timeouts.<name>`` — per-tool override in config.toml / services.yaml
+    3. ``timeouts.default``
+    4. :data:`DEFAULT_SUBPROCESS_TIMEOUT`
+    """
+    timeouts = (config or {}).get("timeouts") if isinstance((config or {}).get("timeouts"), dict) else {}
+    if timeouts.get("force") is not None:
+        return float(timeouts["force"])
+    default = float(timeouts.get("default", DEFAULT_SUBPROCESS_TIMEOUT))
+    if name in timeouts and timeouts[name] is not None:
+        return float(timeouts[name])
+    return default
+
+
 def load_config(path: str | Path | None = None) -> dict[str, Any]:
     cfg = _deep_copy(DEFAULT_CONFIG)
+
+    toml_path = default_toml_config_path()
+    if toml_path.is_file():
+        data = _read_file(toml_path)
+        if isinstance(data, dict):
+            cfg = _deep_merge(cfg, data)
+
     candidates: list[Path] = []
     if path:
         candidates.append(Path(path).expanduser())
@@ -104,8 +150,13 @@ def load_config(path: str | Path | None = None) -> dict[str, Any]:
 
 
 def default_config_path() -> Path:
-    """Return the XDG user configuration path for this CLI."""
+    """Return the XDG user configuration path for services.yaml."""
     return _xdg_config_home() / "ai" / "services.yaml"
+
+
+def default_toml_config_path() -> Path:
+    """Optional TOML settings path (timeouts and future tool knobs)."""
+    return _xdg_config_home() / "ai" / "config.toml"
 
 
 def _xdg_config_home() -> Path:
@@ -120,7 +171,8 @@ def _xdg_config_home() -> Path:
 
 def _read_file(path: Path) -> Any:
     text = path.read_text(encoding="utf-8")
-    if path.suffix.lower() in {".yaml", ".yml"}:
+    suffix = path.suffix.lower()
+    if suffix in {".yaml", ".yml"}:
         try:
             import yaml
         except ImportError as exc:
@@ -128,6 +180,12 @@ def _read_file(path: Path) -> Any:
                 "PyYAML is required for YAML config. Install with: pip install pyyaml  (or use JSON config)"
             ) from exc
         return yaml.safe_load(text)
+    if suffix == ".toml":
+        if sys.version_info >= (3, 11):
+            import tomllib
+        else:  # pragma: no cover — project requires 3.11+
+            import tomli as tomllib  # type: ignore[no-redef]
+        return tomllib.loads(text)
     return json.loads(text)
 
 

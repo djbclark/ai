@@ -6,6 +6,7 @@ from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
+from ai.config import timeout_for
 from ai.models import AccountUsage, CrossCheck, QuotaWindow, Snapshot, provider_display_name, utcnow
 
 from .codexbar import collect_codexbar
@@ -22,12 +23,25 @@ def run_collectors(config: dict[str, Any] | None = None) -> Snapshot:
     # rather than paying the sum of their latencies one after another.
     jobs: list[tuple[str, Callable[[], list[AccountUsage]]]] = []
     if _enabled(collectors_cfg, "cswap"):
-        jobs.append(("cswap", collect_cswap))
+        cswap_timeout = timeout_for(config, "cswap")
+        jobs.append(("cswap", lambda t=cswap_timeout: collect_cswap(timeout=t)))
     if _enabled(collectors_cfg, "codexbar"):
         providers = (collectors_cfg.get("codexbar") or {}).get("providers", "enabled")
-        jobs.append(("codexbar", lambda: collect_codexbar(providers=providers)))
+        codexbar_timeout = timeout_for(config, "codexbar")
+        discovery_timeout = timeout_for(config, "codexbar_discovery")
+        jobs.append(
+            (
+                "codexbar",
+                lambda p=providers, t=codexbar_timeout, d=discovery_timeout: collect_codexbar(
+                    providers=p,
+                    timeout=t,
+                    discovery_timeout=d,
+                ),
+            )
+        )
     if _enabled(collectors_cfg, "tokscale"):
-        jobs.append(("tokscale", collect_tokscale))
+        tokscale_timeout = timeout_for(config, "tokscale")
+        jobs.append(("tokscale", lambda t=tokscale_timeout: collect_tokscale(timeout=t)))
 
     if jobs:
         with ThreadPoolExecutor(max_workers=len(jobs)) as pool:
