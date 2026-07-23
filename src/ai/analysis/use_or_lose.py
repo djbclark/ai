@@ -10,7 +10,7 @@ from ai.analysis.history import (
     compute_learned_flexibility,
     merge_learned_flexibility,
 )
-from ai.analysis.pace import classify_pace, compute_pace
+from ai.analysis.pace import classify_pace, compute_pace, governing_partition
 from ai.models import (
     WINDOW_5H_MAX_MINUTES,
     AccountUsage,
@@ -270,6 +270,19 @@ def analyze_use_or_lose(
         plan_meta = _plan_meta(account.provider, plans)
         monthly_price = plan_meta.get("monthly_price")
         value_multipliers = plan_meta.get("value_multiplier")
+        provider_key = account.provider.lower().replace(" ", "-")
+
+        # Shared-allotment (pace mode): score only the longest-duration window;
+        # shorter siblings (e.g. Claude 5h under weekly) are suppressed children.
+        shared_allotment = mode == "pace" and _shared_allotment_enabled(provider_key, analysis_cfg)
+        governing_window: QuotaWindow | None = None
+        child_windows: list[QuotaWindow] = []
+        if shared_allotment:
+            governing_window, child_windows = governing_partition(account.windows)
+            if governing_window is None:
+                # No usable remaining() on any window — score independently this run.
+                shared_allotment = False
+                child_windows = []
 
         for window in account.windows:
             if mode == "legacy" and _is_short_window(window):
@@ -309,6 +322,9 @@ def analyze_use_or_lose(
             )
 
             if mode == "pace":
+                if shared_allotment and governing_window is not None and window is not governing_window:
+                    continue  # child of a shared allotment — never its own alert
+
                 pace_cfg = analysis_cfg.get("pace") or {}
                 pace = compute_pace(
                     window,
@@ -317,7 +333,16 @@ def analyze_use_or_lose(
                     learned_sample_count=0,
                 )
                 if pace is None:
+                    # Governing window unusable: fall back to independent scoring for
+                    # remaining windows of this account (clear shared for this pass).
+                    if shared_allotment and window is governing_window:
+                        shared_allotment = False
+                        governing_window = None
+                        # Re-enter independent path for this window only: do not
+                        # continue; without pace we still skip.
                     continue
+                if shared_allotment and window is governing_window:
+                    pace.governing = True
                 verdict = classify_pace(
                     pace,
                     resets_at=window.resets_at,
@@ -374,12 +399,18 @@ def analyze_use_or_lose(
                     urgency = Urgency.HIGH if (t_left - t_ex) >= 1.0 else Urgency.MEDIUM
                     kind = "conserve"
 
+                suppressed = (
+                    child_windows
+                    if shared_allotment and window is governing_window and child_windows
+                    else None
+                )
                 message = _pace_message(
                     account=account,
                     window=window,
                     verdict=verdict,
                     pace=pace,
                     days=days,
+                    suppressed_children=suppressed,
                 )
                 alerts.append(
                     UseOrLoseAlert(
@@ -684,6 +715,16 @@ def _score_multi_dimension(
     return urgency, score
 
 
+def _shared_allotment_enabled(provider_key: str, analysis_cfg: dict[str, Any]) -> bool:
+    overrides = analysis_cfg.get("provider_overrides") or {}
+    if not isinstance(overrides, dict):
+        return False
+    prov = overrides.get(provider_key)
+    if not isinstance(prov, dict):
+        return False
+    return bool(prov.get("shared_allotment"))
+
+
 def _pace_message(
     *,
     account: AccountUsage,
@@ -691,19 +732,32 @@ def _pace_message(
     verdict: str,
     pace: Any,
     days: float | None,
+    suppressed_children: list[QuotaWindow] | None = None,
 ) -> str:
     who = account.account or "default"
     when = _human_when(days)
     remaining = window.remaining()
     rem_s = f"{remaining:.0f}%" if remaining is not None else "some"
+    child_note = ""
+    if suppressed_children:
+        labels = ", ".join(c.label for c in suppressed_children)
+        if verdict == "conserve":
+            child_note = (
+                f" Avoid burning {labels} sessions — they draw the same budget "
+                f"you're already close to exhausting."
+            )
+        else:
+            child_note = f" (this also covers your {labels} — no need to burn it separately)"
     if verdict == "conserve":
         return (
             f"{provider_display_name(account.provider)} · {who} · {window.label}: "
-            f"pace yourself — projected to run out before reset ({rem_s} left, resets {when})"
+            f"pace yourself — projected to run out before reset ({rem_s} left, resets {when})."
+            f"{child_note}"
         )
     return (
         f"{provider_display_name(account.provider)} · {who} · {window.label}: "
-        f"{rem_s} left may go unused if you stay at this pace (resets {when})"
+        f"{rem_s} left may go unused if you stay at this pace (resets {when})."
+        f"{child_note}"
     )
 
 

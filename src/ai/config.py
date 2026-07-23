@@ -55,8 +55,14 @@ DEFAULT_CONFIG: dict[str, Any] = {
             "monthly": 1.0,
         },
         "provider_overrides": {
-            "claude": {"5h": {"flexibility": 0.0, "refill_capacity_unit": "requests", "refill_capacity": 45}},
-            "gemini": {"5h": {"flexibility": 0.0, "refill_capacity_unit": "requests", "refill_capacity": 50}},
+            "claude": {
+                "shared_allotment": True,  # 5h ⊂ weekly; pace-score governing window only
+                "5h": {"flexibility": 0.0, "refill_capacity_unit": "requests", "refill_capacity": 45},
+            },
+            "gemini": {
+                "shared_allotment": True,
+                "5h": {"flexibility": 0.0, "refill_capacity_unit": "requests", "refill_capacity": 50},
+            },
             "grok": {"weekly": {"flexibility": 0.5, "refill_capacity_unit": "requests", "refill_capacity": 100}},
         },
     },

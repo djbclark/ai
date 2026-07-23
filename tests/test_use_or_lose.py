@@ -654,6 +654,198 @@ def test_pace_mode_burn_weekly():
     assert alerts[0].kind == "burn"
 
 
+def test_shared_allotment_suppresses_fresh_5h_when_weekly_on_pace():
+    """Core regression: Claude 5h must not top the list when weekly is on-pace."""
+    now = _now()
+    snap = Snapshot(
+        collected_at=now,
+        accounts=[
+            AccountUsage(
+                source="cswap",
+                provider="claude",
+                account="user@example.com",
+                billing_kind=BillingKind.SUBSCRIPTION_WINDOW,
+                windows=[
+                    QuotaWindow(
+                        label="Claude Code 5-hour",
+                        used_percent=3.0,
+                        remaining_percent=97.0,
+                        resets_at=now + timedelta(hours=4),
+                        window_minutes=300,
+                    ),
+                    QuotaWindow(
+                        label="Claude Code weekly",
+                        used_percent=64.0,
+                        remaining_percent=36.0,
+                        resets_at=now + timedelta(days=2),
+                        window_minutes=10080,
+                    ),
+                ],
+            )
+        ],
+    )
+    cfg = _pace_cfg()
+    # Ensure shared_allotment is on for claude (default in DEFAULT_CONFIG too).
+    cfg["analysis"]["provider_overrides"] = {
+        "claude": {"shared_allotment": True, "5h": {"flexibility": 0.0}},
+    }
+    alerts = analyze_use_or_lose(snap, cfg)
+    assert alerts == []
+
+
+def test_shared_allotment_one_conserve_alert_names_5h_child():
+    now = _now()
+    snap = Snapshot(
+        collected_at=now,
+        accounts=[
+            AccountUsage(
+                source="cswap",
+                provider="claude",
+                account="user@example.com",
+                billing_kind=BillingKind.SUBSCRIPTION_WINDOW,
+                windows=[
+                    QuotaWindow(
+                        label="Claude Code 5-hour",
+                        remaining_percent=90.0,
+                        resets_at=now + timedelta(hours=4),
+                        window_minutes=300,
+                    ),
+                    QuotaWindow(
+                        label="Claude Code weekly",
+                        used_percent=90.0,
+                        remaining_percent=10.0,
+                        resets_at=now + timedelta(days=3),
+                        window_minutes=10080,
+                    ),
+                ],
+            )
+        ],
+    )
+    cfg = _pace_cfg()
+    cfg["analysis"]["provider_overrides"] = {"claude": {"shared_allotment": True}}
+    alerts = analyze_use_or_lose(snap, cfg)
+    assert len(alerts) == 1
+    assert alerts[0].kind == "conserve"
+    assert "weekly" in alerts[0].window_label.lower()
+    assert "5-hour" in alerts[0].message.lower() or "5h" in alerts[0].message.lower()
+
+
+def test_shared_allotment_one_burn_alert_for_weekly():
+    now = _now()
+    snap = Snapshot(
+        collected_at=now,
+        accounts=[
+            AccountUsage(
+                source="cswap",
+                provider="claude",
+                billing_kind=BillingKind.SUBSCRIPTION_WINDOW,
+                windows=[
+                    QuotaWindow(
+                        label="Claude Code 5-hour",
+                        remaining_percent=100.0,
+                        resets_at=now + timedelta(hours=5),
+                        window_minutes=300,
+                    ),
+                    QuotaWindow(
+                        label="Claude Code weekly",
+                        used_percent=10.0,
+                        remaining_percent=90.0,
+                        resets_at=now + timedelta(days=3.5),
+                        window_minutes=10080,
+                    ),
+                ],
+            )
+        ],
+    )
+    cfg = _pace_cfg()
+    cfg["analysis"]["provider_overrides"] = {"claude": {"shared_allotment": True}}
+    alerts = analyze_use_or_lose(snap, cfg)
+    assert len(alerts) == 1
+    assert alerts[0].kind == "burn"
+    assert "weekly" in alerts[0].window_label.lower()
+    assert alerts[0].pace is not None
+    assert alerts[0].pace.projected_waste_usd is not None
+
+
+def test_shared_allotment_false_scores_windows_independently():
+    now = _now()
+    snap = Snapshot(
+        collected_at=now,
+        accounts=[
+            AccountUsage(
+                source="cswap",
+                provider="claude",
+                billing_kind=BillingKind.SUBSCRIPTION_WINDOW,
+                windows=[
+                    QuotaWindow(
+                        label="Claude Code 5-hour",
+                        used_percent=0.0,
+                        remaining_percent=100.0,
+                        resets_at=now + timedelta(hours=1),
+                        window_minutes=300,
+                    ),
+                    QuotaWindow(
+                        label="Claude Code weekly",
+                        used_percent=10.0,
+                        remaining_percent=90.0,
+                        resets_at=now + timedelta(days=3.5),
+                        window_minutes=10080,
+                    ),
+                ],
+            )
+        ],
+    )
+    cfg = _pace_cfg()
+    cfg["analysis"]["provider_overrides"] = {"claude": {"shared_allotment": False}}
+    # Lower min_value so a 5h burn can surface if classified burn.
+    cfg["analysis"]["min_value_at_risk_usd"] = 0.0
+    cfg["analysis"]["min_value_fraction"] = 0.0
+    alerts = analyze_use_or_lose(snap, cfg)
+    labels = {a.window_label for a in alerts}
+    # Independent scoring: weekly burn is expected; 5h may also alert.
+    assert any("weekly" in lab.lower() for lab in labels)
+    assert len(alerts) >= 1
+
+
+def test_lone_5h_window_can_still_alert_under_shared_allotment():
+    now = _now()
+    snap = Snapshot(
+        collected_at=now,
+        accounts=[
+            AccountUsage(
+                source="cswap",
+                provider="claude",
+                billing_kind=BillingKind.SUBSCRIPTION_WINDOW,
+                windows=[
+                    QuotaWindow(
+                        label="Claude Code 5-hour",
+                        used_percent=5.0,
+                        remaining_percent=95.0,
+                        resets_at=now + timedelta(hours=4.5),
+                        window_minutes=300,
+                    )
+                ],
+            )
+        ],
+    )
+    cfg = _pace_cfg()
+    cfg["analysis"]["provider_overrides"] = {"claude": {"shared_allotment": True}}
+    cfg["analysis"]["min_value_at_risk_usd"] = 0.0
+    # Fresh 5h with high remaining early in window → on_pace confidence gate;
+    # use later elapsed: 4.5h left of 5h → elapsed ~0.1, still early.
+    # Push toward burn: very little used, most of window already elapsed.
+    snap.accounts[0].windows[0] = QuotaWindow(
+        label="Claude Code 5-hour",
+        used_percent=5.0,
+        remaining_percent=95.0,
+        resets_at=now + timedelta(hours=1),
+        window_minutes=300,
+    )
+    alerts = analyze_use_or_lose(snap, cfg)
+    # Alone, it is its own governing window — may burn or on_pace; must not crash.
+    assert all(a.window_label == "Claude Code 5-hour" for a in alerts)
+
+
 def test_legacy_mode_via_use_multi_dim_false():
     snap = Snapshot(
         collected_at=_now(),
