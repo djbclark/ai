@@ -1,0 +1,2 @@
+- [ai project review — resolved](checkpoint-ai-project-review.md) — 2026-07-23 review/plan complete, checked into ~/src/ai repo (docs/, AGENTS.md); not pending work
+- [Feedback: git over memory](feedback_git_over_memory.md) — for ~/src/ai, durable knowledge goes in the repo (docs/, AGENTS.md), not this memory store

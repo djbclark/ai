@@ -31,9 +31,18 @@ load-bearing to live. Concretely:
   durable version into this repo. Local tool memory can be a *working*
   notepad for a single session, but treat anything meant to outlive that
   session as belonging in git first.
-- `docs/agent-memory-snapshot.md` exists because this was retrofitted after
-  the fact once for Claude Code's memory specifically — don't let that debt
-  reaccumulate; check things in as you go instead of needing another sweep.
+- **`docs/memory/` is a live target, not a snapshot.** Claude Code's memory
+  directory for this project (`~/.claude/projects/<hash>/memory/`) is a
+  **symlink** to `docs/memory/` in this repo (converted 2026-07-23, resolved
+  via `~/src/ai` on this machine). Writing a Claude memory *is* committing to
+  this repo — there's no separate export step, and no drift risk the way a
+  point-in-time snapshot would have. (An earlier `docs/agent-memory-snapshot.md`
+  did the snapshot thing before this symlink existed; it's gone now, superseded.)
+  This mirrors a broader cross-machine convention the operator is rolling out
+  project-by-project — independent projects like this one keep their memory
+  content in their own repo (as here); it's specifically the shared `~/ops/*`
+  repos that split memory content three ways. Not this project's concern
+  beyond the symlink itself.
 
 ## What this project is
 
@@ -53,7 +62,7 @@ full description, install steps, CLI flags, and config.
 | `docs/code-review-2026-07-23.html` | The adversarial code review (45 findings, 79 agents) that `fix-implementation-plan.md` was derived from. Open directly in a browser — GitHub's file viewer shows it as source, not rendered HTML. | For the *why* and full evidence behind a specific plan step, or before adding a new finding (check it isn't already documented here). |
 | `docs/consumption-flexibility-plan.md` | Original design doc for the multi-dimensional scoring model. **Superseded** — the review found bugs in this design's implementation, and `fix-implementation-plan.md` Phase 2 replaces its scoring mechanics with pace-based scoring. Still accurate as problem-framing background. | For historical context on why scoring has a value/flexibility/deadline split at all. |
 | `docs/review-workflow.js` | The Claude Code Workflow script that generated the review — not runnable outside that tool, checked in for methodology transparency/reproducibility. | If you need to know exactly what each review agent was asked, or want to re-run/extend the review. |
-| `docs/agent-memory-snapshot.md` | Point-in-time export of this project's Claude Code persistent memory (which otherwise lives outside git, per-machine). May drift from the live memory store over time. | If a prior agent session's memory notes are referenced and you don't have local memory access. |
+| `docs/memory/` | This project's Claude Code memory — a **live symlink target**, not a snapshot. `~/.claude/projects/<hash>/memory/` on this machine points here directly. | If a prior session's memory notes are referenced; also where you write a new Claude memory for this project (it lands here automatically). |
 | `src/ai/` | Source: `collectors/` (cswap, CodexBar, tokscale, plus `runner.py` orchestration), `analysis/` (`use_or_lose.py` scoring, `history.py` snapshot learning), `report.py`, `cli.py`, `config.py`, `models.py`. | When implementing. |
 | `tests/` | Pytest suite, one file per module roughly mirroring `src/ai/`. | Run `.venv/bin/python -m pytest -q` before and after any change. |
 | `config/services.example.yaml` | Example user config (copy to `$XDG_CONFIG_HOME/ai/services.yaml`). | When touching `config.py`'s `DEFAULT_CONFIG` — keep this example in sync. |

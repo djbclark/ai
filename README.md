@@ -176,5 +176,5 @@ of those corresponding inputs.
 - [`docs/code-review-2026-07-23.html`](docs/code-review-2026-07-23.html) — a 79-agent adversarial code review (45 findings) plus design proposals for containing tokscale's collector timeouts and fixing the rating algorithm. Open it directly in a browser for the styled version; GitHub's file viewer only shows the source.
 - [`docs/fix-implementation-plan.md`](docs/fix-implementation-plan.md) — the ordered, step-by-step plan for fixing everything the review above found, phased as showstopper bugs → rating-algorithm redesign → everything else.
 - [`docs/review-workflow.js`](docs/review-workflow.js) — the Claude Code Workflow script that generated the review, checked in for reproducibility.
-- [`docs/agent-memory-snapshot.md`](docs/agent-memory-snapshot.md) — a point-in-time export of this project's AI-agent persistent memory notes.
+- [`docs/memory/`](docs/memory/) — this project's AI-agent persistent memory; a live symlink target (`~/.claude/projects/<hash>/memory/` points here), not a snapshot.
 - Local quota dashboards in the same category as OpenUsage / CodexBar menu bar tools
