@@ -20,6 +20,7 @@ from ai.config import (
     DEFAULT_SUBPROCESS_TIMEOUT,
     default_config_path,
     default_toml_config_path,
+    generate_user_config,
     load_config,
 )
 from ai.models import provider_display_name
@@ -45,6 +46,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--show-config-path",
         action="store_true",
         help="Print default config paths (services.yaml and config.toml) and exit",
+    )
+    p.add_argument(
+        "--generate-config",
+        action="store_true",
+        help=(
+            "Create default config files under ~/.config/ai/ (or $XDG_CONFIG_HOME/ai/). "
+            "Creates missing directories; refuses to overwrite existing files"
+        ),
     )
     p.add_argument(
         "-t",
@@ -129,6 +138,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"services: {default_config_path()}")
         print(f"settings: {default_toml_config_path()}")
         return 0
+    if args.generate_config:
+        return _run_generate_config()
     config = load_config(args.config)
     _apply_cli_overrides(config, args)
 
@@ -204,6 +215,41 @@ def main(argv: list[str] | None = None) -> int:
             traditional_summary=args.traditional_summary,
         )
     )
+    return 0
+
+
+def _run_generate_config() -> int:
+    """Write default configs; never overwrite. Exit 1 if any path was skipped or errored."""
+    result = generate_user_config()
+    for path in result["created"]:
+        print(f"created: {path}")
+    for path in result["skipped"]:
+        print(f"exists (not overwritten): {path}", file=sys.stderr)
+    for msg in result["errors"]:
+        print(f"error: {msg}", file=sys.stderr)
+
+    if result["created"] and not result["skipped"] and not result["errors"]:
+        print(
+            f"Config directory ready: {default_config_path().parent}",
+            file=sys.stderr,
+        )
+        return 0
+    if result["created"] and result["skipped"] and not result["errors"]:
+        print(
+            "Some files already existed and were left unchanged. "
+            "Remove or rename them if you want fresh defaults.",
+            file=sys.stderr,
+        )
+        return 1
+    if result["skipped"] and not result["created"] and not result["errors"]:
+        print(
+            "All default config files already exist; nothing written.",
+            file=sys.stderr,
+        )
+        return 1
+    if result["errors"]:
+        return 1
+    # No files defined edge case
     return 0
 
 

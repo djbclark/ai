@@ -2,8 +2,11 @@ from pathlib import Path
 
 from ai.config import (
     DEFAULT_SUBPROCESS_TIMEOUT,
+    default_config_dir,
     default_config_path,
     default_toml_config_path,
+    ensure_config_dir,
+    generate_user_config,
     load_config,
     timeout_for,
 )
@@ -60,3 +63,37 @@ def test_load_config_merges_toml_timeouts(monkeypatch, tmp_path):
 
     assert timeout_for(config, "cswap") == 30.0
     assert timeout_for(config, "tokscale") == 12.0
+
+
+def test_ensure_config_dir_creates_nested_levels(monkeypatch, tmp_path):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+    assert not (tmp_path / "xdg").exists()
+    ai_dir = ensure_config_dir()
+    assert ai_dir == tmp_path / "xdg" / "ai"
+    assert ai_dir.is_dir()
+    assert (tmp_path / "xdg").is_dir()
+
+
+def test_generate_user_config_writes_defaults_without_overwrite(monkeypatch, tmp_path):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    first = generate_user_config()
+    assert sorted(Path(p).name for p in first["created"]) == ["config.toml", "services.yaml"]
+    assert first["skipped"] == []
+    assert first["errors"] == []
+    assert (tmp_path / "ai" / "config.toml").is_file()
+    assert (tmp_path / "ai" / "services.yaml").is_file()
+    assert "default = 45" in (tmp_path / "ai" / "config.toml").read_text(encoding="utf-8")
+
+    # Second run must not overwrite
+    stamp = "KEEP-ME"
+    toml_path = tmp_path / "ai" / "config.toml"
+    toml_path.write_text(stamp, encoding="utf-8")
+    second = generate_user_config()
+    assert second["created"] == []
+    assert set(Path(p).name for p in second["skipped"]) == {"config.toml", "services.yaml"}
+    assert toml_path.read_text(encoding="utf-8") == stamp
+
+
+def test_default_config_dir_is_under_xdg_ai(monkeypatch, tmp_path):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    assert default_config_dir() == tmp_path / "ai"

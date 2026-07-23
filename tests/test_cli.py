@@ -74,3 +74,17 @@ def test_cli_timeout_flag_sets_force(monkeypatch):
 
     assert cli.main(["-t45", "--json", "--alerts-only"]) == 0
     assert captured["timeouts"]["force"] == 45.0
+
+
+def test_generate_config_creates_files_and_refuses_overwrite(monkeypatch, tmp_path, capsys):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    assert cli.main(["--generate-config"]) == 0
+    out = capsys.readouterr()
+    assert "created:" in out.out
+    assert (tmp_path / "ai" / "config.toml").is_file()
+    assert (tmp_path / "ai" / "services.yaml").is_file()
+
+    assert cli.main(["--generate-config"]) == 1
+    err = capsys.readouterr().err
+    assert "exists (not overwritten)" in err
+    assert "already exist" in err or "left unchanged" in err

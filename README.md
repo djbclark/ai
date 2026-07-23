@@ -30,24 +30,27 @@ source .venv/bin/activate
 pip install -e ".[dev]"
 ```
 
-Optional config:
+Optional config (standard location: **`~/.config/ai/`**, or `$XDG_CONFIG_HOME/ai/`):
 
 ```bash
+# Create directories + default files (never overwrites existing files)
+ai --generate-config
+
+# Or copy examples by hand:
 mkdir -p "${XDG_CONFIG_HOME:-$HOME/.config}/ai"
 cp config/services.example.yaml "${XDG_CONFIG_HOME:-$HOME/.config}/ai/services.yaml"
-# edit plan notes / analysis thresholds
-
-# Optional tool settings (timeouts, future knobs):
 cp config/config.example.toml "${XDG_CONFIG_HOME:-$HOME/.config}/ai/config.toml"
 ```
 
 | File | Purpose |
 | --- | --- |
-| `$XDG_CONFIG_HOME/ai/services.yaml` (or `~/.config/ai/…`) | Plans, analysis thresholds, which collectors are enabled |
-| `$XDG_CONFIG_HOME/ai/config.toml` | Tool settings: subprocess **timeouts** (default **45s**), room for more later |
+| `~/.config/ai/services.yaml` | Plans, analysis thresholds, which collectors are enabled |
+| `~/.config/ai/config.toml` | Tool settings: subprocess **timeouts** (default **45s**), room for more later |
 
-Run `ai --show-config-path` to print both paths. Provider credentials stay with
-cswap, CodexBar, and tokscale — these files do not hold tokens or emails.
+Run `ai --show-config-path` to print both paths. `ai --generate-config` creates
+missing parent dirs (`~/.config`, `~/.config/ai`) and writes defaults; if a file
+already exists it is left alone and reported on stderr. Provider credentials stay
+with cswap, CodexBar, and tokscale — these files do not hold tokens or emails.
 
 ## Usage
 
@@ -86,6 +89,8 @@ ai -t45
 | `--no-tokscale` / `--no-cswap` / `--no-codexbar` | Skip specific collectors                                           |
 | `--providers copilot,grok`                       | Query specific CodexBar providers (CSV, one per subprocess)        |
 | `-t` / `--timeout SECONDS`                       | Force subprocess timeout for all external tools (default **45**)   |
+| `--generate-config`                              | Write default `~/.config/ai/*` files; never overwrites existing    |
+| `--show-config-path`                             | Print services.yaml and config.toml paths                          |
 | `--min-remaining 50 --max-days 10`               | Override alert thresholds                                          |
 | `--save PATH`                                    | Also write full JSON snapshot to PATH                              |
 
