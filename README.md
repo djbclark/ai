@@ -61,6 +61,7 @@ ai doctor                 # PATH tools + config presence + timeouts
 
 # Morning / before a long coding block
 ai                        # action plan first, then per-provider detail
+ai --brief                # action plan + errors only
 ai -q                     # same report, no “Collecting…” on stderr
 
 # Scripting / cron (JSON on stdout; use exit codes)
@@ -68,6 +69,11 @@ ai -q --json
 # exit 0 = ok, no burn/conserve alerts
 # exit 1 = hard failure (collectors failed, no accounts)
 # exit 2 = success with at least one burn/conserve alert
+# field contract: docs/json-contract.md
+
+# Shell completion (bash or zsh)
+eval "$(ai --print-completion bash)"
+# or: source completions/ai.bash
 
 # Tighter thresholds for “only what resets soon”
 ai --min-remaining 50 --max-days 7
@@ -111,8 +117,10 @@ ai --doctor
 | `--json` / `--format json`                       | Full snapshot + alerts as JSON                                     |
 | `--no-color`                                     | Disable ANSI colors in pretty mode                                 |
 | `-q` / `--quiet`                                 | Suppress progress messages on stderr                               |
+| `--brief`                                        | Pretty: action plan + collector errors only                        |
 | `--alerts-only`                                  | Recommendations only (respects pretty vs json)                     |
 | `--traditional-summary`                          | Legacy flat summary format instead of unified action plan          |
+| `--print-completion bash\|zsh`                   | Print shell completion script to stdout                            |
 | `--no-tokscale` / `--no-cswap` / `--no-codexbar` | Skip specific collectors                                           |
 | `--providers copilot,grok`                       | Query specific CodexBar providers (CSV, one per subprocess)        |
 | `-t` / `--timeout SECONDS`                       | Force subprocess timeout for all external tools (default **45**)   |
@@ -130,7 +138,10 @@ ai --doctor
 | **1** | Hard failure: collectors reported errors and **no** accounts were collected. Also used by `ai doctor` when an **enabled** tool is missing from `PATH`, and by `--generate-config` when nothing was written / overwrite refused. |
 | **2** | Collect succeeded and at least one **burn** or **conserve** alert is present. Cross-check disagreements alone do **not** set 2. Bad `--timeout` values also use 2. |
 
-`ai doctor` does not call usage APIs or check authentication — only local discoverability.
+`ai doctor` checks config file presence, **config validation** (unknown keys, bad
+timeouts, dead plan aliases), tools on `PATH`, and a light **version probe**
+(`cswap --version`, `codexbar -V`, `tokscale --version`). It does **not** call
+usage APIs or verify login sessions.
 
 ## What “use it or lose it” means
 
@@ -257,6 +268,9 @@ Shared allotment: `analysis.provider_overrides.<provider>.shared_allotment: true
 - [`docs/cswap-reliability.md`](docs/cswap-reliability.md) — Claude multi-account reliability: why `cswap list --json` can drop usable quota, and how cache hydration + fallbacks work.
 - [`docs/claude-local-usage.md`](docs/claude-local-usage.md) — Local Claude Code files / ccusage (token burn) vs subscription 5h/7d % from the OAuth usage API.
 - [`docs/tokscale-per-provider-investigation.md`](docs/tokscale-per-provider-investigation.md) — why tokscale cannot yet fan out per provider like CodexBar.
+- [`docs/json-contract.md`](docs/json-contract.md) — stable JSON fields and exit codes for scripts.
+- [`docs/collector-concurrency.md`](docs/collector-concurrency.md) — parallel collect + 45s timeout audit.
+- [`completions/`](completions/) — bash/zsh completion (`ai --print-completion bash`).
 - [`docs/review-workflow.js`](docs/review-workflow.js) — the Claude Code Workflow script that generated the review, checked in for reproducibility.
 - [`docs/memory/`](docs/memory/) — thin Claude symlink target for this project; see `AGENTS.md` for persistence policy and links to `~/ops/site-private` generic memory.
 - Local quota dashboards in the same category as OpenUsage / CodexBar menu bar tools

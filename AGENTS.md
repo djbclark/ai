@@ -94,6 +94,9 @@ full description, install steps, CLI flags, and config.
 | `README.md` | Project overview: install, usage, CLI flags, config, output format. | First, for "what does this tool do / how do I run it." |
 | `AGENTS.md` (this file) | Agent orientation, doc map, persistence policy, **active priorities**. | First, for "where is everything / what next." |
 | `docs/fix-implementation-plan.md` | Review-derived task list (Steps 1–32 + Phase 7 optional 33–35). **1–32 and 34 done.** | Historical scope / remaining optional steps only. |
+| `docs/json-contract.md` | Stable `ai --json` fields and exit codes for scripts. | Cron / automation consumers. |
+| `docs/collector-concurrency.md` | How collectors run in parallel and timeout (45s). | Perf / hang questions. |
+| `completions/` | bash/zsh completion scripts. | Shell UX. |
 | `https://github.com/djbclark/ai/issues/1` | Tracks consuming cswap#170 last-good JSON (Step 33). | When #170 merges or when checking upstream status. |
 | `docs/cswap-reliability.md` | Claude/cswap reliability: decision-stale JSON, cache hydration, fallbacks. | When Claude rows go missing or multi-account looks wrong. |
 | `docs/claude-local-usage.md` | Local `stats-cache` / JSONL / ccusage vs subscription 5h/7d %. | When someone proposes parsing `~/.claude` instead of cswap. |

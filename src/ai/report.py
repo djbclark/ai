@@ -95,15 +95,19 @@ def render_report(
     config: dict[str, Any] | None = None,
     color: bool | None = None,
     traditional_summary: bool = False,
+    brief: bool = False,
 ) -> str:
     """
     Report order (action-first for daily use):
       1. Header
       2. Action plan — what to burn / conserve before reset
-      3. Per-provider live quota detail
-      4. Cross-checks (informational; not alert authority)
+      3. Per-provider live quota detail (skipped if brief)
+      4. Cross-checks (skipped if brief)
       5. Collector errors (if any)
-      6. Short tips + re-run hints
+      6. Short tips (skipped if brief)
+
+    ``brief=True`` keeps header + action plan + collector errors only
+    (between full pretty and ``--alerts-only``).
     """
     s = _Style(use_color(force=color))
     lines: list[str] = []
@@ -115,7 +119,10 @@ def render_report(
     )
 
     lines.append(s.bold("=" * width))
-    lines.append(s.bold(s.cyan("AI USAGE — USE IT OR LOSE IT")))
+    title = "AI USAGE — USE IT OR LOSE IT"
+    if brief:
+        title += " (brief)"
+    lines.append(s.bold(s.cyan(title)))
     meta = f"Collected at {snapshot.collected_at.isoformat()}"
     meta += f" · {n_accounts} account{'s' if n_accounts != 1 else ''}"
     if n_actionable:
@@ -138,31 +145,32 @@ def render_report(
             _render_action_plan(alerts, s, width=width, waking_hours_per_day=waking_hours)
         )
 
-    # 2) Per-provider live quota detail
-    lines.append("")
-    lines.append(s.bold("## Per-provider usage"))
-    lines.append(s.dim("-" * width))
-    if accounts:
-        for acc in accounts:
-            lines.extend(_render_account(acc, s, config=config))
-    else:
-        lines.append(s.dim("  (no provider data collected)"))
+    if not brief:
+        # 2) Per-provider live quota detail
+        lines.append("")
+        lines.append(s.bold("## Per-provider usage"))
+        lines.append(s.dim("-" * width))
+        if accounts:
+            for acc in accounts:
+                lines.extend(_render_account(acc, s, config=config))
+        else:
+            lines.append(s.dim("  (no provider data collected)"))
 
-    # 3) Independent live-source consistency checks (informational)
-    lines.append("")
-    lines.append(s.bold("## Cross-checks (informational)"))
-    lines.append(s.dim("-" * width))
-    lines.append(
-        s.dim(
-            "  Tools poll at different times; multi-account Claude is cswap-only. "
-            "Gaps rarely mean both tools are wrong."
+        # 3) Independent live-source consistency checks (informational)
+        lines.append("")
+        lines.append(s.bold("## Cross-checks (informational)"))
+        lines.append(s.dim("-" * width))
+        lines.append(
+            s.dim(
+                "  Tools poll at different times; multi-account Claude is cswap-only. "
+                "Gaps rarely mean both tools are wrong."
+            )
         )
-    )
-    if snapshot.cross_checks:
-        lines.extend(_render_cross_checks(snapshot.cross_checks, s))
-    else:
-        lines.append(s.dim("  (no overlapping live measurements were available)"))
-    lines.append("")
+        if snapshot.cross_checks:
+            lines.extend(_render_cross_checks(snapshot.cross_checks, s))
+        else:
+            lines.append(s.dim("  (no overlapping live measurements were available)"))
+        lines.append("")
 
     if snapshot.collector_errors:
         lines.append(s.bold(s.red("## Collector errors")))
@@ -171,10 +179,13 @@ def render_report(
             lines.append(s.red(f"  - {err}"))
         lines.append("")
 
-    # 4) Short tips last
-    lines.append(s.bold("## Tips"))
-    lines.append(s.dim("-" * width))
-    lines.extend(_tips_lines(s))
+    if not brief:
+        # 4) Short tips last
+        lines.append(s.bold("## Tips"))
+        lines.append(s.dim("-" * width))
+        lines.extend(_tips_lines(s))
+    else:
+        lines.append(s.dim("  (brief mode — omit per-provider, cross-checks, tips; full: ai)"))
 
     return "\n".join(lines)
 

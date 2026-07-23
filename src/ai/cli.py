@@ -8,9 +8,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from ai.__init__ import __version__
 from ai.analysis.history import save_snapshot
@@ -25,16 +26,20 @@ from ai.config import (
     generate_user_config,
     load_config,
     timeout_for,
+    validate_config,
 )
 from ai.models import Snapshot, Urgency, UseOrLoseAlert, provider_display_name
 from ai.report import render_report
 
 # External CLIs this project shells out to (must already be installed/auth'd).
-_EXTERNAL_TOOLS: tuple[tuple[str, str], ...] = (
-    ("cswap", "cswap"),
-    ("codexbar", "codexbar"),
-    ("tokscale", "tokscale"),
+# Version argv is a light probe only (no usage/auth API).
+_EXTERNAL_TOOLS: tuple[tuple[str, str, list[str]], ...] = (
+    ("cswap", "cswap", ["--version"]),
+    ("codexbar", "codexbar", ["-V"]),
+    ("tokscale", "tokscale", ["--version"]),
 )
+_PROBE_TIMEOUT_S = 5.0
+_COMPLETIONS_DIR = Path(__file__).resolve().parents[2] / "completions"
 
 # Exit codes for collect runs (doctor / generate-config use their own rules).
 # 0 = ok, no actionable alerts · 1 = hard failure · 2 = ok, actionable alerts
@@ -46,10 +51,12 @@ _HELP_EPILOG = f"""\
 config & setup:
   ai --generate-config     write defaults under ~/.config/ai/ (never overwrites)
   ai --show-config-path    print services.yaml and config.toml paths
-  ai doctor                check tools on PATH, config files, effective timeouts
+  ai doctor                PATH tools, version probe, config validation, timeouts
   ai -t / --timeout SEC    force subprocess timeout for all tools this run
                            (default {DEFAULT_SUBPROCESS_TIMEOUT:g}s; also [timeouts] in config.toml)
   ai -q / --quiet          no progress on stderr (JSON stdout stays clean either way)
+  ai --brief               action plan + errors only (pretty)
+  ai --print-completion bash|zsh   shell completion script to stdout
 
 exit codes (collect runs):
   0  success, no burn/conserve alerts
@@ -57,6 +64,7 @@ exit codes (collect runs):
   2  success, but at least one burn/conserve alert
 
 Credentials stay with cswap / CodexBar / tokscale — this CLI never stores tokens.
+See docs/json-contract.md for machine-readable JSON field stability.
 """
 
 
@@ -94,9 +102,15 @@ def build_parser() -> argparse.ArgumentParser:
         "--doctor",
         action="store_true",
         help=(
-            "Check external tools on PATH, config file presence, and effective "
-            "timeouts; exit without collecting usage (also: ai doctor)"
+            "Check tools on PATH (plus light --version probe), config validation, "
+            "and timeouts; no usage collection (also: ai doctor)"
         ),
+    )
+    p.add_argument(
+        "--print-completion",
+        choices=("bash", "zsh"),
+        metavar="SHELL",
+        help="Print shell completion script for bash or zsh and exit",
     )
     p.add_argument(
         "-t",
@@ -135,6 +149,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--alerts-only",
         action="store_true",
         help="Only print use-or-lose recommendations (pretty text, unless --json)",
+    )
+    p.add_argument(
+        "--brief",
+        action="store_true",
+        help=(
+            "Pretty report: action plan + collector errors only "
+            "(skip per-provider detail, cross-checks, tips)"
+        ),
     )
     p.add_argument(
         "--no-tokscale",
@@ -202,6 +224,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.generate_config:
         return _run_generate_config()
+    if args.print_completion:
+        return _print_completion(args.print_completion)
     if args.doctor:
         return _run_doctor(config_path=args.config, timeout_override=args.timeout)
     config = load_config(args.config)
@@ -285,6 +309,7 @@ def main(argv: list[str] | None = None) -> int:
             config=config,
             color=color,
             traditional_summary=args.traditional_summary,
+            brief=bool(args.brief),
         )
     )
     return exit_code
@@ -366,15 +391,54 @@ def _path_status(path: Path) -> str:
     return "missing (built-in defaults apply)"
 
 
+def probe_tool_version(
+    cmd: str,
+    version_argv: list[str],
+    *,
+    timeout: float = _PROBE_TIMEOUT_S,
+    run_fn: Callable[..., Any] | None = None,
+) -> tuple[bool, str]:
+    """Run a light non-usage version probe. Returns (ok, summary)."""
+    run = run_fn or subprocess.run
+    try:
+        proc = run(
+            [cmd, *version_argv],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            check=False,
+        )
+    except FileNotFoundError:
+        return False, "not found"
+    except subprocess.TimeoutExpired:
+        return False, f"timed out after {timeout:g}s"
+    except OSError as exc:
+        return False, str(exc)
+
+    text = ((proc.stdout or "") + "\n" + (proc.stderr or "")).strip()
+    first = text.splitlines()[0].strip() if text else ""
+    if proc.returncode != 0 and not first:
+        return False, f"exit {proc.returncode}"
+    if not first:
+        first = f"exit {proc.returncode}"
+    # Truncate noisy banners
+    if len(first) > 80:
+        first = first[:77] + "..."
+    ok = proc.returncode == 0 or bool(text)
+    return ok, first
+
+
 def diagnose(
     config: dict[str, Any],
     *,
     which_fn=None,
+    probe: bool = True,
+    run_fn: Callable[..., Any] | None = None,
 ) -> tuple[int, list[str]]:
     """Build doctor report lines and exit code (0 ok, 1 problems).
 
-    Pure enough for tests: pass ``which_fn`` to stub PATH lookups.
-    Does not shell out for usage or auth — only PATH + config presence.
+    Pure enough for tests: pass ``which_fn`` / ``run_fn`` to stub PATH and probes.
+    Does not collect usage. Version probe is optional and non-auth.
     """
     lookup = which_fn if which_fn is not None else which
     lines: list[str] = [f"ai doctor  (v{__version__})", ""]
@@ -382,10 +446,21 @@ def diagnose(
 
     services = default_config_path()
     settings = default_toml_config_path()
-    lines.append("Config")
+    lines.append("Config files")
     lines.append(f"  directory: {default_config_dir()}")
     lines.append(f"  services.yaml: {_path_status(services)} — {services}")
     lines.append(f"  config.toml:   {_path_status(settings)} — {settings}")
+    lines.append("")
+
+    issues = validate_config(config)
+    lines.append("Config validation")
+    if not issues:
+        lines.append("  ok — no unknown keys or invalid timeouts")
+    else:
+        for issue in issues:
+            lines.append(f"  {issue}")
+            if issue.startswith("error:"):
+                problems += 1
     lines.append("")
 
     lines.append("Timeouts (seconds)")
@@ -393,17 +468,26 @@ def diagnose(
     force = timeouts.get("force")
     lines.append(f"  default: {timeout_for(config, 'default'):g}")
     lines.append(f"  force:   {force if force is not None else '(none)'}")
-    for tool_key, _cmd in _EXTERNAL_TOOLS:
+    for tool_key, _cmd, _va in _EXTERNAL_TOOLS:
         lines.append(f"  {tool_key}: {timeout_for(config, tool_key):g}")
     lines.append("")
 
-    lines.append("External tools (must already be installed and authenticated)")
-    for collector_key, cmd in _EXTERNAL_TOOLS:
+    lines.append("External tools (PATH + light version probe; no usage/auth)")
+    for collector_key, cmd, version_argv in _EXTERNAL_TOOLS:
         enabled = _collector_enabled(config, collector_key)
         path = lookup(cmd)
         if path:
             status = "ok"
             detail = path
+            if probe:
+                ok, summary = probe_tool_version(
+                    cmd, version_argv, timeout=_PROBE_TIMEOUT_S, run_fn=run_fn
+                )
+                if ok:
+                    detail = f"{path} · {summary}"
+                else:
+                    detail = f"{path} · probe failed: {summary}"
+                    # Probe failure is a warning, not a hard PATH problem
         else:
             status = "MISSING"
             detail = "not found on PATH"
@@ -414,20 +498,34 @@ def diagnose(
     lines.append("")
 
     if problems:
-        lines.append(f"Problems: {problems} enabled tool(s) missing from PATH.")
-        lines.append("Install/authenticate the tool(s) above, or disable the collector in services.yaml.")
+        lines.append(f"Problems: {problems} issue(s) (missing tools and/or config errors).")
+        lines.append(
+            "Install/authenticate tools, fix timeouts, or disable collectors in services.yaml."
+        )
         exit_code = 1
     else:
-        lines.append("No problems detected for enabled collectors.")
+        lines.append("No hard problems detected for enabled collectors.")
         exit_code = 0
 
     lines.append("")
     lines.append("Hints")
     lines.append("  ai --generate-config   # create ~/.config/ai defaults (no overwrite)")
     lines.append("  ai --show-config-path  # print config file paths")
+    lines.append("  ai --brief             # action plan only")
     lines.append("  ai -t 45               # force all tool timeouts for one run")
     lines.append("  ai --help              # full flag list + setup epilog")
+    lines.append("  docs/json-contract.md  # stable JSON fields for scripts")
     return exit_code, lines
+
+
+def _print_completion(shell: str) -> int:
+    path = _COMPLETIONS_DIR / f"ai.{shell}"
+    if not path.is_file():
+        print(f"error: completion file not found: {path}", file=sys.stderr)
+        return 1
+    text = path.read_text(encoding="utf-8")
+    sys.stdout.write(text if text.endswith("\n") else text + "\n")
+    return 0
 
 
 def _run_doctor(*, config_path: str | None, timeout_override: float | None) -> int:

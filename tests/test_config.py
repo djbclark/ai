@@ -11,6 +11,7 @@ from ai.config import (
     generate_user_config,
     load_config,
     timeout_for,
+    validate_config,
 )
 
 
@@ -78,7 +79,40 @@ def test_ensure_config_dir_creates_nested_levels(monkeypatch, tmp_path):
     ai_dir = ensure_config_dir()
     assert ai_dir == tmp_path / "xdg" / "ai"
     assert ai_dir.is_dir()
-    assert (tmp_path / "xdg").is_dir()
+
+
+def test_validate_config_clean_defaults():
+    # Empty dict is fine (defaults not required for validation of known keys)
+    assert validate_config({}) == []
+    assert validate_config(
+        {
+            "timeouts": {"default": 45},
+            "collectors": {"cswap": {"enabled": True}},
+            "analysis": {"scoring_mode": "pace"},
+            "plans": {"claude": {"monthly_price": 20}},
+        }
+    ) == []
+
+
+def test_validate_config_unknown_and_bad_timeouts():
+    issues = validate_config(
+        {
+            "timeouts": {"default": -5, "nope": 1},
+            "extra": True,
+            "collectors": {"cswap": {"enabled": True, "wat": 1}, "ghost": True},
+            "plans": {"antigravity": {"monthly_price": 20}},
+            "analysis": {"scoring_mode": "magic", "provider_overrides": {"chatgpt": {}}},
+        }
+    )
+    text = "\n".join(issues)
+    assert "error: timeouts.default must be positive" in text
+    assert "unknown timeouts key 'nope'" in text
+    assert "unknown top-level config key 'extra'" in text
+    assert "unknown collector 'ghost'" in text
+    assert "unknown collectors.cswap key 'wat'" in text
+    assert "plans key 'antigravity' is dead" in text
+    assert "provider_overrides key 'chatgpt' is dead" in text
+    assert "scoring_mode 'magic'" in text
 
 
 def test_generate_user_config_writes_defaults_without_overwrite(monkeypatch, tmp_path):

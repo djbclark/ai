@@ -241,6 +241,20 @@ def test_render_report_action_plan_before_tips_and_usage():
     assert "1 alert" in text or "alerts" in text
 
 
+def test_brief_report_omits_usage_and_tips():
+    now = utcnow()
+    acc = AccountUsage(provider="codex", source="codexbar", account="a@x.com")
+    snap = Snapshot(collected_at=now, accounts=[acc], collector_errors=["tokscale: boom"])
+    text = render_report(snap, [], config={}, color=False, brief=True)
+    assert "(brief)" in text
+    assert "Action plan" in text
+    assert "Collector errors" in text
+    assert "tokscale: boom" in text
+    assert "## Per-provider usage" not in text
+    assert "## Cross-checks" not in text
+    assert "## Tips" not in text
+
+
 def test_render_cross_checks_use_soft_labels():
     now = utcnow()
     snap = Snapshot(

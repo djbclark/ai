@@ -111,6 +111,31 @@ DEFAULT_CONFIG: dict[str, Any] = {
 }
 
 
+# Top-level and nested keys recognized by the loader / doctor (unknown → warning).
+KNOWN_TOP_LEVEL_KEYS = frozenset({"timeouts", "analysis", "plans", "collectors"})
+KNOWN_TIMEOUT_KEYS = frozenset(
+    {"default", "force", "cswap", "codexbar", "codexbar_discovery", "tokscale"}
+)
+KNOWN_COLLECTOR_KEYS = frozenset({"cswap", "codexbar", "tokscale"})
+KNOWN_COLLECTOR_ENTRY_KEYS = frozenset({"enabled", "providers"})
+KNOWN_ANALYSIS_KEYS = frozenset(DEFAULT_CONFIG["analysis"].keys())
+KNOWN_PACE_KEYS = frozenset(DEFAULT_CONFIG["analysis"]["pace"].keys())
+KNOWN_SCORING_MODES = frozenset({"pace", "multi_dim", "legacy"})
+
+# Collector provider ids that resolve via provider_config_key / aliases.
+# Using these as *plan* or *provider_overrides* keys is a no-op (dead config).
+_DEAD_PLAN_KEYS: dict[str, str] = {
+    "antigravity": "gemini",
+    "opencode-go": "opencode",
+    "opencodego": "opencode",
+    "chatgpt": "codex",
+    "openai-codex": "codex",
+    "github-copilot": "copilot",
+    "supergrok": "grok",
+    "grok-build": "grok",
+}
+
+
 def timeout_for(config: dict[str, Any] | None, name: str) -> float:
     """Resolve subprocess timeout (seconds) for a named tool.
 
@@ -128,6 +153,102 @@ def timeout_for(config: dict[str, Any] | None, name: str) -> float:
     if name in timeouts and timeouts[name] is not None:
         return float(timeouts[name])
     return default
+
+
+def validate_config(config: dict[str, Any] | None) -> list[str]:
+    """Return human-readable config problems/warnings (empty = clean).
+
+    Does not raise. Used by ``ai doctor``; safe to call after ``load_config``.
+    Severity is encoded in the message prefix: ``error:`` vs ``warning:``.
+    """
+    cfg = config or {}
+    issues: list[str] = []
+
+    for key in cfg:
+        if key not in KNOWN_TOP_LEVEL_KEYS:
+            issues.append(f"warning: unknown top-level config key {key!r} (ignored)")
+
+    timeouts = cfg.get("timeouts")
+    if timeouts is not None and not isinstance(timeouts, dict):
+        issues.append("error: timeouts must be a mapping")
+    elif isinstance(timeouts, dict):
+        for key, value in timeouts.items():
+            if key not in KNOWN_TIMEOUT_KEYS:
+                issues.append(f"warning: unknown timeouts key {key!r}")
+            if value is None:
+                continue
+            try:
+                num = float(value)
+            except (TypeError, ValueError):
+                issues.append(f"error: timeouts.{key} must be a number (got {value!r})")
+                continue
+            if num <= 0:
+                issues.append(f"error: timeouts.{key} must be positive (got {num:g})")
+
+    collectors = cfg.get("collectors")
+    if collectors is not None and not isinstance(collectors, dict):
+        issues.append("error: collectors must be a mapping")
+    elif isinstance(collectors, dict):
+        for name, entry in collectors.items():
+            if name not in KNOWN_COLLECTOR_KEYS:
+                issues.append(
+                    f"warning: unknown collector {name!r} "
+                    f"(known: {', '.join(sorted(KNOWN_COLLECTOR_KEYS))})"
+                )
+            if isinstance(entry, bool):
+                continue
+            if not isinstance(entry, dict):
+                issues.append(f"error: collectors.{name} must be a bool or mapping")
+                continue
+            for ek in entry:
+                if ek not in KNOWN_COLLECTOR_ENTRY_KEYS:
+                    issues.append(f"warning: unknown collectors.{name} key {ek!r}")
+
+    analysis = cfg.get("analysis")
+    if analysis is not None and not isinstance(analysis, dict):
+        issues.append("error: analysis must be a mapping")
+    elif isinstance(analysis, dict):
+        for key in analysis:
+            if key not in KNOWN_ANALYSIS_KEYS:
+                issues.append(f"warning: unknown analysis key {key!r}")
+        mode = analysis.get("scoring_mode")
+        if mode is not None and str(mode) not in KNOWN_SCORING_MODES:
+            issues.append(
+                f"warning: analysis.scoring_mode {mode!r} is not one of "
+                f"{', '.join(sorted(KNOWN_SCORING_MODES))}"
+            )
+        pace = analysis.get("pace")
+        if pace is not None and not isinstance(pace, dict):
+            issues.append("error: analysis.pace must be a mapping")
+        elif isinstance(pace, dict):
+            for key in pace:
+                if key not in KNOWN_PACE_KEYS:
+                    issues.append(f"warning: unknown analysis.pace key {key!r}")
+        overrides = analysis.get("provider_overrides")
+        if overrides is not None and not isinstance(overrides, dict):
+            issues.append("error: analysis.provider_overrides must be a mapping")
+        elif isinstance(overrides, dict):
+            for name in overrides:
+                canon = _DEAD_PLAN_KEYS.get(str(name).lower().replace(" ", "-"))
+                if canon:
+                    issues.append(
+                        f"warning: analysis.provider_overrides key {name!r} is dead — "
+                        f"use {canon!r} (see provider_config_key aliases)"
+                    )
+
+    plans = cfg.get("plans")
+    if plans is not None and not isinstance(plans, dict):
+        issues.append("error: plans must be a mapping")
+    elif isinstance(plans, dict):
+        for name in plans:
+            canon = _DEAD_PLAN_KEYS.get(str(name).lower().replace(" ", "-"))
+            if canon:
+                issues.append(
+                    f"warning: plans key {name!r} is dead — use {canon!r} "
+                    f"(collector id aliases to that config key)"
+                )
+
+    return issues
 
 
 def load_config(path: str | Path | None = None) -> dict[str, Any]:

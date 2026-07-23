@@ -14,6 +14,14 @@ def test_help_epilog_mentions_setup_flags(capsys):
     assert "config.toml" in out
 
 
+def _stub_probe(monkeypatch):
+    monkeypatch.setattr(
+        cli,
+        "probe_tool_version",
+        lambda cmd, _va, **_k: (True, f"{cmd}-probe"),
+    )
+
+
 def test_doctor_exits_without_collecting(monkeypatch, tmp_path, capsys):
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
 
@@ -22,17 +30,20 @@ def test_doctor_exits_without_collecting(monkeypatch, tmp_path, capsys):
 
     monkeypatch.setattr(cli, "run_collectors", fail_if_called)
     monkeypatch.setattr(cli, "which", lambda _cmd: "/usr/bin/fake")
+    _stub_probe(monkeypatch)
 
     assert cli.main(["--doctor"]) == 0
     out = capsys.readouterr().out
     assert "ai doctor" in out
-    assert "No problems detected" in out
+    assert "No hard problems" in out or "No problems" in out
     assert str(tmp_path / "ai") in out
+    assert "probe" in out.lower() or "cswap-probe" in out
 
 
 def test_doctor_subcommand_synonym(monkeypatch, tmp_path, capsys):
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
     monkeypatch.setattr(cli, "which", lambda _cmd: "/bin/tool")
+    _stub_probe(monkeypatch)
     monkeypatch.setattr(cli, "run_collectors", lambda _c: (_ for _ in ()).throw(AssertionError("no collect")))
     assert cli.main(["doctor"]) == 0
     assert "ai doctor" in capsys.readouterr().out
@@ -47,6 +58,7 @@ def test_doctor_missing_enabled_tool_exits_1(monkeypatch, tmp_path, capsys):
         return f"/usr/bin/{cmd}"
 
     monkeypatch.setattr(cli, "which", fake_which)
+    _stub_probe(monkeypatch)
     code = cli.main(["--doctor"])
     out = capsys.readouterr().out
     assert code == 1
@@ -72,20 +84,73 @@ def test_doctor_disabled_missing_tool_is_ok(monkeypatch, tmp_path, capsys):
         return f"/usr/bin/{cmd}"
 
     monkeypatch.setattr(cli, "which", fake_which)
+    _stub_probe(monkeypatch)
     assert cli.main(["--doctor"]) == 0
     out = capsys.readouterr().out
     assert "tokscale" in out
     assert "disabled in config" in out
-    assert "No problems detected" in out
+    assert "No hard problems" in out or "No problems" in out
 
 
 def test_diagnose_respects_timeout_force():
     config = {"timeouts": {"force": 12.0, "default": 45.0}, "collectors": {}}
-    code, lines = cli.diagnose(config, which_fn=lambda _c: "/x")
+    code, lines = cli.diagnose(config, which_fn=lambda _c: "/x", probe=False)
     assert code == 0
     text = "\n".join(lines)
     assert "force:   12.0" in text
     assert "cswap: 12" in text
+
+
+def test_doctor_reports_config_errors(monkeypatch, tmp_path, capsys):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    monkeypatch.setattr(
+        cli,
+        "load_config",
+        lambda _p=None: {"timeouts": {"default": -1}, "collectors": {}},
+    )
+    monkeypatch.setattr(cli, "which", lambda _c: "/bin/x")
+    _stub_probe(monkeypatch)
+    assert cli.main(["--doctor"]) == 1
+    out = capsys.readouterr().out
+    assert "error:" in out
+    assert "positive" in out
+
+
+def test_print_completion_bash(capsys):
+    assert cli.main(["--print-completion", "bash"]) == 0
+    out = capsys.readouterr().out
+    assert "complete" in out
+    assert "--brief" in out
+
+
+def test_brief_mode_skips_usage_section(monkeypatch, capsys):
+    from ai.models import AccountUsage, Urgency, UseOrLoseAlert
+
+    snap = Snapshot(
+        collected_at=utcnow(),
+        accounts=[AccountUsage(provider="codex", source="codexbar", account="a@x.com")],
+    )
+    alert = UseOrLoseAlert(
+        urgency=Urgency.HIGH,
+        provider="codex",
+        account="a@x.com",
+        window_label="Weekly",
+        remaining_percent=90.0,
+        days_until_reset=1.0,
+        plan=None,
+        message="burn",
+        source="codexbar",
+        score=10.0,
+        kind="burn",
+    )
+    monkeypatch.setattr(cli, "run_collectors", lambda _c: snap)
+    monkeypatch.setattr(cli, "analyze_use_or_lose", lambda *_a, **_k: [alert])
+    assert cli.main(["--brief", "--no-color", "-q"]) == 2
+    out = capsys.readouterr().out
+    assert "Action plan" in out
+    assert "brief" in out.lower()
+    assert "## Per-provider usage" not in out
+    assert "## Tips" not in out
 
 
 def test_alerts_only_includes_cross_check_warnings(monkeypatch, capsys):
