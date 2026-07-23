@@ -22,7 +22,10 @@ def collect_tokscale() -> list[AccountUsage]:
     if not which("tokscale"):
         raise CollectorError("tokscale not found on PATH")
 
-    payload = run_json(["tokscale", "usage", "--json"], timeout=120)
+    # Match codexbar's bundled-fallback budget (180s). An unpinned
+    # `npx tokscale@latest` wrapper on PATH can burn part of this on a cold
+    # cache, so the timeout must absorb that as well as tokscale's own work.
+    payload = run_json(["tokscale", "usage", "--json"], timeout=180)
     rows = payload if isinstance(payload, list) else [payload]
     accounts: list[AccountUsage] = []
     for row in rows:
