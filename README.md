@@ -60,8 +60,8 @@ ai --generate-config
 ai doctor                 # PATH tools + config presence + timeouts
 
 # Morning / before a long coding block
-ai                        # action plan first, then per-provider detail
-ai --brief                # action plan + errors only
+ai                        # detail first; action plan last (fits ~23 lines)
+ai --brief                # errors + action plan only
 ai -q                     # same report, no “Collecting…” on stderr
 
 # Scripting / cron (JSON on stdout; use exit codes)
@@ -113,11 +113,11 @@ ai --doctor
 
 | Flag                                             | Effect                                                             |
 | ------------------------------------------------ | ------------------------------------------------------------------ |
-| _(none)_ / `--format pretty`                     | Colorized terminal report with time-bucketed action plan (default) |
+| _(none)_ / `--format pretty`                     | Colorized report; action plan last (≤~23×80 when possible)         |
 | `--json` / `--format json`                       | Full snapshot + alerts as JSON                                     |
 | `--no-color`                                     | Disable ANSI colors in pretty mode                                 |
 | `-q` / `--quiet`                                 | Suppress progress messages on stderr                               |
-| `--brief`                                        | Pretty: action plan + collector errors only                        |
+| `--brief`                                        | Pretty: collector errors + action plan only                        |
 | `--alerts-only`                                  | Recommendations only (respects pretty vs json)                     |
 | `--traditional-summary`                          | Legacy flat summary format instead of unified action plan          |
 | `--print-completion bash\|zsh`                   | Print shell completion script to stdout                            |
@@ -153,8 +153,9 @@ This tool:
 2. Scores windows with **pace-based** logic (default): compare how far through the cycle you are vs how much you've used, then project waste or early lockout.
 3. Classifies each window as **Burn** (will leave capacity unused), **Conserve** (on track to exhaust before reset — slow down), or **On pace** (no alert).
 4. For **shared-allotment** providers (Claude, Gemini by default), scores the longest governing window only so a fresh 5-hour bar does not outrank the weekly budget it draws from.
-5. Renders a **unified action plan**: CONSERVE first, then THIS WEEK / THIS WEEKEND / LATER THIS MONTH / THROTTLED.
-6. Cross-checks overlapping sources; Claude multi-account stays canonical in cswap (with cache hydrate + fallbacks).
+5. Renders detail (per-provider, cross-checks, tips), then a **unified action plan last** so the terminal lands on what to do: CONSERVE first, then THIS WEEK / THIS WEEKEND / LATER THIS MONTH / THROTTLED.
+6. Keeps the final action-plan block within ~**23 lines × 80 columns** when possible (no scroll-back). If the detailed plan is taller, both are printed: detailed first, then a compact **at a glance** plan as the true end.
+7. Cross-checks overlapping sources; Claude multi-account stays canonical in cswap (with cache hydrate + fallbacks).
 
 This command intentionally does not report historical local-token usage or
 API-equivalent cost estimates.
@@ -162,29 +163,28 @@ API-equivalent cost estimates.
 ## Example output
 
 ```
-========================================================================
+================================================================================
 AI USAGE — USE IT OR LOSE IT
 Collected at … · 3 accounts · 2 alerts
-========================================================================
-
-## Action plan — use these before they reset
-------------------------------------------------------------------------
-  THIS WEEK (start now — capacity will reset or needs lead time)
-  ────────────────────────────────────────────────────────────────────
-  !!  Codex · you@example.com · Weekly: 90% left · use within 2.0 days · $5.00 at risk
-      Burstable — one heavy session will cover it.
+================================================================================
 
 ## Per-provider usage
-------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 Codex · account=you@example.com · plan=plus · selected live source: CodexBar
   quota: Codex weekly quota
     [============] 100% left   0% used   resets in 6.4d (Jul 28 21:59 UTC)
     $6.90 · flex:▒ semi
 
 ## Cross-checks (informational)
-------------------------------------------------------------------------
+--------------------------------------------------------------------------------
   Tools poll at different times; multi-account Claude is cswap-only. …
-------------------------------------------------------------------------
+
+## Tips
+--------------------------------------------------------------------------------
+  • …
+
+## Action plan — use these before they reset
+--------------------------------------------------------------------------------
   Available capacity this cycle: $35.65 across 6 windows (5 providers).
 
   THIS WEEK (start now — capacity will reset or needs lead time)
@@ -193,19 +193,6 @@ Codex · account=you@example.com · plan=plus · selected live source: CodexBar
       Semi-throttled — steady usage will exhaust it.
   .   OpenCode Go · default · OpenCode Go weekly quota: 98% left · use within 4.5 days · $3.37 at risk
       Burstable — one heavy session will cover it.
-
-  LATER THIS MONTH (before next billing cycle)
-  ────────────────────────────────────────────
-  .   Cursor · you@example.com · Cursor monthly quota: 41% left · use within 11.4 days · $12.41 at risk
-      Burstable — one heavy session will cover it.
-
-  THROTTLED — ACCUMULATING WASTE
-  ──────────────────────────────
-  · Gemini 5h: 0% left per cycle (~$0.00/cycle ≈ ~$0.00/month wasted)
-
-  PREPAID / NON-EXPIRING (no hard deadline)
-  ─────────────────────────────────────────
-  · openrouter: $18.90 prepaid balance
 ```
 
 ## Project layout

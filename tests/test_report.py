@@ -11,7 +11,17 @@ from ai.models import (
     UseOrLoseAlert,
     utcnow,
 )
-from ai.report import _Style, _action_plan_line, _sorted_accounts, _throttled_waste_line, render_report
+from ai.report import (
+    ACTION_PLAN_MAX_LINES,
+    ACTION_PLAN_WIDTH,
+    _Style,
+    _action_plan_line,
+    _physical_line_count,
+    _render_brief_action_plan,
+    _sorted_accounts,
+    _throttled_waste_line,
+    render_report,
+)
 
 
 def test_per_provider_accounts_are_sorted_by_display_name():
@@ -208,7 +218,7 @@ def test_action_plan_line_includes_pace_fragment():
     assert "projected 60% unused" in line
 
 
-def test_render_report_action_plan_before_tips_and_usage():
+def test_render_report_action_plan_is_last_after_detail():
     now = utcnow()
     burn = UseOrLoseAlert(
         urgency=Urgency.HIGH,
@@ -235,10 +245,119 @@ def test_render_report_action_plan_before_tips_and_usage():
         config={},
         color=False,
     )
-    assert text.index("## Action plan") < text.index("## Per-provider usage")
     assert text.index("## Per-provider usage") < text.index("## Cross-checks")
     assert text.index("## Cross-checks") < text.index("## Tips")
+    assert text.index("## Tips") < text.index("## Action plan")
+    # Action plan is the last section heading
+    last_heading = max(
+        text.rfind("## Per-provider"),
+        text.rfind("## Cross-checks"),
+        text.rfind("## Tips"),
+        text.rfind("## Action plan"),
+        text.rfind("## Collector"),
+    )
+    assert last_heading == text.rfind("## Action plan")
     assert "1 alert" in text or "alerts" in text
+
+
+def test_action_plan_section_fits_viewport_when_short():
+    now = utcnow()
+    burn = UseOrLoseAlert(
+        urgency=Urgency.HIGH,
+        provider="codex",
+        account="a@example.com",
+        window_label="Weekly",
+        remaining_percent=90.0,
+        days_until_reset=2.0,
+        plan=None,
+        message="burn me",
+        source="codexbar",
+        score=80.0,
+        kind="burn",
+        flexibility_profile=FlexibilityProfile(
+            flexibility_class=FlexibilityClass.BURSTABLE,
+            consumption_flexibility=1.0,
+            value_at_risk_usd=5.0,
+        ),
+    )
+    text = render_report(
+        Snapshot(collected_at=now, accounts=[]),
+        [burn],
+        config={},
+        color=False,
+        brief=True,
+    )
+    # Only one action-plan heading when it fits
+    assert text.count("## Action plan") == 1
+    assert "at a glance" not in text
+    plan_start = text.index("## Action plan")
+    plan_lines = text[plan_start:].splitlines()
+    assert len(plan_lines) <= ACTION_PLAN_MAX_LINES
+    assert all(len(line) <= ACTION_PLAN_WIDTH + 5 for line in plan_lines)  # small slack
+
+
+def test_long_action_plan_appends_brief_at_end():
+    """Many alerts → detailed plan + trailing at-a-glance brief ≤ 23 lines."""
+    now = utcnow()
+    alerts: list[UseOrLoseAlert] = []
+    for i in range(12):
+        alerts.append(
+            UseOrLoseAlert(
+                urgency=Urgency.MEDIUM,
+                provider="codex",
+                account=f"user{i}@example.com",
+                window_label="Weekly",
+                remaining_percent=80.0 + i,
+                days_until_reset=2.0 + (i % 5),
+                plan=None,
+                message=f"burn {i}",
+                source="codexbar",
+                score=50.0 + i,
+                kind="burn",
+                flexibility_profile=FlexibilityProfile(
+                    flexibility_class=FlexibilityClass.BURSTABLE,
+                    consumption_flexibility=1.0,
+                    value_at_risk_usd=1.0 + i,
+                ),
+            )
+        )
+    text = render_report(
+        Snapshot(collected_at=now, accounts=[]),
+        alerts,
+        config={},
+        color=False,
+        brief=True,
+    )
+    assert "## Action plan (detailed)" in text
+    assert "## Action plan — at a glance" in text
+    assert text.index("(detailed)") < text.index("at a glance")
+    # Trailing brief block is last and viewport-sized
+    glance_start = text.index("## Action plan — at a glance")
+    glance_lines = text[glance_start:].splitlines()
+    assert len(glance_lines) <= ACTION_PLAN_MAX_LINES
+    assert text.strip().endswith(glance_lines[-1].strip()) or glance_lines[-1] in text[-200:]
+
+
+def test_brief_action_plan_respects_max_lines():
+    alerts = [
+        UseOrLoseAlert(
+            urgency=Urgency.LOW,
+            provider="codex",
+            account=f"u{i}@x.com",
+            window_label="Weekly",
+            remaining_percent=50.0,
+            days_until_reset=3.0,
+            plan=None,
+            message="x",
+            source="codexbar",
+            score=float(i),
+            kind="burn",
+        )
+        for i in range(30)
+    ]
+    body = _render_brief_action_plan(alerts, _Style(False), width=80, max_lines=10)
+    assert _physical_line_count(body) <= 10
+    assert any("more" in line for line in body)
 
 
 def test_brief_report_omits_usage_and_tips():
@@ -253,6 +372,8 @@ def test_brief_report_omits_usage_and_tips():
     assert "## Per-provider usage" not in text
     assert "## Cross-checks" not in text
     assert "## Tips" not in text
+    # Errors before action plan; plan last
+    assert text.index("Collector errors") < text.index("Action plan")
 
 
 def test_render_cross_checks_use_soft_labels():

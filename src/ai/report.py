@@ -30,6 +30,12 @@ URGENCY_ICON = {
     Urgency.NONE: "   ",
 }
 
+# Action plan is always last so the terminal lands on it after `ai` returns.
+# Target: entire last plan block fits on a typical 24-row viewport without
+# scrolling back (header of the block + ~22 body lines ≈ 23 lines total).
+ACTION_PLAN_MAX_LINES = 23
+ACTION_PLAN_WIDTH = 80
+
 
 class _Style:
     """ANSI colors when stdout is a TTY and color is not disabled."""
@@ -98,20 +104,25 @@ def render_report(
     brief: bool = False,
 ) -> str:
     """
-    Report order (action-first for daily use):
+    Report order (detail first, action plan last for terminal landing):
       1. Header
-      2. Action plan — what to burn / conserve before reset
-      3. Per-provider live quota detail (skipped if brief)
-      4. Cross-checks (skipped if brief)
-      5. Collector errors (if any)
-      6. Short tips (skipped if brief)
+      2. Per-provider live quota detail (skipped if brief)
+      3. Cross-checks (skipped if brief)
+      4. Collector errors (if any)
+      5. Short tips (skipped if brief)
+      6. Action plan — always last so `ai` ends on what to do
 
-    ``brief=True`` keeps header + action plan + collector errors only
+    The final action-plan block targets ≤ ``ACTION_PLAN_MAX_LINES`` lines of
+    ~``ACTION_PLAN_WIDTH``-column text so a typical terminal shows the whole
+    plan without scrolling back. If the detailed plan is longer, both are
+    rendered: detailed first, then a compact brief plan as the true end.
+
+    ``brief=True`` keeps header + collector errors + action plan only
     (between full pretty and ``--alerts-only``).
     """
     s = _Style(use_color(force=color))
     lines: list[str] = []
-    width = 72
+    width = ACTION_PLAN_WIDTH
     accounts = _sorted_accounts(snapshot.accounts)
     n_accounts = len(accounts)
     n_actionable = sum(
@@ -132,21 +143,8 @@ def render_report(
     lines.append(s.dim(meta))
     lines.append(s.bold("=" * width))
 
-    # 1) Action plan first — the reason you ran the tool
-    lines.append("")
-    lines.append(s.bold("## Action plan — use these before they reset"))
-    lines.append(s.dim("-" * width))
-    if traditional_summary:
-        lines.extend(_render_traditional_summary(alerts, s, width=width))
-    else:
-        analysis_cfg = (config or {}).get("analysis") or {}
-        waking_hours = float(analysis_cfg.get("waking_hours_per_day", 16))
-        lines.extend(
-            _render_action_plan(alerts, s, width=width, waking_hours_per_day=waking_hours)
-        )
-
     if not brief:
-        # 2) Per-provider live quota detail
+        # 1) Per-provider live quota detail
         lines.append("")
         lines.append(s.bold("## Per-provider usage"))
         lines.append(s.dim("-" * width))
@@ -156,7 +154,7 @@ def render_report(
         else:
             lines.append(s.dim("  (no provider data collected)"))
 
-        # 3) Independent live-source consistency checks (informational)
+        # 2) Independent live-source consistency checks (informational)
         lines.append("")
         lines.append(s.bold("## Cross-checks (informational)"))
         lines.append(s.dim("-" * width))
@@ -180,14 +178,89 @@ def render_report(
         lines.append("")
 
     if not brief:
-        # 4) Short tips last
+        # 3) Tips before action plan (plan must remain the last section)
         lines.append(s.bold("## Tips"))
         lines.append(s.dim("-" * width))
         lines.extend(_tips_lines(s))
+        lines.append("")
     else:
-        lines.append(s.dim("  (brief mode — omit per-provider, cross-checks, tips; full: ai)"))
+        lines.append(
+            s.dim("  (brief mode — omit per-provider, cross-checks, tips; full: ai)")
+        )
+        lines.append("")
+
+    # 4) Action plan last — terminal lands here after the command finishes
+    analysis_cfg = (config or {}).get("analysis") or {}
+    waking_hours = float(analysis_cfg.get("waking_hours_per_day", 16))
+    lines.extend(
+        _render_action_plan_section(
+            alerts,
+            s,
+            width=width,
+            traditional_summary=traditional_summary,
+            waking_hours_per_day=waking_hours,
+        )
+    )
 
     return "\n".join(lines)
+
+
+def _physical_line_count(lines: list[str]) -> int:
+    """Count terminal rows, including embedded newlines inside a list entry."""
+    if not lines:
+        return 0
+    return sum(part.count("\n") + 1 for part in lines)
+
+
+def _render_action_plan_section(
+    alerts: list[UseOrLoseAlert],
+    s: _Style,
+    *,
+    width: int,
+    traditional_summary: bool,
+    waking_hours_per_day: float,
+) -> list[str]:
+    """
+    Build the trailing action-plan block(s).
+
+    Prefer a single detailed plan when it fits in ``ACTION_PLAN_MAX_LINES``.
+    Otherwise emit detailed + compact brief, with brief always last.
+    """
+    if traditional_summary:
+        detailed_body = _render_traditional_summary(alerts, s, width=width)
+    else:
+        detailed_body = _render_action_plan(
+            alerts, s, width=width, waking_hours_per_day=waking_hours_per_day
+        )
+
+    header_title = "## Action plan — use these before they reset"
+    # Section = title + rule + body (+ optional trailing blank already in body)
+    detailed_block = [
+        s.bold(header_title),
+        s.dim("-" * width),
+        *detailed_body,
+    ]
+    detailed_rows = _physical_line_count(detailed_block)
+
+    if detailed_rows <= ACTION_PLAN_MAX_LINES:
+        return detailed_block
+
+    # Too tall for one screen: full detail, then a compact plan the viewport
+    # can hold without scrolling back.
+    brief_body = _render_brief_action_plan(
+        alerts, s, width=width, max_lines=ACTION_PLAN_MAX_LINES - 2
+    )
+    out: list[str] = [
+        s.bold("## Action plan (detailed)"),
+        s.dim("-" * width),
+        *detailed_body,
+    ]
+    if out and out[-1] != "":
+        out.append("")
+    out.append(s.bold("## Action plan — at a glance"))
+    out.append(s.dim("-" * width))
+    out.extend(brief_body)
+    return out
 
 
 def _tips_lines(s: _Style) -> list[str]:
@@ -286,6 +359,101 @@ def _render_traditional_summary(
     return lines
 
 
+def _render_brief_action_plan(
+    alerts: list[UseOrLoseAlert],
+    s: _Style,
+    *,
+    width: int,
+    max_lines: int,
+) -> list[str]:
+    """
+    One-line-per-alert compact plan for the final viewport.
+
+    Fits in ``max_lines`` physical rows (callers reserve title + rule outside).
+    """
+    action = [a for a in alerts if a.urgency not in (Urgency.INFO, Urgency.NONE)]
+    conserve = sorted(
+        [a for a in action if a.kind == "conserve"],
+        key=lambda a: (-a.score,),
+    )
+    burns = [a for a in action if a.kind != "conserve"]
+    lines: list[str] = []
+
+    if not action:
+        lines.append(s.green("  Nothing urgent under current thresholds."))
+        return lines
+
+    # Flatten to ordered display rows (headers + alert lines), then take what fits.
+    rows: list[str] = []
+    if conserve:
+        rows.append(s.bold("  CONSERVE"))
+        for alert in conserve:
+            rows.append(_brief_alert_line(alert, s, kind="conserve"))
+    if burns:
+        buckets = _action_buckets(burns)
+        for bucket_label in ("THIS WEEK", "THIS WEEKEND", "LATER THIS MONTH", "THROTTLED"):
+            items = buckets.get(bucket_label, [])
+            if not items:
+                continue
+            rows.append(s.bold(f"  {bucket_label}"))
+            for alert in sorted(items, key=lambda a: (-a.score,)):
+                rows.append(_brief_alert_line(alert, s, kind="burn"))
+
+    # Reserve one row for a possible "+N more" footer when we truncate.
+    body_budget = max(1, max_lines - 1)
+    used = 0
+    for row in rows:
+        row_h = _physical_line_count([row])
+        if used + row_h > body_budget:
+            remaining = len(rows) - len(lines)
+            # Count only remaining alert lines roughly: remaining rows not yet added
+            omitted = remaining
+            lines.append(s.dim(f"  … +{omitted} more (see detailed plan above)"))
+            break
+        lines.append(_clamp_display_width(row, width))
+        used += row_h
+
+    return lines
+
+
+def _brief_alert_line(alert: UseOrLoseAlert, s: _Style, *, kind: str) -> str:
+    icon = URGENCY_ICON.get(alert.urgency, "   ")
+    who = alert.account or "default"
+    when = _human_deadline(alert.days_until_reset)
+    verb = "pace" if kind == "conserve" else "use"
+    return (
+        f"  {s.urgency(alert.urgency, icon)} "
+        f"{s.bold(provider_display_name(alert.provider))} · {who} · "
+        f"{alert.window_label}: {alert.remaining_percent:.0f}% left · {verb} {when}"
+    )
+
+
+def _clamp_display_width(text: str, width: int) -> str:
+    """Truncate plain or lightly-styled text to roughly ``width`` display cols."""
+    # Strip ANSI for length; if over, cut the raw string and re-append reset.
+    plain = _strip_ansi(text)
+    if len(plain) <= width:
+        return text
+    # Prefer truncating the unstyled form when styles make counting hard.
+    cut = max(0, width - 1)
+    return plain[:cut] + "…"
+
+
+def _strip_ansi(text: str) -> str:
+    out: list[str] = []
+    i = 0
+    while i < len(text):
+        if text[i] == "\033" and i + 1 < len(text) and text[i + 1] == "[":
+            j = i + 2
+            while j < len(text) and text[j] != "m":
+                j += 1
+            i = j + 1 if j < len(text) else len(text)
+            continue
+        out.append(text[i])
+        i += 1
+    return "".join(out)
+
+
 def _render_action_plan(
     alerts: list[UseOrLoseAlert],
     s: _Style,
@@ -305,6 +473,7 @@ def _render_action_plan(
         if a.flexibility_profile and a.flexibility_profile.value_at_risk_usd is not None
     )
     providers = len({a.provider for a in action} | {a.provider for a in conserve})
+    rule = "─" * max(8, min(width - 4, 76))
 
     if not action and not conserve and not info:
         lines.append(s.green("  Nothing urgent: no large unused subscription windows"))
@@ -315,7 +484,7 @@ def _render_action_plan(
 
     if conserve:
         lines.append(f"  {s.bold('CONSERVE — pace yourself, avoid lockout before reset')}")
-        lines.append(s.dim(f"  {'─' * (width - 4)}"))
+        lines.append(s.dim(f"  {rule}"))
         for alert in sorted(conserve, key=lambda a: (-a.score,)):
             lines.append(_conserve_line(alert, s))
         lines.append("")
@@ -324,11 +493,16 @@ def _render_action_plan(
         if total_value_usd > 0:
             lines.append(
                 s.dim(
-                    f"  Available capacity this cycle: {s.bold(f'${total_value_usd:.2f}')} across {len(action)} windows ({providers} providers)."
+                    f"  Available capacity this cycle: {s.bold(f'${total_value_usd:.2f}')} "
+                    f"across {len(action)} windows ({providers} providers)."
                 )
             )
         else:
-            lines.append(s.dim(f"  {len(action)} windows with unused capacity across {providers} providers."))
+            lines.append(
+                s.dim(
+                    f"  {len(action)} windows with unused capacity across {providers} providers."
+                )
+            )
         lines.append("")
 
         buckets = _action_buckets(action)
@@ -341,7 +515,7 @@ def _render_action_plan(
             if not items:
                 continue
             lines.append(f"  {s.bold(bucket_label)} ({s.dim(bucket_name)})")
-            lines.append(s.dim(f"  {'─' * (width - 4)}"))
+            lines.append(s.dim(f"  {rule}"))
             for alert in sorted(items, key=lambda a: (-a.score,)):
                 lines.append(_action_plan_line(alert, s))
             lines.append("")
@@ -349,7 +523,7 @@ def _render_action_plan(
         throttled = buckets.get("THROTTLED", [])
         if throttled:
             lines.append(f"  {s.bold('THROTTLED — ACCUMULATING WASTE')}")
-            lines.append(s.dim(f"  {'─' * (width - 4)}"))
+            lines.append(s.dim(f"  {rule}"))
             lines.append(s.dim("  These windows refill so fast you can't use them all. Estimated"))
             lines.append(s.dim("  plan value silently wasted each month:"))
             lines.append("")
@@ -361,7 +535,7 @@ def _render_action_plan(
 
     if info:
         lines.append(s.bold("  ADVISORY / LOW URGENCY (no hard deadline)"))
-        lines.append(s.dim(f"  {'─' * (width - 4)}"))
+        lines.append(s.dim(f"  {rule}"))
         for alert in info:
             lines.append(s.dim(f"  · {alert.message}"))
         lines.append("")

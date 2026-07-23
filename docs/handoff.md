@@ -16,10 +16,11 @@ Fresh agents: start at [`AGENTS.md`](../AGENTS.md). This file is the short
 | cswap reliability (interim) | Cache hydrate, countdown recompute, CodexBar/tokscale fallback — [`cswap-reliability.md`](cswap-reliability.md) |
 | Tracker | [ai#1](https://github.com/djbclark/ai/issues/1) documents consumer contract for upstream #170 |
 | CLI discoverability | `ai doctor`, `--help` epilog, `--generate-config` under `~/.config/ai/` |
-| Product polish batch | Exit codes 0/1/2, `-q`, action-first report, soft cross-checks, daily workflow README |
+| Product polish batch | Exit codes 0/1/2, `-q`, soft cross-checks, daily workflow README |
 | Second polish batch | Doctor version probe + config validation, `--brief`, completions, JSON contract, concurrency audit |
+| Action plan last | Report ends on action plan (≤~23×80); if detailed is taller, detailed + **at a glance** brief trailer |
 
-Recent commits (newest first): `b5cc6b7`, `2a73746`, `1fa32dd`, `d4339ec`, `6609295`, …
+Recent commits (newest first): see `git log -5 --oneline`
 
 ## Operator preferences (standing)
 

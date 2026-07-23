@@ -55,7 +55,7 @@ config & setup:
   ai -t / --timeout SEC    force subprocess timeout for all tools this run
                            (default {DEFAULT_SUBPROCESS_TIMEOUT:g}s; also [timeouts] in config.toml)
   ai -q / --quiet          no progress on stderr (JSON stdout stays clean either way)
-  ai --brief               action plan + errors only (pretty)
+  ai --brief               errors + action plan only (pretty)
   ai --print-completion bash|zsh   shell completion script to stdout
 
 exit codes (collect runs):
@@ -154,7 +154,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--brief",
         action="store_true",
         help=(
-            "Pretty report: action plan + collector errors only "
+            "Pretty report: collector errors + trailing action plan only "
             "(skip per-provider detail, cross-checks, tips)"
         ),
     )
@@ -511,7 +511,7 @@ def diagnose(
     lines.append("Hints")
     lines.append("  ai --generate-config   # create ~/.config/ai defaults (no overwrite)")
     lines.append("  ai --show-config-path  # print config file paths")
-    lines.append("  ai --brief             # action plan only")
+    lines.append("  ai --brief             # errors + trailing action plan")
     lines.append("  ai -t 45               # force all tool timeouts for one run")
     lines.append("  ai --help              # full flag list + setup epilog")
     lines.append("  docs/json-contract.md  # stable JSON fields for scripts")
