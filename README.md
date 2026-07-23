@@ -101,11 +101,11 @@ Most **subscription** coding plans (Claude Pro/Max, ChatGPT Plus/Codex, Cursor, 
 This tool:
 
 1. Pulls **remaining %** and **reset times** from cswap for each distinct Claude Code account and from CodexBar/tokscale for other providers.
-2. Scores windows across **three dimensions**: dollar value at risk, consumption flexibility (can you burst-burn it, or is it rate-limited?), and deadline pressure.
-3. Generates a **time-bucketed unified action plan**: THIS WEEK / THIS WEEKEND / LATER THIS MONTH / THROTTLED ACCUMULATING WASTE.
-4. Skips pure **pay-as-you-go** history and treats **prepaid API balances** (OpenRouter, etc.) as non-urgent (they usually roll until spent).
-5. Compares overlapping CodexBar and tokscale measurements and reports clear consistency warnings. Claude Code remains canonical in cswap, with CodexBar used only as an account-aware cross-check when possible.
-6. Shows per-window **consumption flexibility** (burstable vs semi-throttled vs throttled) and estimated dollar value at risk.
+2. Scores windows with **pace-based** logic (default): compare how far through the cycle you are vs how much you've used, then project waste or early lockout.
+3. Classifies each window as **Burn** (will leave capacity unused), **Conserve** (on track to exhaust before reset — slow down), or **On pace** (no alert).
+4. For **shared-allotment** providers (Claude, Gemini by default), scores the longest governing window only so a fresh 5-hour bar does not outrank the weekly budget it draws from.
+5. Renders a **unified action plan**: CONSERVE first, then THIS WEEK / THIS WEEKEND / LATER THIS MONTH / THROTTLED.
+6. Cross-checks overlapping sources; Claude multi-account stays canonical in cswap (with cache hydrate + fallbacks).
 
 This command intentionally does not report historical local-token usage or
 API-equivalent cost estimates.
@@ -176,19 +176,33 @@ Semgrep, Gitleaks, pre-commit, and `just`. Ansible, shell, JavaScript/CSS, doten
 Caddy, and browser-page checks are omitted because this repository contains none
 of those corresponding inputs.
 
+## Scoring modes (`analysis.scoring_mode`)
+
+| Mode | Meaning |
+| --- | --- |
+| **`pace`** (default) | Burn / conserve / on-pace from projected waste and lockout |
+| **`multi_dim`** | Previous value + flexibility + deadline blend (escape hatch) |
+| **`legacy`** | Original deadline-heavy scorer (`use_multi_dim_scoring: false` still maps here) |
+
+Pace knobs (also in `services.yaml` under `analysis.pace`):
+
+- `waste_alert_fraction` (default 0.30) — project this much unused → **Burn**
+- `min_elapsed_fraction` (default 0.15) — too early in the window → **On pace** unless history says otherwise
+- `conserve_min_lead_hours` (default 4) — exhaust this far before reset → **Conserve**
+
+Shared allotment: `analysis.provider_overrides.<provider>.shared_allotment: true` (Claude/Gemini default) scores only the longest window per account.
+
 ## Notes / limitations
 
 - Live quota accuracy depends on each tool's auth (browser cookies, OAuth, keychain). Errors are reported per account rather than aborting the whole run.
-- cswap, CodexBar, and tokscale run concurrently, and by default each CodexBar provider (and any explicit comma-separated `--providers` list) is queried as its own concurrent subprocess, so total runtime tracks the slowest single provider rather than the sum of all of them. `--providers all` is intentionally thorough and stays a single, slower bundled CodexBar call.
-- **5-hour windows** are no longer binary-filtered -- they appear with dollar value and throttled flexibility. Their low per-cycle value naturally deprioritizes them, but accumulating waste is flagged in the THROTTLED section of the action plan.
-- Per-window consumption detail ($ value, flexibility class) is shown inline with each quota window.
-- Scoring uses three dimensions: value-at-risk, consumption flexibility (burstable vs rate-limited), and deadline pressure. Set `analysis.use_multi_dim_scoring: false` in config to revert to legacy scoring.
-- Duplicate live measurements are retained for cross-checking but only one copy drives recommendations, preventing duplicate alerts.
-- Dollar values are derived from plan `monthly_price` in config with waking-hours correction (default 16h/day).
+- cswap, CodexBar, and tokscale run concurrently; each CodexBar provider is its own subprocess. Default tool timeout is **45s** (`-t` / `config.toml [timeouts]`).
+- Per-window detail still shows $ value, flexibility class, and a **pace** ratio when computable.
+- Duplicate live measurements are retained for cross-checking but only one copy drives recommendations.
+- Dollar values use plan `monthly_price` with waking-hours correction (default 16h/day).
 
 ## Related reading
 
-- [`docs/consumption-flexibility-plan.md`](docs/consumption-flexibility-plan.md) — design rationale for the multi-dimensional scoring model.
+- [`docs/consumption-flexibility-plan.md`](docs/consumption-flexibility-plan.md) — historical multi-dimensional scoring design (**superseded** by pace-based scoring in Phase 2 of the fix plan).
 - [`docs/code-review-2026-07-23.html`](docs/code-review-2026-07-23.html) — a 79-agent adversarial code review (45 findings) plus design proposals for containing tokscale's collector timeouts and fixing the rating algorithm. Open it directly in a browser for the styled version; GitHub's file viewer only shows the source.
 - [`docs/fix-implementation-plan.md`](docs/fix-implementation-plan.md) — the ordered, step-by-step plan for fixing everything the review above found, phased as showstopper bugs → rating-algorithm redesign → everything else.
 - [`docs/cswap-reliability.md`](docs/cswap-reliability.md) — Claude multi-account reliability: why `cswap list --json` can drop usable quota, and how cache hydration + fallbacks work.
