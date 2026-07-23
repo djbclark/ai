@@ -175,11 +175,8 @@ def merge_learned_flexibility(
         return base_flex
     key = f"{provider.lower().replace(' ', '-')}:{duration_kind}"
     learned_flex = learned.get(key)
-    if learned_flex is None:
-        for learned_key, val in learned.items():
-            if learned_key.endswith(f":{duration_kind}"):
-                learned_flex = val
-                break
+    # Exact provider match only — never blend another provider's rate for the
+    # same duration bucket (Grok weekly ≠ Codex weekly).
     if learned_flex is None:
         return base_flex
     return 0.3 * learned_flex + 0.7 * base_flex

@@ -286,6 +286,17 @@ def test_classify_flexibility_provider_override():
     assert score == 0.0
 
 
+def test_antigravity_uses_gemini_provider_override():
+    """Config keys gemini; collector name is often antigravity after canonicalization."""
+    cfg = {
+        "consumption_flexibility_defaults": {"5h": 0.5},
+        "provider_overrides": {"gemini": {"5h": {"flexibility": 0.0}}},
+    }
+    cls, score = _classify_flexibility(window_minutes=300, provider="antigravity", config=cfg)
+    assert cls == FlexibilityClass.THROTTLED
+    assert score == 0.0
+
+
 def test_compute_value_at_risk_weekly_unchanged_when_cycles_gt_one():
     val = _compute_value_at_risk(
         remaining=100.0,

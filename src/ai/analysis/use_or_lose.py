@@ -23,6 +23,7 @@ from ai.models import (
     Urgency,
     UseOrLoseAlert,
     classify_window_minutes,
+    provider_config_key,
     provider_display_name,
     utcnow,
 )
@@ -72,7 +73,7 @@ def _classify_flexibility(
     overrides = overrides_cfg if isinstance(overrides_cfg, dict) else {}
 
     flex = None
-    provider_key = provider.lower().replace(" ", "-")
+    provider_key = provider_config_key(provider)
 
     if provider_key in overrides and duration_kind:
         prov_overrides = overrides[provider_key]
@@ -145,7 +146,7 @@ def _compute_flexibility_profile(
     if capacity is None and duration_kind:
         overrides_cfg = cfg.get("provider_overrides") or {}
         overrides = overrides_cfg if isinstance(overrides_cfg, dict) else {}
-        provider_key = provider.lower().replace(" ", "-")
+        provider_key = provider_config_key(provider)
         prov_overrides = overrides.get(provider_key)
         if isinstance(prov_overrides, dict):
             window_overrides = prov_overrides.get(duration_kind)
@@ -276,7 +277,7 @@ def analyze_use_or_lose(
         plan_meta = _plan_meta(account.provider, plans)
         monthly_price = plan_meta.get("monthly_price")
         value_multipliers = plan_meta.get("value_multiplier")
-        provider_key = account.provider.lower().replace(" ", "-")
+        provider_key = provider_config_key(account.provider)
 
         # Shared-allotment (pace mode): score only the longest-duration window;
         # shorter siblings (e.g. Claude 5h under weekly) are suppressed children.
@@ -568,16 +569,8 @@ def _looks_monthly(label: str) -> bool:
 
 
 def _plan_meta(provider: str, plans: dict[str, Any]) -> dict[str, Any]:
-    key = provider.lower().replace(" ", "-")
-    # By the time an account reaches here, runner.py's _canonical_provider has already
-    # rewritten raw collector slugs (chatgpt, grok-build, github-copilot, ...) to their
-    # canonical provider name. This maps canonical provider -> plans.yaml config key,
-    # for the providers whose config key differs from the canonical provider name.
-    aliases = {
-        "antigravity": "gemini",
-        "opencode-go": "opencode",
-    }
-    lookup = aliases.get(key, key)
+    # Canonical collector key → plans / services.yaml key (e.g. antigravity → gemini).
+    lookup = provider_config_key(provider)
     meta = plans.get(lookup) or plans.get(provider) or {}
     return meta if isinstance(meta, dict) else {}
 

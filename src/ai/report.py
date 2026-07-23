@@ -16,6 +16,7 @@ from ai.models import (
     Urgency,
     UseOrLoseAlert,
     classify_window_minutes,
+    provider_config_key,
     provider_display_name,
     utcnow,
 )
@@ -610,8 +611,7 @@ def _consumption_line(
     if not window.window_minutes:
         return None
 
-    aliases = {"antigravity": "gemini", "opencode-go": "opencode"}
-    provider_key = aliases.get(provider.lower().replace(" ", "-"), provider.lower().replace(" ", "-"))
+    provider_key = provider_config_key(provider)
     plan_meta: dict[str, Any] = {}
     meta = plans.get(provider_key)
     if isinstance(meta, dict):

@@ -85,10 +85,10 @@ def test_merge_learned_flexibility_with_match():
     assert result == 0.3 * 0.9 + 0.7 * 0.7
 
 
-def test_merge_learned_flexibility_fallback():
-    learned = {"other:weekly": 0.3}
+def test_merge_learned_flexibility_does_not_cross_providers():
+    learned = {"grok:weekly": 0.3}
     result = merge_learned_flexibility(0.7, "codex", "weekly", learned)
-    assert result == 0.3 * 0.3 + 0.7 * 0.7
+    assert result == 0.7
 
 
 def test_merge_learned_flexibility_no_duration():

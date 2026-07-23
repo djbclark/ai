@@ -56,9 +56,21 @@ PROVIDER_DISPLAY_NAMES: dict[str, str] = {
     "opencode-go": "OpenCode Go",
 }
 
+# Map canonical collector provider keys to config plan/override keys.
+PROVIDER_CONFIG_ALIASES: dict[str, str] = {
+    "antigravity": "gemini",
+    "opencode-go": "opencode",
+}
+
 
 def provider_display_name(provider: str) -> str:
     return PROVIDER_DISPLAY_NAMES.get(provider, provider.replace("-", " ").title())
+
+
+def provider_config_key(provider: str) -> str:
+    """Normalize a provider id for looking up plans / provider_overrides."""
+    key = provider.lower().replace(" ", "-")
+    return PROVIDER_CONFIG_ALIASES.get(key, key)
 
 
 def parse_dt(value: str | None) -> datetime | None:
