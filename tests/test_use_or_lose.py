@@ -435,6 +435,46 @@ def test_score_multi_dim_zero_remaining_is_none():
     assert urgency == Urgency.NONE
 
 
+def test_multi_dim_does_not_drop_low_remaining_weekly_window():
+    """min_remaining gate must not silence multi-dim (e.g. 36% left, 2 days)."""
+    snap = Snapshot(
+        collected_at=_now(),
+        accounts=[
+            AccountUsage(
+                source="tokscale",
+                provider="claude",
+                account="user@example.com",
+                billing_kind=BillingKind.SUBSCRIPTION_WINDOW,
+                windows=[
+                    QuotaWindow(
+                        label="Weekly",
+                        used_percent=64.0,
+                        remaining_percent=36.0,
+                        resets_at=_now() + timedelta(days=2),
+                        window_minutes=10080,
+                    )
+                ],
+            )
+        ],
+    )
+    alerts = analyze_use_or_lose(
+        snap,
+        {
+            "analysis": {
+                "use_multi_dim_scoring": True,
+                "min_remaining_percent": 40,
+                "max_days_until_reset": 14,
+                "min_value_at_risk_usd": 0.0,
+                "min_value_fraction_of_plan": 0.0,
+            },
+            "plans": {"claude": {"monthly_price": 20}},
+        },
+    )
+    matching = [a for a in alerts if a.remaining_percent == 36.0]
+    assert matching, f"expected alert for 36% remaining weekly; got {alerts!r}"
+    assert matching[0].window_label == "Weekly"
+
+
 def test_multi_dim_includes_throttled_5h():
     snap = Snapshot(
         collected_at=_now(),

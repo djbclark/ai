@@ -309,8 +309,9 @@ def analyze_use_or_lose(
 
                 if days is not None and days > max_days:
                     continue
-                if remaining < min_remaining:
-                    continue
+                # min_remaining is intentionally NOT applied on the multi-dim path
+                # (interim; Phase 2 pace/conserve logic will handle low-remaining
+                # windows). Legacy branch below still gates on min_remaining.
 
                 urgency, score = _score_multi_dimension(
                     profile=flex_profile,

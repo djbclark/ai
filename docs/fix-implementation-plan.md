@@ -126,6 +126,12 @@ cold cache, so the timeout has to absorb that too.
 
 ## Step 3 — All live Claude data disappears when cswap is enabled but returns nothing
 
+**Status:** done as part of the 2026-07-23 cswap reliability work (cache hydrate +
+selection fallback + tokscale in Claude cross-checks). See
+[`cswap-reliability.md`](cswap-reliability.md) and tests in
+`tests/test_runner_consolidation.py`. Do not re-implement; if re-running the plan,
+treat this step as already green.
+
 **File:** `src/ai/collectors/runner.py`, function `_select_and_cross_check` (the
 `claude`/`cswap_authoritative` branch, ~line 98) and `_claude_cross_checks` (~line 143).
 
