@@ -95,10 +95,17 @@ cadence stay owned by cswap / CodexBar / tokscale.
 ## Optional follow-ups (parked)
 
 Deferred work lives at the **tail** of
-[`fix-implementation-plan.md`](fix-implementation-plan.md) **Phase 7**
-(Steps 33–35): upstream cswap JSON display-grade fields, usage-credits
-surfacing, optional ccusage/stats-cache local-burn section. Not blocking
-Phases 1–6.
+[`fix-implementation-plan.md`](fix-implementation-plan.md) **Phase 7**.
+
+- **Step 33 (upstream display-grade JSON):** open issue/PR
+  [realiti4/claude-swap#170](https://github.com/realiti4/claude-swap/issues/170)
+  (`feat(json): expose display-grade last-good usage`) already proposes additive
+  `lastGoodUsage` / `lastGoodFetchedAt` / `lastGoodAgeSeconds` while keeping
+  decision-grade `usage`/`usageStatus`. Once merged, prefer those fields and
+  keep cache-file hydration only as a fallback for older cswap.
+- **Step 34 (usage credits):** landed in this repo — cswap `usage.spend` →
+  structured `AccountUsage.usage_credits` + pretty report section.
+- **Step 35 (local ccusage burn):** still deferred; not plan quota.
 
 Note: fix-plan Steps 3 / 23 partially overlap the runner fallback and
 cross-check work already landed here — narrow or mark done when executing

@@ -150,6 +150,30 @@ def test_render_report_shows_conserve_before_burn_buckets():
     assert "burn me" not in text or "90%" in text  # burn line may use remaining
 
 
+def test_render_report_shows_usage_credits_section():
+    from ai.models import BillingKind, UsageCredits
+
+    now = utcnow()
+    acc = AccountUsage(
+        source="cswap",
+        provider="claude",
+        account="a@example.com",
+        billing_kind=BillingKind.SUBSCRIPTION_WINDOW,
+        usage_credits=UsageCredits(
+            used=50.0,
+            limit=100.0,
+            remaining=50.0,
+            currency="USD",
+            used_percent=50.0,
+            resets_at=now + timedelta(days=5),
+        ),
+    )
+    text = render_report(Snapshot(collected_at=now, accounts=[acc]), [], config={}, color=False)
+    assert "usage credits" in text.lower()
+    assert "50 of 100 USD" in text or "spent: 50" in text
+    assert "remaining headroom" in text.lower()
+
+
 def test_action_plan_line_includes_pace_fragment():
     alert = UseOrLoseAlert(
         urgency=Urgency.MEDIUM,

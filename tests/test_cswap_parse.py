@@ -2,6 +2,8 @@
 
 import time
 
+import pytest
+
 from ai.collectors.cswap import _account_from_item
 from ai.models import BillingKind
 
@@ -88,6 +90,41 @@ def test_scoped_model_limit_has_semantic_name():
         2,
     )
     assert account.windows[0].label == "Claude Code weekly — Claude Opus"
+
+
+def test_spend_block_becomes_structured_usage_credits():
+    account = _account_from_item(
+        {
+            "number": 1,
+            "email": "work@example.org",
+            "usageStatus": "ok",
+            "usage": {
+                "fiveHour": {"pct": 0},
+                "spend": {
+                    "used": 110.76,
+                    "limit": 200.0,
+                    "pct": 55.38,
+                    "currency": "USD",
+                    "resetsAt": "2099-08-01T00:00:00Z",
+                },
+            },
+        },
+        1,
+    )
+    assert account.usage_credits is not None
+    assert account.usage_credits.used == 110.76
+    assert account.usage_credits.limit == 200.0
+    assert account.usage_credits.remaining == pytest.approx(89.24)
+    assert account.usage_credits.currency == "USD"
+    assert account.usage_credits.used_percent == pytest.approx(55.38)
+    assert account.usage_credits.resets_at is not None
+    # Headroom mirrored for generic balance UI without reclassifying billing.
+    assert account.balance_usd == pytest.approx(89.24)
+    assert account.billing_kind.value == "subscription_window"
+    assert any("Usage credits:" in n for n in account.notes)
+    d = account.to_dict()
+    assert d["usage_credits"]["used"] == 110.76
+    assert d["usage_credits"]["remaining"] == pytest.approx(89.24)
 
 
 def test_api_key_account_has_no_error_and_payg_billing():

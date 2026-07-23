@@ -1434,41 +1434,36 @@ already landed: cache hydrate, countdown recompute, CodexBar/tokscale fallback).
 
 ## Step 33 — Upstream: richer cswap JSON for display-grade usage (optional)
 
-**Why:** `ai` currently reads `~/.claude-swap-backup/cache/usage.json` (or XDG
-equivalent) when `cswap list --json` marks a slot `unavailable` after
-decision-grade trust expires. That couples us to an internal cache path.
+**Upstream status (2026-07-23):** this feature request **already exists** —
 
-**Work:**
+- Issue/PR: [realiti4/claude-swap#170](https://github.com/realiti4/claude-swap/issues/170)
+  — *feat(json): expose display-grade last-good usage* (open)
+- Branch: `possibilities:feat/display-last-good-usage`
+- Contract proposed: when decision-grade data is too old, keep
+  `usageStatus: unavailable` + `usage: null`, and add additive
+  `lastGoodUsage` / `lastGoodFetchedAt` / `lastGoodAgeSeconds` for UIs.
 
-1. File (or contribute) an upstream claude-swap change so `cswap list --json`
-   can expose display-grade data without a private cache read — e.g. additive
-   `usageLastGood` / `usageAgeSeconds` while `usageStatus` stays decision-grade,
-   or a documented `"stale"` status with non-null `usage`.
-2. Once available on a released cswap, prefer that field in `collectors/cswap.py`
-   and keep cache-file hydration only as a fallback for older cswap versions.
-3. Document the minimum cswap version in README if we depend on the new field.
+**Why (our side):** `ai` currently reads `~/.claude-swap-backup/cache/usage.json`
+when JSON marks a slot unavailable. Prefer official last-good fields when #170
+lands; keep cache hydration as fallback for older cswap.
 
-**Done when:** either the upstream field is consumed with tests + README note, or
-a short note here records that upstream declined / stalled and cache hydration
-remains the standing approach.
+**Work (when #170 merges):**
+
+1. Prefer `lastGoodUsage` (+ age fields) in `collectors/cswap.py`.
+2. Keep cache-file hydration only for older cswap versions.
+3. Document minimum cswap version in README.
+
+**Do not** open a duplicate issue — track #170.
 
 ## Step 34 — Surface Claude usage-credits / pay-as-you-go more fully (optional)
 
+**Status:** done. cswap `usage.spend` → `UsageCredits` on `AccountUsage`
+(`usage_credits` in JSON); pretty report shows a dedicated **usage credits**
+block. Does not reclassify accounts as prepaid (subscription windows still
+drive use-or-lose). Step 35 (ccusage local burn) remains deferred.
+
 **Why:** Website Settings → Usage shows spend, balance, and monthly credit
-limits. cswap sometimes carries a `spend` block (notes-only today). Local
-JSONL/ccusage measure tokens, not plan credits.
-
-**Work:**
-
-1. Inventory what cswap JSON and CodexBar already return for extra-usage /
-   credits on Pro/Max accounts.
-2. If structured enough, model as windows or a small prepaid-style section in
-   the report (without inventing numbers from ccusage cost estimates).
-3. Tests with fixture payloads; do not scrape the website.
-
-**Done when:** credits appear in pretty/JSON report when the source provides
-them, or a written note explains the data is insufficient.
-
+limits. cswap sometimes carries a `spend` block (notes-only previously).
 ## Step 35 — Optional local burn section via ccusage / stats-cache (optional)
 
 **Why:** Token burn on this machine is interesting for activity, but it is **not**

@@ -218,6 +218,34 @@ class QuotaWindow:
 
 
 @dataclass
+class UsageCredits:
+    """Extra-usage / pay-as-you-go spend against a subscription (e.g. Claude).
+
+    Distinct from prepaid ``balance_usd`` on pure API accounts: this is the
+    optional overage wallet that sits *beside* 5h/weekly plan windows.
+    """
+
+    used: float | None = None
+    limit: float | None = None
+    remaining: float | None = None
+    currency: str = "USD"
+    used_percent: float | None = None
+    resets_at: datetime | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        d: dict[str, Any] = {
+            "used": self.used,
+            "limit": self.limit,
+            "remaining": self.remaining,
+            "currency": self.currency,
+            "used_percent": self.used_percent,
+        }
+        if self.resets_at is not None:
+            d["resets_at"] = self.resets_at.isoformat()
+        return d
+
+
+@dataclass
 class AccountUsage:
     """Normalized usage for one provider account."""
 
@@ -229,12 +257,13 @@ class AccountUsage:
     windows: list[QuotaWindow] = field(default_factory=list)
     balance_usd: float | None = None
     credits_remaining: float | None = None
+    usage_credits: UsageCredits | None = None
     error: str | None = None
     notes: list[str] = field(default_factory=list)
     raw: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        d: dict[str, Any] = {
             "source": self.source,
             "provider": self.provider,
             "account": self.account,
@@ -246,6 +275,9 @@ class AccountUsage:
             "error": self.error,
             "notes": self.notes,
         }
+        if self.usage_credits is not None:
+            d["usage_credits"] = self.usage_credits.to_dict()
+        return d
 
 
 @dataclass

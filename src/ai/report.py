@@ -514,9 +514,11 @@ def _render_account(acc: AccountUsage, s: _Style, *, config: dict[str, Any] | No
     if acc.error:
         lines.append(s.red(f"  ERROR: {acc.error}"))
 
-    if acc.balance_usd is not None:
+    if acc.usage_credits is not None:
+        lines.extend(_usage_credits_lines(acc.usage_credits, s))
+    elif acc.balance_usd is not None:
         lines.append(f"  balance: {s.green(f'${acc.balance_usd:.2f}')}")
-    if acc.credits_remaining is not None and acc.balance_usd is None:
+    if acc.credits_remaining is not None and acc.usage_credits is None and acc.balance_usd is None:
         lines.append(f"  credits remaining: {acc.credits_remaining}")
 
     for w in acc.windows:
@@ -595,6 +597,28 @@ def _fmt_dt(dt: datetime | None) -> str:
     if not dt:
         return "?"
     return dt.strftime("%Y-%m-%d %H:%M UTC")
+
+
+def _usage_credits_lines(credits: Any, s: _Style) -> list[str]:
+    """Pretty-print Claude (or similar) extra-usage wallet beside plan windows."""
+    cur = getattr(credits, "currency", None) or "USD"
+    lines = [s.bold("  usage credits (extra / pay-as-you-go)")]
+    used = getattr(credits, "used", None)
+    limit = getattr(credits, "limit", None)
+    remaining = getattr(credits, "remaining", None)
+    pct = getattr(credits, "used_percent", None)
+    resets = getattr(credits, "resets_at", None)
+
+    if used is not None and limit is not None:
+        pct_s = f" · {pct:.0f}% of limit" if pct is not None else ""
+        lines.append(f"    spent: {used:g} of {limit:g} {cur}{pct_s}")
+    elif used is not None:
+        lines.append(f"    spent: {used:g} {cur}")
+    if remaining is not None:
+        lines.append(f"    remaining headroom: {s.green(f'{remaining:g} {cur}')}")
+    if resets is not None:
+        lines.append(f"    resets: {_fmt_dt(resets)}")
+    return lines
 
 
 def _source_description(source: str) -> str:

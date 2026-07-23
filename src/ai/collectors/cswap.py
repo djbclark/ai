@@ -26,6 +26,7 @@ from ai.models import (
     AccountUsage,
     BillingKind,
     QuotaWindow,
+    UsageCredits,
     classify_window_minutes,
     parse_dt,
 )
@@ -82,6 +83,7 @@ def _account_from_item(
     notes: list[str] = [f"cswap slot {number}" + ("; active" if active else "")]
     error: str | None = None
     billing_kind = BillingKind.SUBSCRIPTION_WINDOW
+    usage_credits: UsageCredits | None = None
 
     if item.get("alias"):
         notes.append(f"cswap alias: {item['alias']}")
@@ -111,7 +113,8 @@ def _account_from_item(
 
     if usage:
         windows.extend(_windows_from_usage(usage))
-        _append_spend_note(notes, usage)
+        usage_credits = _usage_credits_from_spend(usage)
+        _append_spend_note(notes, usage_credits)
 
     # Display-grade recovery: when decision-grade JSON omitted usage, reuse the
     # same lastGood row the human `cswap list` view would show with an age note.
@@ -120,8 +123,10 @@ def _account_from_item(
         if hydrated is not None:
             cache_usage, age_s, fetched_at = hydrated
             windows.extend(_windows_from_usage(cache_usage))
-            _append_spend_note(notes, cache_usage)
-            if windows:
+            if usage_credits is None:
+                usage_credits = _usage_credits_from_spend(cache_usage)
+                _append_spend_note(notes, usage_credits)
+            if windows or usage_credits is not None:
                 error = None  # usable for reporting; age is called out in notes
                 if age_s is not None:
                     notes.append(
@@ -137,12 +142,16 @@ def _account_from_item(
                     )
 
     account_name = str(email) if email else f"cswap-slot-{number}"
+    # Mirror remaining credit headroom onto balance_usd for generic prepaid UI.
+    balance_usd = usage_credits.remaining if usage_credits is not None else None
     return AccountUsage(
         source="cswap",
         provider="claude",
         account=account_name,
         billing_kind=billing_kind,
         windows=windows,
+        balance_usd=balance_usd,
+        usage_credits=usage_credits,
         error=error,
         notes=notes,
         raw=item,
@@ -177,15 +186,58 @@ def _windows_from_usage(usage: dict[str, Any]) -> list[QuotaWindow]:
     return windows
 
 
-def _append_spend_note(notes: list[str], usage: dict[str, Any]) -> None:
+def _usage_credits_from_spend(usage: dict[str, Any]) -> UsageCredits | None:
+    """Parse cswap ``usage.spend`` (extra-usage wallet) into structured credits.
+
+    cswap normalizes Anthropic ``extra_usage`` to currency units (cents/100):
+    ``used``, ``limit``, ``pct``, optional ``resetsAt`` / ``currency``.
+    """
     spend = usage.get("spend")
     if not isinstance(spend, dict):
-        return
+        return None
     used = _number(spend.get("used"))
     limit = _number(spend.get("limit"))
-    currency = str(spend.get("currency") or "currency units")
+    pct = _number(spend.get("pct") if spend.get("pct") is not None else spend.get("usedPercent"))
+    currency = str(spend.get("currency") or "USD")
+    resets = parse_dt(
+        spend.get("resetsAt") or spend.get("resets_at") or spend.get("resetAt") or spend.get("reset_at")
+    )
+    if used is None and limit is None and pct is None and resets is None:
+        return None
+    remaining: float | None = None
     if used is not None and limit is not None:
-        notes.append(f"Current Claude pay-as-you-go spend limit: {used:g} of {limit:g} {currency}.")
+        remaining = max(0.0, limit - used)
+    elif pct is not None and limit is not None:
+        remaining = max(0.0, limit * (1.0 - pct / 100.0))
+    return UsageCredits(
+        used=used,
+        limit=limit,
+        remaining=remaining,
+        currency=currency,
+        used_percent=pct,
+        resets_at=resets,
+    )
+
+
+def _append_spend_note(notes: list[str], credits: UsageCredits | None) -> None:
+    if credits is None:
+        return
+    cur = credits.currency
+    if credits.used is not None and credits.limit is not None:
+        notes.append(
+            f"Usage credits: {credits.used:g} of {credits.limit:g} {cur} spent"
+            + (f" ({credits.used_percent:g}% of limit)" if credits.used_percent is not None else "")
+            + (
+                f"; {credits.remaining:g} {cur} headroom"
+                if credits.remaining is not None
+                else ""
+            )
+            + "."
+        )
+    elif credits.used is not None:
+        notes.append(f"Usage credits spent: {credits.used:g} {cur}.")
+    if credits.resets_at is not None:
+        notes.append(f"Usage credits reset at {credits.resets_at.isoformat()}.")
 
 
 _NOMINAL_MINUTES = {
