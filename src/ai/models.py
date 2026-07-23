@@ -102,6 +102,35 @@ class FlexibilityClass(str, Enum):
     THROTTLED = "throttled"  # strictly rate-limited per refill
 
 
+WINDOW_NOMINAL_MINUTES = {"5h": 300, "weekly": 10080, "monthly": 43800}
+
+
+def nominal_window_minutes(kind: str | None) -> int | None:
+    return WINDOW_NOMINAL_MINUTES.get(kind) if kind else None
+
+
+@dataclass
+class PaceProfile:
+    """Projected consumption pace for a quota window (Phase 2 scoring)."""
+
+    elapsed_fraction: float | None
+    used_fraction: float
+    pace_ratio: float | None
+    projected_used_fraction: float | None
+    projected_waste_fraction: float | None
+    projected_waste_usd: float | None
+    projected_exhaust_at: datetime | None
+    governing: bool = True
+    gated_by: str | None = None  # label of the enclosing window, set on children
+    confidence: str = "measured"  # measured | inferred | low
+
+    def to_dict(self) -> dict[str, Any]:
+        d = asdict(self)
+        if self.projected_exhaust_at:
+            d["projected_exhaust_at"] = self.projected_exhaust_at.isoformat()
+        return d
+
+
 @dataclass
 class FlexibilityProfile:
     """Derived per-window consumption characteristics (not raw data)."""
@@ -223,6 +252,8 @@ class UseOrLoseAlert:
 
     flexibility_profile: FlexibilityProfile | None = None
     window_minutes: int | None = None
+    kind: str = "burn"  # burn | conserve
+    pace: PaceProfile | None = None
 
     def to_dict(self) -> dict[str, Any]:
         d: dict[str, Any] = {
@@ -237,9 +268,12 @@ class UseOrLoseAlert:
             "source": self.source,
             "score": self.score,
             "window_minutes": self.window_minutes,
+            "kind": self.kind,
         }
         if self.flexibility_profile:
             d["consumption_analysis"] = self.flexibility_profile.to_dict()
+        if self.pace is not None:
+            d["pace"] = self.pace.to_dict()
         return d
 
 
