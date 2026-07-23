@@ -7,6 +7,7 @@ from typing import Any
 
 from ai.analysis.history import (
     chronic_waste_summary,
+    compute_learned_burn_rates,
     compute_learned_flexibility,
     merge_learned_flexibility,
 )
@@ -235,9 +236,14 @@ def analyze_use_or_lose(
     waking = float(analysis_cfg.get("waking_hours_per_day", _DEFAULT_WAKING_HOURS))
 
     learned_flex: dict[str, float] = {}
+    learned_burn_rates: dict[str, tuple[float, int]] = {}
     if analysis_cfg.get("learn_from_history"):
         retention = int(analysis_cfg.get("snapshot_retention_days", 90))
         learned_flex = compute_learned_flexibility(current=snapshot, retention_days=retention)
+        if mode == "pace":
+            learned_burn_rates = compute_learned_burn_rates(
+                current=snapshot, retention_days=retention
+            )
 
     for account in snapshot.accounts:
         if account.error and not account.windows:
@@ -326,11 +332,17 @@ def analyze_use_or_lose(
                     continue  # child of a shared allotment — never its own alert
 
                 pace_cfg = analysis_cfg.get("pace") or {}
+                learned_rate: float | None = None
+                learned_n = 0
+                if learned_burn_rates and duration_kind:
+                    rate_key = f"{provider_key}:{duration_kind}"
+                    if rate_key in learned_burn_rates:
+                        learned_rate, learned_n = learned_burn_rates[rate_key]
                 pace = compute_pace(
                     window,
                     now=now,
-                    learned_rate_per_day=None,
-                    learned_sample_count=0,
+                    learned_rate_per_day=learned_rate,
+                    learned_sample_count=learned_n,
                 )
                 if pace is None:
                     # Governing window unusable: fall back to independent scoring for
@@ -349,7 +361,7 @@ def analyze_use_or_lose(
                     waste_alert_fraction=float(pace_cfg.get("waste_alert_fraction", 0.30)),
                     min_elapsed_fraction=float(pace_cfg.get("min_elapsed_fraction", 0.15)),
                     conserve_min_lead_hours=float(pace_cfg.get("conserve_min_lead_hours", 4.0)),
-                    has_learned_rate=False,
+                    has_learned_rate=learned_n > 0,
                 )
                 if verdict in ("on_pace", "unknown"):
                     continue

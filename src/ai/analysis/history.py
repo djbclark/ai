@@ -75,17 +75,21 @@ def _account_window_key(account: dict[str, Any], window: dict[str, Any]) -> str:
     return f"{provider}|{acct}|{label}|{resets}"
 
 
-def compute_learned_flexibility(
+def compute_learned_burn_rates(
     *,
     current: Snapshot,
     retention_days: int = _DEFAULT_RETENTION_DAYS,
     min_snapshots: int = _DEFAULT_MIN_SNAPSHOTS,
-) -> dict[str, float]:
+) -> dict[str, tuple[float, int]]:
+    """Return ``{'provider:duration_kind': (avg_fraction_per_day, sample_count)}``.
+
+    ``avg_fraction_per_day`` is remaining-percent consumed per day / 100
+    (e.g. 0.30 means ~30% of the window per day).
+    """
     history = load_recent_snapshots(retention_days=retention_days)
     if len(history) < min_snapshots:
         return {}
 
-    learned: dict[str, float] = {}
     provider_window_burns: dict[str, list[tuple[float, float]]] = {}
 
     now = utcnow()
@@ -119,20 +123,34 @@ def compute_learned_flexibility(
                 if consumed <= 0:
                     continue
 
-                burn_rate = consumed / time_delta_days
+                burn_rate = consumed / time_delta_days  # percent of window per day
                 window_minutes = prev_window.get("window_minutes")
                 duration_key = _duration_key(window_minutes)
                 if duration_key:
                     pk = f"{provider}:{duration_key}"
                     provider_window_burns.setdefault(pk, []).append((burn_rate, 1.0))
 
+    rates: dict[str, tuple[float, int]] = {}
     for pk, burns in provider_window_burns.items():
         if len(burns) < 2:
             continue
-        avg_burn = sum(b * w for b, w in burns) / sum(w for _, w in burns)
-        learned[pk] = _burn_rate_to_flexibility(avg_burn)
+        avg_burn_pct = sum(b * w for b, w in burns) / sum(w for _, w in burns)
+        rates[pk] = (avg_burn_pct / 100.0, len(burns))
+    return rates
 
-    return learned
+
+def compute_learned_flexibility(
+    *,
+    current: Snapshot,
+    retention_days: int = _DEFAULT_RETENTION_DAYS,
+    min_snapshots: int = _DEFAULT_MIN_SNAPSHOTS,
+) -> dict[str, float]:
+    rates = compute_learned_burn_rates(
+        current=current,
+        retention_days=retention_days,
+        min_snapshots=min_snapshots,
+    )
+    return {k: _burn_rate_to_flexibility(rate * 100.0) for k, (rate, _n) in rates.items()}
 
 
 def _burn_rate_to_flexibility(burn_rate_pct_per_day: float) -> float:

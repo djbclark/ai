@@ -7,12 +7,15 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
 from ai.analysis.history import (
     _account_window_key,
     _burn_rate_to_flexibility,
     _duration_key,
     _remaining_from_used,
     chronic_waste_summary,
+    compute_learned_burn_rates,
     compute_learned_flexibility,
     load_recent_snapshots,
     merge_learned_flexibility,
@@ -212,6 +215,14 @@ def test_compute_learned_flexibility_with_data(tmp_path: Path):
         learned = compute_learned_flexibility(current=current, retention_days=90, min_snapshots=2)
         assert "codex:weekly" in learned
         assert 0.0 <= learned["codex:weekly"] <= 1.0
+
+        rates = compute_learned_burn_rates(current=current, retention_days=90, min_snapshots=2)
+        assert "codex:weekly" in rates
+        rate, n = rates["codex:weekly"]
+        assert n >= 2
+        assert rate > 0
+        # Flexibility and raw rate move together (higher burn → higher flex).
+        assert learned["codex:weekly"] == pytest.approx(_burn_rate_to_flexibility(rate * 100.0))
 
 
 def test_chronic_waste_detection(tmp_path: Path):

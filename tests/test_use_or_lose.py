@@ -577,6 +577,45 @@ def _pace_cfg(**overrides: object) -> dict:
     return {"analysis": analysis, "plans": {"claude": {"monthly_price": 20}}}
 
 
+def test_pace_mode_learned_rate_bypasses_early_window_confidence_gate(monkeypatch):
+    """With learn_from_history, high historical burn can classify burn early in a window."""
+    now = _now()
+    # Elapsed ≈ 0.5/7 ≈ 0.07 < min_elapsed 0.15 → would be on_pace without learning.
+    window = QuotaWindow(
+        label="Weekly",
+        used_percent=5.0,
+        remaining_percent=95.0,
+        resets_at=now + timedelta(days=6.5),
+        window_minutes=10080,
+    )
+    snap = Snapshot(
+        collected_at=now,
+        accounts=[
+            AccountUsage(
+                source="tokscale",
+                provider="codex",
+                billing_kind=BillingKind.SUBSCRIPTION_WINDOW,
+                windows=[window],
+            )
+        ],
+    )
+    # Slow learned burn (under-use) → waste projection → burn once early-window
+    # confidence gate is bypassed by has_learned_rate.
+    monkeypatch.setattr(
+        "ai.analysis.use_or_lose.compute_learned_burn_rates",
+        lambda **_k: {"codex:weekly": (0.01, 5)},  # 1% of window / day
+    )
+    monkeypatch.setattr(
+        "ai.analysis.use_or_lose.compute_learned_flexibility",
+        lambda **_k: {},
+    )
+    cfg = _pace_cfg()
+    cfg["analysis"]["learn_from_history"] = True
+    cfg["analysis"]["provider_overrides"] = {"codex": {"shared_allotment": False}}
+    alerts = analyze_use_or_lose(snap, cfg)
+    assert any(a.kind == "burn" for a in alerts), alerts
+
+
 def test_pace_mode_on_pace_weekly_produces_no_alert():
     now = _now()
     snap = Snapshot(
