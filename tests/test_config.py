@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from ai.config import (
     DEFAULT_SUBPROCESS_TIMEOUT,
     default_config_dir,
@@ -34,6 +36,11 @@ def test_relative_xdg_config_home_is_ignored(monkeypatch):
     monkeypatch.setenv("XDG_CONFIG_HOME", "relative/path")
 
     assert default_config_path() == Path.home() / ".config" / "ai" / "services.yaml"
+
+
+def test_load_config_explicit_missing_path_exits():
+    with pytest.raises(SystemExit, match="Config file not found"):
+        load_config("/nonexistent/ai-config-does-not-exist.yaml")
 
 
 def test_default_timeouts_are_45s():

@@ -8,9 +8,7 @@ from ai.models import (
     AccountUsage,
     BillingKind,
     QuotaWindow,
-    WINDOW_MONTHLY_MAX_MINUTES,
-    WINDOW_WEEKLY_MAX_MINUTES,
-    WINDOW_5H_MAX_MINUTES,
+    WINDOW_NOMINAL_MINUTES,
     coerce_float,
     parse_dt,
 )
@@ -100,12 +98,14 @@ def _metric_label(provider: str, label: str) -> str:
 
 def _infer_window_minutes(provider: str, raw_label: str, display_label: str) -> int | None:
     key = (raw_label or "").lower().strip()
-    if key in ("chat", "completions", "premium"):
-        return WINDOW_MONTHLY_MAX_MINUTES
+    provider_key = (provider or "").lower().replace(" ", "-")
+    # Copilot label vocabulary only — do not apply to other providers.
+    if provider_key == "copilot" and key in ("chat", "completions", "premium"):
+        return WINDOW_NOMINAL_MINUTES["monthly"]
     if key in ("session", "5h", "5-hour", "5 hour") or "5h" in key or "5-hour" in key or "5 hour" in key:
-        return WINDOW_5H_MAX_MINUTES
-    if key in ("weekly",) or "week" in key or "7" in display_label.lower():
-        return WINDOW_WEEKLY_MAX_MINUTES
-    if provider == "copilot":
-        return WINDOW_MONTHLY_MAX_MINUTES
+        return WINDOW_NOMINAL_MINUTES["5h"]
+    if key in ("weekly",) or "week" in key:
+        return WINDOW_NOMINAL_MINUTES["weekly"]
+    if provider_key == "copilot":
+        return WINDOW_NOMINAL_MINUTES["monthly"]
     return None

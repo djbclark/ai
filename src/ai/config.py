@@ -50,7 +50,6 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "max_usd_per_minute": 0.05,
         "consumption_flexibility_defaults": {
             "5h": 0.0,
-            "daily": 0.1,
             "weekly": 0.7,
             "monthly": 1.0,
         },
@@ -147,6 +146,8 @@ def load_config(path: str | Path | None = None) -> dict[str, Any]:
         candidates.append(default_config_path())
 
     for candidate in candidates:
+        if path is not None and not candidate.is_file():
+            raise SystemExit(f"Config file not found: {candidate}")
         if candidate.is_file():
             data = _read_file(candidate)
             if isinstance(data, dict):

@@ -43,7 +43,6 @@ analysis:
   # 1.0 = fully burstable (can consume entire window in one session).
   consumption_flexibility_defaults:
     5h: 0.0
-    daily: 0.1
     weekly: 0.7
     monthly: 1.0
 

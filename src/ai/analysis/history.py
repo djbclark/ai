@@ -24,15 +24,22 @@ def save_snapshot(snapshot: Snapshot, alerts: list[Any]) -> Path:
     path = snapshot_dir()
     path.mkdir(parents=True, exist_ok=True)
     path.chmod(0o700)
-    ts = snapshot.collected_at.strftime("%Y-%m-%dT%H%M%SZ")
+    # Microseconds keep same-second runs unique and still sort lexicographically.
+    ts = snapshot.collected_at.strftime("%Y-%m-%dT%H%M%S.%fZ")
     filepath = path / f"{ts}.json"
+    n = 1
+    while filepath.exists():
+        filepath = path / f"{ts}-{n}.json"
+        n += 1
     payload = {
         "collected_at": snapshot.collected_at.isoformat(),
         "accounts": [a.to_dict() for a in snapshot.accounts],
         "alerts": [a.to_dict() for a in alerts],
     }
-    filepath.write_text(json.dumps(payload, indent=2, default=str) + "\n", encoding="utf-8")
-    filepath.chmod(0o600)
+    text = json.dumps(payload, indent=2, default=str) + "\n"
+    fd = os.open(filepath, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        handle.write(text)
     return filepath
 
 

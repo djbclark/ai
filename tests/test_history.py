@@ -132,11 +132,18 @@ def test_save_and_load_snapshot(tmp_path: Path):
         )
         path = save_snapshot(snap, [alert])
         assert path.exists()
+        assert path.stat().st_mode & 0o777 == 0o600
 
         loaded = load_recent_snapshots(retention_days=90, max_count=10)
         assert len(loaded) == 1
         assert loaded[0]["collected_at"] == snap.collected_at.isoformat()
         assert len(loaded[0]["accounts"]) == 1
+
+        # Same collected_at must not overwrite the first file.
+        path2 = save_snapshot(snap, [alert])
+        assert path2 != path
+        assert path2.exists()
+        assert len(list(tmp_path.glob("*.json"))) == 2
 
 
 def test_load_recent_snapshots_empty_dir(tmp_path: Path):
