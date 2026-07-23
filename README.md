@@ -270,6 +270,7 @@ Shared allotment: `analysis.provider_overrides.<provider>.shared_allotment: true
 - [`docs/tokscale-per-provider-investigation.md`](docs/tokscale-per-provider-investigation.md) — why tokscale cannot yet fan out per provider like CodexBar.
 - [`docs/json-contract.md`](docs/json-contract.md) — stable JSON fields and exit codes for scripts.
 - [`docs/collector-concurrency.md`](docs/collector-concurrency.md) — parallel collect + 45s timeout audit.
+- [`docs/handoff.md`](docs/handoff.md) — latest session wrap-up and loose ends (for agents and future you).
 - [`completions/`](completions/) — bash/zsh completion (`ai --print-completion bash`).
 - [`docs/review-workflow.js`](docs/review-workflow.js) — the Claude Code Workflow script that generated the review, checked in for reproducibility.
 - [`docs/memory/`](docs/memory/) — thin Claude symlink target for this project; see `AGENTS.md` for persistence policy and links to `~/ops/site-private` generic memory.

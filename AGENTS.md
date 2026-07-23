@@ -11,25 +11,25 @@ three gets you to the other two immediately.
 
 ## Active priorities (what to do next)
 
-**Status (2026-07-23):** fix-plan Steps **1–32** and **34** are done. There is
-no mandatory numbered step left. When the operator asks “what next?” without a
-more specific goal, **do not restart at Step 1** — offer choices from the list
-below (or ask what they want to work on).
+**Status (2026-07-23):** fix-plan Steps **1–32** and **34** are done. Product
+polish through doctor/brief/exit codes/completions/JSON contract is done.
+There is **no mandatory numbered step**. Open-ended “what next?” → read
+[`docs/handoff.md`](docs/handoff.md), then offer choices — **do not restart at
+Step 1**.
 
-1. **Blocked / wait on upstream (Step 33).** When
+1. **Session handoff / loose ends:** [`docs/handoff.md`](docs/handoff.md)
+   (latest wrap-up, deferred items, verification commands).
+2. **Blocked / wait on upstream (Step 33).** When
    [realiti4/claude-swap#170](https://github.com/realiti4/claude-swap/issues/170)
-   merges, consume official `lastGoodUsage` fields in `collectors/cswap.py`
-   (cache hydration becomes fallback). Tracked here:
-   [djbclark/ai#1](https://github.com/djbclark/ai/issues/1). Design notes:
-   [`docs/cswap-reliability.md`](docs/cswap-reliability.md).
-2. **Operator-driven product work** — polish, UX, packaging, docs, live smoke,
-   new features. Nothing is queued until the operator picks an item.
-3. **Parked optional (do not start unless asked):**
-   - **Step 35** — local ccusage / stats-cache burn section (activity only; not
-     plan 5h/7d authority). See plan Phase 7 and
-     [`docs/claude-local-usage.md`](docs/claude-local-usage.md).
-4. **Historical:** full step list and rationale remain in
-   [`docs/fix-implementation-plan.md`](docs/fix-implementation-plan.md) and
+   merges, consume official `lastGoodUsage` in `collectors/cswap.py` (cache
+   hydrate → fallback). Tracked: [djbclark/ai#1](https://github.com/djbclark/ai/issues/1).
+   Design: [`docs/cswap-reliability.md`](docs/cswap-reliability.md).
+3. **Operator-driven only** — live smoke (A, operator-owned), packaging, cron
+   recipe, history insights, or new features. Nothing else is queued.
+4. **Parked (do not start unless asked):**
+   - **Step 35** — local ccusage / stats-cache burn (not plan %). See Phase 7
+     and [`docs/claude-local-usage.md`](docs/claude-local-usage.md).
+5. **Historical:** [`docs/fix-implementation-plan.md`](docs/fix-implementation-plan.md),
    [`docs/code-review-2026-07-23.html`](docs/code-review-2026-07-23.html).
 
 ## Persistence policy: durable project knowledge goes in this git repo
@@ -93,6 +93,7 @@ full description, install steps, CLI flags, and config.
 | --- | --- | --- |
 | `README.md` | Project overview: install, usage, CLI flags, config, output format. | First, for "what does this tool do / how do I run it." |
 | `AGENTS.md` (this file) | Agent orientation, doc map, persistence policy, **active priorities**. | First, for "where is everything / what next." |
+| `docs/handoff.md` | Latest session wrap-up, loose ends, verify commands. | First stop after this file when resuming. |
 | `docs/fix-implementation-plan.md` | Review-derived task list (Steps 1–32 + Phase 7 optional 33–35). **1–32 and 34 done.** | Historical scope / remaining optional steps only. |
 | `docs/json-contract.md` | Stable `ai --json` fields and exit codes for scripts. | Cron / automation consumers. |
 | `docs/collector-concurrency.md` | How collectors run in parallel and timeout (45s). | Perf / hang questions. |
@@ -110,9 +111,10 @@ full description, install steps, CLI flags, and config.
 
 ## If you were asked to fix a bug or implement a feature here
 
-1. Check **Active priorities** above. Open-ended “what next?” → summarize status
-   and offer choices (upstream Step 33 when unblocked, product polish, or
-   parked Step 35). Do **not** restart the completed Steps 1–32.
+1. Check **Active priorities** and [`docs/handoff.md`](docs/handoff.md).
+   Open-ended “what next?” → summarize status and offer choices (Step 33 when
+   unblocked, operator-picked polish, or parked Step 35). Do **not** restart
+   completed Steps 1–32.
 2. For remaining optional plan work (33, 35), read the matching section in
    `docs/fix-implementation-plan.md` and any linked issue (ai#1 for 33).
 3. If the task is not in the plan, check `docs/code-review-2026-07-23.html` and
