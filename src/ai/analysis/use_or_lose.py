@@ -50,7 +50,10 @@ def _compute_value_at_risk(
     if active_minutes_per_month <= 0 or window_minutes <= 0:
         return 0.0
     active_cycles = active_minutes_per_month / window_minutes
-    value_per_refill = monthly_price / active_cycles
+    # Monthly-or-longer windows can yield active_cycles < 1, which would make
+    # value_per_refill exceed the whole plan price. A single refill cannot be
+    # worth more than the plan itself.
+    value_per_refill = monthly_price / max(active_cycles, 1.0)
     return value_per_refill * (remaining / 100.0) * value_multiplier
 
 

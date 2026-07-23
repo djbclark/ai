@@ -270,7 +270,7 @@ def test_classify_flexibility_provider_override():
     assert score == 0.0
 
 
-def test_compute_value_at_risk_monthly():
+def test_compute_value_at_risk_weekly_unchanged_when_cycles_gt_one():
     val = _compute_value_at_risk(
         remaining=100.0,
         window_minutes=10080,
@@ -279,6 +279,18 @@ def test_compute_value_at_risk_monthly():
     )
     expected = (100.0 / 100.0) * (20.0 / (16 * 30.44 * 60 / 10080))
     assert abs(val - expected) < 0.01
+
+
+def test_compute_value_at_risk_monthly_window_cannot_exceed_plan_fraction():
+    # window_minutes longer than waking month → active_cycles < 1 without clamp.
+    val = _compute_value_at_risk(
+        remaining=90.0,
+        window_minutes=44640,
+        monthly_price=10.0,
+        waking_hours_per_day=16,
+    )
+    assert val <= 10.0 * 0.9 + 1e-9
+    assert abs(val - 9.0) < 0.01
 
 
 def test_compute_value_at_risk_5h():
