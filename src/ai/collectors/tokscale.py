@@ -4,7 +4,16 @@ from __future__ import annotations
 
 from typing import Any
 
-from ai.models import AccountUsage, BillingKind, QuotaWindow, coerce_float, parse_dt
+from ai.models import (
+    AccountUsage,
+    BillingKind,
+    QuotaWindow,
+    WINDOW_MONTHLY_MAX_MINUTES,
+    WINDOW_WEEKLY_MAX_MINUTES,
+    WINDOW_5H_MAX_MINUTES,
+    coerce_float,
+    parse_dt,
+)
 
 from .base import CollectorError, run_json, which
 
@@ -35,11 +44,13 @@ def _from_row(row: dict[str, Any]) -> AccountUsage:
         remaining = coerce_float(m.get("remaining_percent"))
         if remaining is None and used is not None:
             remaining = max(0.0, 100.0 - used)
+        label = _metric_label(provider_key, str(m.get("label") or "unnamed quota"))
         windows.append(
             QuotaWindow(
-                label=_metric_label(provider_key, str(m.get("label") or "unnamed quota")),
+                label=label,
                 used_percent=used,
                 remaining_percent=remaining,
+                window_minutes=_infer_window_minutes(provider_key, m.get("label", ""), label),
                 resets_at=parse_dt(m.get("resets_at")),
                 reset_description=m.get("remaining_label"),
                 raw=m,
@@ -85,3 +96,16 @@ def _metric_label(provider: str, label: str) -> str:
     if provider == "grok-build" and key == "weekly":
         return "Grok weekly quota"
     return f"{provider.replace('-', ' ').title()} {label}"
+
+
+def _infer_window_minutes(provider: str, raw_label: str, display_label: str) -> int | None:
+    key = (raw_label or "").lower().strip()
+    if key in ("chat", "completions", "premium"):
+        return WINDOW_MONTHLY_MAX_MINUTES
+    if key in ("session", "5h", "5-hour", "5 hour") or "5h" in key or "5-hour" in key or "5 hour" in key:
+        return WINDOW_5H_MAX_MINUTES
+    if key in ("weekly",) or "week" in key or "7" in display_label.lower():
+        return WINDOW_WEEKLY_MAX_MINUTES
+    if provider == "copilot":
+        return WINDOW_MONTHLY_MAX_MINUTES
+    return None

@@ -235,7 +235,7 @@ def _render_traditional_summary(
         lines.append("")
 
     if info:
-        lines.append(s.bold("  Prepaid / non-expiring (no hard deadline)"))
+        lines.append(s.bold("  Advisory / low urgency (no hard deadline)"))
         lines.append(s.dim("  " + "-" * (width - 4)))
         for alert in info:
             lines.append(s.dim(f"  · {alert.message}"))
@@ -306,7 +306,7 @@ def _render_action_plan(
             lines.append("")
 
     if info:
-        lines.append(s.bold("  PREPAID / NON-EXPIRING (no hard deadline)"))
+        lines.append(s.bold("  ADVISORY / LOW URGENCY (no hard deadline)"))
         lines.append(s.dim(f"  {'─' * (width - 4)}"))
         for alert in info:
             lines.append(s.dim(f"  · {alert.message}"))

@@ -300,6 +300,11 @@ def analyze_use_or_lose(
                 if flex_profile is None:
                     continue
 
+                if days is not None and days > max_days:
+                    continue
+                if remaining < min_remaining:
+                    continue
+
                 urgency, score = _score_multi_dimension(
                     profile=flex_profile,
                     remaining=remaining,
