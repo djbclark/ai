@@ -449,6 +449,29 @@ def test_score_multi_dim_throttled_past_start_elevated():
     assert urgency in (Urgency.HIGH, Urgency.MEDIUM)
 
 
+def test_value_urgency_normalized_to_own_plan_not_global_max():
+    """A $10 plan and $30 plan with same relative value_at_risk score equally."""
+    cheap = FlexibilityProfile(
+        flexibility_class=FlexibilityClass.BURSTABLE,
+        consumption_flexibility=1.0,
+        value_at_risk_usd=5.0,  # 50% of $10
+    )
+    expensive = FlexibilityProfile(
+        flexibility_class=FlexibilityClass.BURSTABLE,
+        consumption_flexibility=1.0,
+        value_at_risk_usd=15.0,  # 50% of $30
+    )
+    cfg = {"plans": {"a": {"monthly_price": 10}, "b": {"monthly_price": 30}}}
+    _, score_cheap = _score_multi_dimension(
+        profile=cheap, remaining=50.0, days=5.0, config=cfg, monthly_price=10.0
+    )
+    _, score_exp = _score_multi_dimension(
+        profile=expensive, remaining=50.0, days=5.0, config=cfg, monthly_price=30.0
+    )
+    # Same relative value urgency + same other terms → equal composite scores
+    assert score_cheap == pytest.approx(score_exp, abs=0.01)
+
+
 def test_score_multi_dim_zero_remaining_is_none():
     profile = FlexibilityProfile(
         flexibility_class=FlexibilityClass.BURSTABLE,

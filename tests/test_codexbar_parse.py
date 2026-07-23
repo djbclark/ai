@@ -199,10 +199,10 @@ def test_dollar_rate_in_description_is_not_mistaken_for_a_balance():
 
 def test_unmapped_provider_windowminutes_bucketing_boundaries():
     weekly = _from_row({"provider": "codex", "usage": {"primary": {"usedPercent": 10, "windowMinutes": 500}}})
-    assert weekly.windows[0].label == "Codex weekly quota"
+    assert weekly.windows[0].label == "Codex weekly quota (1)"
 
     monthly = _from_row({"provider": "codex", "usage": {"primary": {"usedPercent": 10, "windowMinutes": 44640}}})
-    assert monthly.windows[0].label == "Codex monthly quota"
+    assert monthly.windows[0].label == "Codex monthly quota (1)"
 
 
 def test_parse_enabled_providers_filters_to_enabled_true():
@@ -359,3 +359,51 @@ def test_single_discovered_provider_uses_configured_timeout(monkeypatch):
     collect_codexbar(timeout=45.0, discovery_timeout=45.0)
 
     assert captured_timeouts == [45.0]
+
+
+def test_unnamed_same_duration_slots_keep_distinct_labels():
+    from ai.collectors.codexbar import _from_row
+
+    row = {
+        "provider": "mystery",
+        "enabled": True,
+        "usage": {
+            "primary": {
+                "usedPercent": 10,
+                "windowMinutes": 300,
+                "resetsAt": "2099-01-01T00:00:00Z",
+            },
+            "secondary": {
+                "usedPercent": 40,
+                "windowMinutes": 300,
+                "resetsAt": "2099-01-01T01:00:00Z",
+            },
+        },
+    }
+    account = _from_row(row)
+    assert len(account.windows) == 2
+    labels = [w.label for w in account.windows]
+    assert labels[0] != labels[1]
+    assert "(1)" in labels[0]
+    assert "(2)" in labels[1]
+
+
+def test_dollar_in_reset_description_does_not_flip_subscription_billing():
+    from ai.collectors.codexbar import _from_row
+    from ai.models import BillingKind
+
+    row = {
+        "provider": "codex",
+        "enabled": True,
+        "usage": {
+            "primary": {
+                "usedPercent": 10,
+                "windowMinutes": 10080,
+                "resetsAt": "2099-01-01T00:00:00Z",
+                "resetDescription": "Resets soon — plan was $20/mo",
+            }
+        },
+    }
+    account = _from_row(row)
+    assert account.billing_kind == BillingKind.SUBSCRIPTION_WINDOW
+    assert len(account.windows) == 1

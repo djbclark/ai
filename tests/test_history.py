@@ -244,3 +244,121 @@ def test_chronic_waste_detection(tmp_path: Path):
         wasted = chronic_waste_summary(current=current, retention_days=90)
         assert len(wasted) >= 1
         assert wasted[0]["avg_remaining_pct"] > 80
+
+
+def test_short_interval_pair_has_negligible_weight_in_burn_rate(tmp_path: Path):
+    with patch("ai.analysis.history.snapshot_dir", return_value=tmp_path):
+        now = _now()
+        # Two day-scale samples: 20% consumed over ~1 day each → moderate rate.
+        for i, (ago, rem) in enumerate([(2.0, 80.0), (1.0, 60.0)]):
+            data = {
+                "collected_at": (now - timedelta(days=ago)).isoformat(),
+                "accounts": [
+                    {
+                        "provider": "codex",
+                        "account": "test",
+                        "windows": [
+                            {
+                                "label": "weekly",
+                                "remaining_percent": rem,
+                                "window_minutes": 10080,
+                                "resets_at": (now + timedelta(days=5)).isoformat(),
+                            }
+                        ],
+                    }
+                ],
+            }
+            (tmp_path / f"day{i}.json").write_text(json.dumps(data))
+
+        current = Snapshot(
+            collected_at=now,
+            accounts=[
+                AccountUsage(
+                    source="codexbar",
+                    provider="codex",
+                    account="test",
+                    billing_kind=BillingKind.SUBSCRIPTION_WINDOW,
+                    windows=[
+                        QuotaWindow(
+                            label="weekly",
+                            remaining_percent=40.0,
+                            resets_at=now + timedelta(days=5),
+                            window_minutes=10080,
+                        )
+                    ],
+                )
+            ],
+        )
+        baseline = compute_learned_burn_rates(current=current, retention_days=90, min_snapshots=2)
+        assert "codex:weekly" in baseline
+
+        # Add a 3-minute-apart noisy pair with a huge extrapolated rate if equally weighted.
+        noisy = {
+            "collected_at": (now - timedelta(minutes=3)).isoformat(),
+            "accounts": [
+                {
+                    "provider": "codex",
+                    "account": "test",
+                    "windows": [
+                        {
+                            "label": "weekly",
+                            "remaining_percent": 50.0,
+                            "window_minutes": 10080,
+                            "resets_at": (now + timedelta(days=5)).isoformat(),
+                        }
+                    ],
+                }
+            ],
+        }
+        (tmp_path / "noisy.json").write_text(json.dumps(noisy))
+        with_noise = compute_learned_burn_rates(current=current, retention_days=90, min_snapshots=2)
+        # Weighted average must stay near baseline (noise weight ~3min << 1 day).
+        assert abs(with_noise["codex:weekly"][0] - baseline["codex:weekly"][0]) < 0.05
+
+
+def test_chronic_waste_requires_distinct_reset_cycles(tmp_path: Path):
+    with patch("ai.analysis.history.snapshot_dir", return_value=tmp_path):
+        now = _now()
+        same_reset = (now + timedelta(days=1)).isoformat()
+        for i in range(5):
+            data = {
+                "collected_at": (now - timedelta(hours=i)).isoformat(),
+                "accounts": [
+                    {
+                        "provider": "claude",
+                        "windows": [
+                            {
+                                "label": "5-hour",
+                                "remaining_percent": 95.0,
+                                "window_minutes": 300,
+                                "resets_at": same_reset,
+                            }
+                        ],
+                    }
+                ],
+            }
+            (tmp_path / f"same{i}.json").write_text(json.dumps(data))
+        current = Snapshot(collected_at=now, accounts=[])
+        assert chronic_waste_summary(current=current) == []
+
+        # Three distinct cycles → chronic pattern can surface.
+        for i, rem in enumerate([90.0, 88.0, 92.0]):
+            data = {
+                "collected_at": (now - timedelta(days=i + 1)).isoformat(),
+                "accounts": [
+                    {
+                        "provider": "claude",
+                        "windows": [
+                            {
+                                "label": "5-hour",
+                                "remaining_percent": rem,
+                                "window_minutes": 300,
+                                "resets_at": (now + timedelta(days=i + 2)).isoformat(),
+                            }
+                        ],
+                    }
+                ],
+            }
+            (tmp_path / f"cycle{i}.json").write_text(json.dumps(data))
+        result = chronic_waste_summary(current=current)
+        assert any(r["provider"] == "claude" and r["label"] == "5-hour" for r in result)

@@ -280,7 +280,11 @@ def _from_row(row: dict[str, Any]) -> AccountUsage:
                 match = None
             if match:
                 balance_usd = float(match.group(1))
-                if billing == BillingKind.UNKNOWN:
+                # Never flip subscription windows (with resets) to prepaid just
+                # because a "$" figure appears in a description string.
+                if billing == BillingKind.UNKNOWN and not any(
+                    window.resets_at is not None for window in windows
+                ):
                     billing = BillingKind.PREPAID_BALANCE
 
     return AccountUsage(
@@ -339,12 +343,14 @@ def _slot_label(provider: str, index: int, block: dict[str, Any]) -> str:
         "antigravity": "Google AI / Antigravity",
     }.get(provider, provider.replace("-", " ").title())
     kind = classify_window_minutes(minutes)
+    # Always include index on the fallback path so two same-duration unnamed
+    # slots never share a label and get collapsed later.
     if kind == "5h":
-        return f"{provider_name} 5-hour quota"
+        return f"{provider_name} 5-hour quota ({index})"
     if kind == "weekly":
-        return f"{provider_name} weekly quota"
+        return f"{provider_name} weekly quota ({index})"
     if kind == "monthly":
-        return f"{provider_name} monthly quota"
+        return f"{provider_name} monthly quota ({index})"
     return f"{provider_name} quota {index} (name not supplied by CodexBar)"
 
 

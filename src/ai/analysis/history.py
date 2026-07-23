@@ -85,6 +85,10 @@ def compute_learned_burn_rates(
 
     ``avg_fraction_per_day`` is remaining-percent consumed per day / 100
     (e.g. 0.30 means ~30% of the window per day).
+
+    Pairs are weighted by elapsed time so multi-minute noise does not dominate
+    day-scale samples. Snapshot pairs that straddle a window reset contribute a
+    reconstructed tail-of-cycle point instead of being dropped.
     """
     history = load_recent_snapshots(retention_days=retention_days)
     if len(history) < min_snapshots:
@@ -105,6 +109,8 @@ def compute_learned_burn_rates(
         time_delta_days = max(0.01, (now - prev_time).total_seconds() / 86400.0)
         if time_delta_days > retention_days:
             continue
+        # Weight by elapsed days (capped at 1) so 3-minute pairs barely matter.
+        weight = min(time_delta_days, 1.0)
 
         for prev_account in prev_data.get("accounts") or []:
             provider = str(prev_account.get("provider", "")).lower()
@@ -114,27 +120,65 @@ def compute_learned_burn_rates(
                     prev_remaining = _remaining_from_used(prev_window.get("used_percent"))
                 if prev_remaining is None:
                     continue
-
-                current_remaining = _find_current_remaining(current, prev_account, prev_window)
-                if current_remaining is None:
+                try:
+                    prev_remaining_f = float(prev_remaining)
+                except (TypeError, ValueError):
                     continue
 
-                consumed = prev_remaining - current_remaining
-                if consumed <= 0:
-                    continue
+                current_remaining = _find_current_remaining(
+                    current, prev_account, prev_window, match_resets=True
+                )
+                burn_rate: float | None = None
+                pair_weight = weight
 
-                burn_rate = consumed / time_delta_days  # percent of window per day
+                if current_remaining is not None:
+                    consumed = prev_remaining_f - current_remaining
+                    if consumed > 0:
+                        burn_rate = consumed / time_delta_days
+                    elif current_remaining > prev_remaining_f:
+                        # Same resets_at match but remaining rose — ignore.
+                        continue
+                    else:
+                        continue
+                else:
+                    # No same-cycle match: try same label (possible reset).
+                    loose = _find_current_remaining(
+                        current, prev_account, prev_window, match_resets=False
+                    )
+                    if loose is None or loose <= prev_remaining_f:
+                        continue
+                    # Reset between snapshots: attribute remaining at prev as
+                    # consumption closed out over prev → previous resets_at.
+                    resets_raw = prev_window.get("resets_at")
+                    days_to_reset = time_delta_days
+                    if resets_raw:
+                        try:
+                            resets_at = datetime.fromisoformat(str(resets_raw).replace("Z", "+00:00"))
+                            if resets_at.tzinfo is None:
+                                resets_at = resets_at.replace(tzinfo=timezone.utc)
+                            if prev_time < resets_at <= now:
+                                days_to_reset = max(0.01, (resets_at - prev_time).total_seconds() / 86400.0)
+                        except ValueError:
+                            pass
+                    burn_rate = prev_remaining_f / days_to_reset
+                    pair_weight = min(days_to_reset, 1.0)
+
+                if burn_rate is None:
+                    continue
                 window_minutes = prev_window.get("window_minutes")
                 duration_key = _duration_key(window_minutes)
                 if duration_key:
                     pk = f"{provider}:{duration_key}"
-                    provider_window_burns.setdefault(pk, []).append((burn_rate, 1.0))
+                    provider_window_burns.setdefault(pk, []).append((burn_rate, pair_weight))
 
     rates: dict[str, tuple[float, int]] = {}
     for pk, burns in provider_window_burns.items():
         if len(burns) < 2:
             continue
-        avg_burn_pct = sum(b * w for b, w in burns) / sum(w for _, w in burns)
+        total_w = sum(w for _, w in burns)
+        if total_w <= 0:
+            continue
+        avg_burn_pct = sum(b * w for b, w in burns) / total_w
         rates[pk] = (avg_burn_pct / 100.0, len(burns))
     return rates
 
@@ -191,6 +235,7 @@ def chronic_waste_summary(
     if len(history) < _DEFAULT_MIN_SNAPSHOTS:
         return []
 
+    # samples: list of (resets_at_key, remaining) — at most one per cycle
     wasted: dict[str, dict[str, Any]] = {}
 
     for prev_data in history[:7]:
@@ -215,14 +260,25 @@ def chronic_waste_summary(
                     continue
 
                 key = f"{provider}:{prev_window.get('label', '')}"
-                wasted.setdefault(key, {"provider": provider, "label": prev_window.get("label", ""), "samples": []})
-                wasted[key]["samples"].append(prev_remaining)
+                resets_key = str(prev_window.get("resets_at") or "") or f"unknown:{ts_str}"
+                bucket = wasted.setdefault(
+                    key,
+                    {
+                        "provider": provider,
+                        "label": prev_window.get("label", ""),
+                        "by_reset": {},  # resets_at -> remaining (most recent wins)
+                    },
+                )
+                # history is newest-first; keep first sample per resets_at
+                if resets_key not in bucket["by_reset"]:
+                    bucket["by_reset"][resets_key] = float(prev_remaining)
 
     result: list[dict[str, Any]] = []
     for key, data in wasted.items():
-        samples = data["samples"]
-        if len(samples) < 2:
+        by_reset: dict[str, float] = data["by_reset"]
+        if len(by_reset) < 2:
             continue
+        samples = list(by_reset.values())
         avg = sum(samples) / len(samples)
         result.append(
             {
@@ -246,7 +302,11 @@ def _remaining_from_used(used: Any) -> float | None:
 
 
 def _find_current_remaining(
-    snapshot: Snapshot, prev_account: dict[str, Any], prev_window: dict[str, Any]
+    snapshot: Snapshot,
+    prev_account: dict[str, Any],
+    prev_window: dict[str, Any],
+    *,
+    match_resets: bool = True,
 ) -> float | None:
     prev_provider = str(prev_account.get("provider", "")).lower()
     prev_account_id = str(prev_account.get("account", "")).lower()
@@ -261,7 +321,7 @@ def _find_current_remaining(
         for w in acc.windows:
             if w.label.lower() != prev_label:
                 continue
-            if prev_resets:
+            if match_resets and prev_resets:
                 w_resets = w.resets_at.isoformat() if w.resets_at else ""
                 if w_resets != prev_resets:
                     continue

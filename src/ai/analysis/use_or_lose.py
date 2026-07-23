@@ -460,6 +460,7 @@ def analyze_use_or_lose(
                     remaining=remaining,
                     days=days,
                     config=config,
+                    monthly_price=float(monthly_price) if monthly_price is not None else None,
                 )
 
                 value_usd = flex_profile.value_at_risk_usd
@@ -638,27 +639,23 @@ def _score_multi_dimension(
     remaining: float,
     days: float | None,
     config: dict[str, Any] | None = None,
+    monthly_price: float | None = None,
 ) -> tuple[Urgency, float]:
-    cfg = config or {}
-    raw_plans = cfg.get("plans")
-    plans_cfg: dict[str, Any] = raw_plans if isinstance(raw_plans, dict) else {}
-
     if remaining < 1.0:
         return Urgency.NONE, 0.0
 
-    max_plan_price = 20.0
-    for plan in plans_cfg.values():
-        if isinstance(plan, dict):
-            price = plan.get("monthly_price")
-            if isinstance(price, (int, float)) and price > max_plan_price:
-                max_plan_price = float(price)
+    # Normalize value urgency against this window's own plan price — never the
+    # most expensive plan in the whole config (that diluted cheaper plans).
+    plan_price_for_norm = float(monthly_price) if monthly_price else 20.0
 
     flex = profile.consumption_flexibility
 
     # --- value_urgency (0-100) ---
     value_urgency = 0.0
-    if profile.value_at_risk_usd is not None and max_plan_price > 0:
-        value_urgency = max(0.0, min(100.0, (profile.value_at_risk_usd / max_plan_price) * 100))
+    if profile.value_at_risk_usd is not None and plan_price_for_norm > 0:
+        value_urgency = max(
+            0.0, min(100.0, (profile.value_at_risk_usd / plan_price_for_norm) * 100)
+        )
 
     # --- flexibility_urgency (0-100) ---
     flexibility_urgency = 0.0

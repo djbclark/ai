@@ -209,3 +209,24 @@ def test_claude_cross_check_includes_tokscale_when_cswap_live():
         and "tokscale" in check.sources
         for check in checks
     )
+
+
+def test_errored_cswap_with_matching_codexbar_email_gets_specific_warning():
+    # Keep one live cswap account so selection stays on cswap rows (not global fallback).
+    cswap_ok = _account("cswap", "claude")
+    cswap_ok.account = "other@example.com"
+    cswap_err = _account("cswap", "claude", error="token expired")
+    cswap_err.account = "user@example.com"
+    codexbar_row = _account("codexbar", "claude")
+    codexbar_row.account = "user@example.com"
+    codexbar_row.windows[0].label = "Claude weekly"
+    codexbar_row.windows[0].used_percent = 50
+
+    _selected, checks = _select_and_cross_check(
+        [cswap_ok, cswap_err, codexbar_row], cswap_authoritative=True
+    )
+    messages = [c.message for c in checks if c.account == "user@example.com"]
+    assert messages, checks
+    assert any("could not read canonical usage" in m for m in messages)
+    assert any("do not substitute" in m.lower() for m in messages)
+    assert not any("reporting inconsistency" in m.lower() for m in messages)
