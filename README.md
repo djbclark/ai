@@ -6,6 +6,10 @@ reset** (use-it-or-lose-it).
 
 CLI command: **`ai`**
 
+> **AI agents:** start at [`AGENTS.md`](AGENTS.md) for a map of this repo and,
+> if you're here to fix a bug or add a feature, [`docs/fix-implementation-plan.md`](docs/fix-implementation-plan.md)
+> for the current step-by-step task list.
+
 ## Data sources
 
 | Tool                                                               | Purpose                                                   | Authority                                                                         |

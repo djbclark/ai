@@ -5,6 +5,9 @@ one step at a time, each with no memory of the others. Every step is self-contai
 it names exact files/functions, states the bug, states the fix precisely enough that
 it does not need to be re-derived, and ends with a concrete test gate.
 
+**See also:** [`../AGENTS.md`](../AGENTS.md) for a map of this repo, and
+[`../README.md`](../README.md) for what the `ai` CLI does and how to run it.
+
 **Background reading** (do not re-derive what's already investigated):
 - `docs/code-review-2026-07-23.html` — the full review report this plan is derived from
   (open the file directly in a browser for the styled version; GitHub's file viewer
