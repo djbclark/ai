@@ -372,6 +372,7 @@ def analyze_use_or_lose(
                     source=account.source,
                     score=score,
                     flexibility_profile=flex_profile,
+                    window_minutes=window.window_minutes,
                 )
             )
     alerts.sort(key=lambda a: (-a.score, a.provider.casefold(), a.window_label.casefold()))

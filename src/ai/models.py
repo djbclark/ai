@@ -222,6 +222,7 @@ class UseOrLoseAlert:
     score: float  # higher = more important
 
     flexibility_profile: FlexibilityProfile | None = None
+    window_minutes: int | None = None
 
     def to_dict(self) -> dict[str, Any]:
         d: dict[str, Any] = {
@@ -235,6 +236,7 @@ class UseOrLoseAlert:
             "message": self.message,
             "source": self.source,
             "score": self.score,
+            "window_minutes": self.window_minutes,
         }
         if self.flexibility_profile:
             d["consumption_analysis"] = self.flexibility_profile.to_dict()

@@ -7,7 +7,7 @@ import sys
 from datetime import datetime
 from typing import Any, TextIO
 
-from ai.analysis.use_or_lose import _classify_flexibility, _compute_value_at_risk
+from ai.analysis.use_or_lose import DAYS_PER_MONTH, _classify_flexibility, _compute_value_at_risk
 from ai.models import (
     AccountUsage,
     CrossCheck,
@@ -149,7 +149,11 @@ def render_report(
     if traditional_summary:
         lines.extend(_render_traditional_summary(alerts, s, width=width))
     else:
-        lines.extend(_render_action_plan(alerts, s, width=width))
+        analysis_cfg = (config or {}).get("analysis") or {}
+        waking_hours = float(analysis_cfg.get("waking_hours_per_day", 16))
+        lines.extend(
+            _render_action_plan(alerts, s, width=width, waking_hours_per_day=waking_hours)
+        )
 
     return "\n".join(lines)
 
@@ -249,6 +253,7 @@ def _render_action_plan(
     s: _Style,
     *,
     width: int,
+    waking_hours_per_day: float = 16.0,
 ) -> list[str]:
     action = [a for a in alerts if a.urgency not in (Urgency.INFO, Urgency.NONE)]
     info = [a for a in alerts if a.urgency == Urgency.INFO]
@@ -302,7 +307,9 @@ def _render_action_plan(
             lines.append(s.dim("  plan value silently wasted each month:"))
             lines.append("")
             for alert in sorted(throttled, key=lambda a: (-a.score,)):
-                lines.append(_throttled_waste_line(alert, s))
+                lines.append(
+                    _throttled_waste_line(alert, s, waking_hours_per_day=waking_hours_per_day)
+                )
             lines.append("")
 
     if info:
@@ -370,14 +377,20 @@ def _action_plan_line(alert: UseOrLoseAlert, s: _Style) -> str:
     )
 
 
-def _throttled_waste_line(alert: UseOrLoseAlert, s: _Style) -> str:
+def _throttled_waste_line(
+    alert: UseOrLoseAlert,
+    s: _Style,
+    *,
+    waking_hours_per_day: float = 16.0,
+) -> str:
     who = alert.account or "default"
     profile = alert.flexibility_profile
     value_usd = profile.value_at_risk_usd if profile else None
     remaining = alert.remaining_percent
 
-    if value_usd is not None and value_usd > 0.01:
-        monthly_waste = value_usd * 30
+    if value_usd is not None and value_usd > 0.01 and alert.window_minutes:
+        active_cycles = (waking_hours_per_day * DAYS_PER_MONTH * 60) / alert.window_minutes
+        monthly_waste = value_usd * active_cycles
         return s.dim(
             f"  · {provider_display_name(alert.provider)} · {who} · "
             f"{alert.window_label}: {remaining:.0f}% left per cycle "
