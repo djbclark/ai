@@ -5,8 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from ai.models import Snapshot, Urgency, UseOrLoseAlert, provider_display_name
-from ai.report import (
+from aiuse.models import Snapshot, Urgency, UseOrLoseAlert, provider_display_name
+from aiuse.report import (
     ACTION_PLAN_MAX_LINES,
     ACTION_PLAN_WIDTH,
     URGENCY_ICON,

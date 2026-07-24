@@ -7,9 +7,9 @@ import sys
 from datetime import datetime
 from typing import Any, TextIO
 
-from ai.analysis.pace import compute_pace
-from ai.analysis.use_or_lose import DAYS_PER_MONTH, _classify_flexibility, _compute_value_at_risk
-from ai.models import (
+from aiuse.analysis.pace import compute_pace
+from aiuse.analysis.use_or_lose import DAYS_PER_MONTH, _classify_flexibility, _compute_value_at_risk
+from aiuse.models import (
     AccountUsage,
     CrossCheck,
     Snapshot,
@@ -30,7 +30,7 @@ URGENCY_ICON = {
     Urgency.NONE: "   ",
 }
 
-# Action plan is always last so the terminal lands on it after `ai` returns.
+# Action plan is always last so the terminal lands on it after `aiuse` returns.
 # Target: entire last plan block fits on a typical 24-row viewport without
 # scrolling back (header of the block + ~22 body lines ≈ 23 lines total).
 ACTION_PLAN_MAX_LINES = 23

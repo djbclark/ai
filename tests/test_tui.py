@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 
-from ai.models import (
+from aiuse.models import (
     AccountUsage,
     BillingKind,
     QuotaWindow,
@@ -13,8 +13,8 @@ from ai.models import (
     UseOrLoseAlert,
     utcnow,
 )
-from ai.tui import should_use_tui, textual_available
-from ai.tui.builders import alert_headline, build_report_sections
+from aiuse.tui import should_use_tui, textual_available
+from aiuse.tui.builders import alert_headline, build_report_sections
 
 
 def _snap_with_account() -> Snapshot:
@@ -127,7 +127,7 @@ def test_should_use_tui_true_on_tty_when_rich_present():
 
 
 def test_run_usage_app_default_prints_priority_ladder(capsys):
-    from ai.tui.app import run_usage_app
+    from aiuse.tui.app import run_usage_app
 
     run_usage_app(_snap_with_account(), [_burn_alert()], full=False, quiet=True)
     out = capsys.readouterr().out
@@ -138,7 +138,7 @@ def test_run_usage_app_default_prints_priority_ladder(capsys):
 
 
 def test_run_usage_app_full_includes_providers(capsys):
-    from ai.tui.app import run_usage_app
+    from aiuse.tui.app import run_usage_app
 
     run_usage_app(_snap_with_account(), [_burn_alert()], full=True)
     out = capsys.readouterr().out

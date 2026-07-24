@@ -2,7 +2,7 @@
 
 from datetime import datetime, timezone
 
-from ai.models import PaceProfile, Urgency, UseOrLoseAlert
+from aiuse.models import PaceProfile, Urgency, UseOrLoseAlert
 
 
 def test_pace_profile_and_alert_kind_round_trip_in_to_dict():
@@ -61,7 +61,7 @@ def test_pace_profile_and_alert_kind_round_trip_in_to_dict():
 
 
 def test_same_measurement_compares_remaining_percent():
-    from ai.models import QuotaWindow
+    from aiuse.models import QuotaWindow
 
     a = QuotaWindow(label="w", remaining_percent=50.0, window_minutes=300)
     b = QuotaWindow(label="w", remaining_percent=80.0, window_minutes=300)

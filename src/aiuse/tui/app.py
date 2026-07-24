@@ -10,9 +10,9 @@ from rich.panel import Panel
 from rich.rule import Rule
 from rich.text import Text
 
-from ai.models import Snapshot, UseOrLoseAlert
-from ai.report import render_priority_ladder, render_stderr_meta
-from ai.tui.builders import ReportSection, build_report_sections
+from aiuse.models import Snapshot, UseOrLoseAlert
+from aiuse.report import render_priority_ladder, render_stderr_meta
+from aiuse.tui.builders import ReportSection, build_report_sections
 
 # Panel chrome (borders + padding) eats columns from glance clamp width.
 _PANEL_CHROME = 4

@@ -5,14 +5,14 @@ from __future__ import annotations
 from datetime import timedelta
 from typing import Any
 
-from ai.analysis.history import (
+from aiuse.analysis.history import (
     chronic_waste_summary,
     compute_learned_burn_rates,
     compute_learned_flexibility,
     merge_learned_flexibility,
 )
-from ai.analysis.pace import classify_pace, compute_pace, governing_partition
-from ai.models import (
+from aiuse.analysis.pace import classify_pace, compute_pace, governing_partition
+from aiuse.models import (
     WINDOW_5H_MAX_MINUTES,
     AccountUsage,
     BillingKind,

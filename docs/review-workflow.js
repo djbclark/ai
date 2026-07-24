@@ -32,7 +32,7 @@ const ROOT = '/Users/djbclark/src/ai'
 const SP = args.scratchpad
 
 const CONTEXT = `
-PROJECT CONTEXT — the "ai" CLI (${ROOT}, Python 3.14, src layout at src/ai/, tests in tests/).
+PROJECT CONTEXT — the "ai" CLI (${ROOT}, Python 3.14, src layout at src/aiuse/, tests in tests/).
 Purpose: collect AI subscription quota usage from three external CLIs and tell the user which
 paid subscription windows to burn before they reset ("use it or lose it").
 - collectors/cswap.py: canonical multi-account Claude Code source (cswap list --json).
@@ -66,7 +66,7 @@ const FINDINGS_SCHEMA = {
       items: {
         type: 'object',
         properties: {
-          file: { type: 'string', description: 'repo-relative path, e.g. src/ai/analysis/use_or_lose.py' },
+          file: { type: 'string', description: 'repo-relative path, e.g. src/aiuse/analysis/use_or_lose.py' },
           line: { type: 'integer' },
           title: { type: 'string' },
           severity: { enum: ['critical', 'major', 'minor', 'nit'] },
@@ -137,7 +137,7 @@ const FINDERS = [
   {
     key: 'tokscale',
     prompt: `${CONTEXT}\n${FINDER_COMMON}
-SCOPE: src/ai/collectors/tokscale.py (including its uncommitted diff hunks) and src/ai/collectors/base.py.
+SCOPE: src/aiuse/collectors/tokscale.py (including its uncommitted diff hunks) and src/aiuse/collectors/base.py.
 Real payload sample from a live run is saved at ${SP}/tokscale-usage.json (labels seen live:
 Claude "Session"/"Weekly", Codex "Weekly", Copilot "Chat"/"Completions"/"Premium", Grok Build "Weekly").
 Leads:
@@ -152,7 +152,7 @@ Also check base.py run_json JSON-extraction fallback for edge cases (e.g. stderr
   {
     key: 'codexbar',
     prompt: `${CONTEXT}\n${FINDER_COMMON}
-SCOPE: src/ai/collectors/codexbar.py.
+SCOPE: src/aiuse/collectors/codexbar.py.
 Leads:
 - min_timeout=180 is applied only when discovery returns exactly one provider; is the reasoning sound for other counts?
 - _normalize_providers: "all"/"both" become a literal provider arg; check _query_provider timeout logic for that path.
@@ -165,7 +165,7 @@ Leads:
   {
     key: 'runner-cswap',
     prompt: `${CONTEXT}\n${FINDER_COMMON}
-SCOPE: src/ai/collectors/runner.py and src/ai/collectors/cswap.py.
+SCOPE: src/aiuse/collectors/runner.py and src/aiuse/collectors/cswap.py.
 Leads:
 - _select_and_cross_check: when cswap is authoritative for claude, tokscale's claude rows are silently DROPPED — never selected, never cross-checked (live tokscale reports a Claude row today; see ${SP}/tokscale-usage.json).
 - cswap rows with error but no windows: check _has_live_data / selection / analysis skip logic end to end.
@@ -177,7 +177,7 @@ Leads:
   {
     key: 'analysis',
     prompt: `${CONTEXT}\n${FINDER_COMMON}
-SCOPE: src/ai/analysis/use_or_lose.py (including uncommitted diff hunks) and src/ai/models.py.
+SCOPE: src/aiuse/analysis/use_or_lose.py (including uncommitted diff hunks) and src/aiuse/models.py.
 Leads:
 - line ~153: cycles_needed = max(1, int(round((remaining/100.0)*capacity/capacity))) — capacity cancels out; expression is just round(remaining/100) in [0,1] -> always 1 for remaining<150%. Determine intended semantics and blast radius (earliest_start_calendar, burn text, flexibility_urgency).
 - the NEW uncommitted gates (days>max_days, remaining<min_remaining) in the multi-dim path: what alerts existed before that now vanish? e.g. windows below 40% remaining were previously eligible (throttled-waste bucket in report). Is filtering by min_remaining before scoring consistent with multi-dim's own value/urgency filters?
@@ -191,7 +191,7 @@ Leads:
   {
     key: 'history-config',
     prompt: `${CONTEXT}\n${FINDER_COMMON}
-SCOPE: src/ai/analysis/history.py and src/ai/config.py.
+SCOPE: src/aiuse/analysis/history.py and src/aiuse/config.py.
 Leads:
 - merge_learned_flexibility: on provider miss it falls back to ANY provider with the same duration_kind (endswith ':weekly') — cross-provider contamination of learned flexibility; first-match order is dict order.
 - compute_learned_flexibility compares each historical snapshot to the CURRENT one only (prev->now), weighting all pairs equally — an old snapshot in the same window cycle yields a low burn rate estimate; consumed<=0 pairs are skipped entirely (a window that RESET between snapshots silently contributes nothing — is that right for burn learning?).
@@ -205,7 +205,7 @@ Leads:
   {
     key: 'report-cli-tests',
     prompt: `${CONTEXT}\n${FINDER_COMMON}
-SCOPE: src/ai/report.py (incl. uncommitted diff), src/ai/cli.py, src/ai/__main__.py, tests/ (all files), pyproject.toml, justfile.
+SCOPE: src/aiuse/report.py (incl. uncommitted diff), src/aiuse/cli.py, src/aiuse/__main__.py, tests/ (all files), pyproject.toml, justfile.
 First run the test suite: cd ${ROOT} && .venv/bin/python -m pytest -q  (report failures as findings; do not fix anything).
 Leads:
 - report.py imports private functions from use_or_lose (_classify_flexibility, _compute_value_at_risk) — duplicated computation drift risk vs the profiles already attached to alerts.
@@ -271,7 +271,7 @@ VERIFIED SUPPORTING FACTS:
   remaining, resets in ~5h), Claude Weekly 64% used (36% remaining, resets in ~2 days). Under
   current code the weekly is FILTERED OUT (36% < min_remaining_percent=40, a gate the uncommitted
   diff extends to the multi-dim path), while the 5h window scores high.
-- Why 5h wins structurally (src/ai/analysis/use_or_lose.py::_score_multi_dimension): deadline
+- Why 5h wins structurally (src/aiuse/analysis/use_or_lose.py::_score_multi_dimension): deadline
   urgency uses ABSOLUTE days (days<=0.5 -> raw 100); a 5h window is always within 0.5 days of
   reset. Claude 5h config override (config.py): flexibility 0.0, refill_capacity 45 requests ->
   cycles_needed collapses to 1 (note: the formula (remaining/100)*capacity/capacity cancels — a
@@ -288,7 +288,7 @@ DESIGN REQUIREMENTS:
    that alone must not dominate).
 4. Preserve: config back-compat where reasonable, both scoring paths or an explicit migration,
    explainable report lines, JSON output stability, testability (spec the tests).
-Read src/ai/analysis/use_or_lose.py, src/ai/models.py, src/ai/config.py, src/ai/report.py,
+Read src/aiuse/analysis/use_or_lose.py, src/aiuse/models.py, src/aiuse/config.py, src/aiuse/report.py,
 tests/test_use_or_lose.py before designing. Cover both the scoring change AND how report.py
 presents it (incl. the action-plan buckets).`
 
@@ -296,7 +296,7 @@ const TOPICS = [
   {
     key: 'tokscale-timeouts',
     angles: [
-      `${CONTEXT}\n${TOKSCALE_FACTS}\nANGLE 1 — WORK WITH TODAY'S TOKSCALE AS-IS. Design timeout containment without changing tokscale upstream: think version pinning / bypassing the npx-latest wrapper from the collector, tighter budget with cached-last-good fallback (staleness-labeled), demoting tokscale to cross-check-only so its failure never blocks selection, per-integration subcommands if any expose usage, killing the subprocess early while runner proceeds, etc. Investigate the CLI hands-on (read-only) before proposing. Be specific about changes to src/ai/collectors/tokscale.py, base.py, runner.py and config.`,
+      `${CONTEXT}\n${TOKSCALE_FACTS}\nANGLE 1 — WORK WITH TODAY'S TOKSCALE AS-IS. Design timeout containment without changing tokscale upstream: think version pinning / bypassing the npx-latest wrapper from the collector, tighter budget with cached-last-good fallback (staleness-labeled), demoting tokscale to cross-check-only so its failure never blocks selection, per-integration subcommands if any expose usage, killing the subprocess early while runner proceeds, etc. Investigate the CLI hands-on (read-only) before proposing. Be specific about changes to src/aiuse/collectors/tokscale.py, base.py, runner.py and config.`,
       `${CONTEXT}\n${TOKSCALE_FACTS}\nANGLE 2 — CHANGE THE INTERFACE. Design the ideal per-provider containment matching codexbar.py's pattern, including what has to change outside this repo: an upstream tokscale '--provider' flag (spec it: discovery of enabled providers, per-provider usage), or replacing the bundled call with N concurrent 'tokscale usage' calls each filtered via whatever mechanism exists (settings toggles? --home trick with per-provider config dirs? evaluate honestly), or dropping tokscale's aggregated call for direct per-integration subcommand calls. Spec the collector code (mirror codexbar.py's discovery/fan-out/fallback structure) and the migration/fallback story when the flag is absent (old tokscale version).`,
     ],
   },

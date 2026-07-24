@@ -1,7 +1,7 @@
 import time
 
-from ai.collectors.runner import _consolidate_accounts, _select_and_cross_check, run_collectors
-from ai.models import AccountUsage, BillingKind, QuotaWindow
+from aiuse.collectors.runner import _consolidate_accounts, _select_and_cross_check, run_collectors
+from aiuse.models import AccountUsage, BillingKind, QuotaWindow
 
 
 def _account(source: str, provider: str, *, error: str | None = None) -> AccountUsage:
@@ -125,9 +125,9 @@ def test_run_collectors_runs_sources_concurrently_not_sequentially(monkeypatch):
         time.sleep(0.1)
         return [_account("tokscale", "grok")]
 
-    monkeypatch.setattr("ai.collectors.runner.collect_cswap", slow_cswap)
-    monkeypatch.setattr("ai.collectors.runner.collect_codexbar", slow_codexbar)
-    monkeypatch.setattr("ai.collectors.runner.collect_tokscale", slow_tokscale)
+    monkeypatch.setattr("aiuse.collectors.runner.collect_cswap", slow_cswap)
+    monkeypatch.setattr("aiuse.collectors.runner.collect_codexbar", slow_codexbar)
+    monkeypatch.setattr("aiuse.collectors.runner.collect_tokscale", slow_tokscale)
 
     start = time.monotonic()
     snapshot = run_collectors({})
@@ -143,13 +143,13 @@ def test_run_collectors_keeps_other_sources_when_one_raises(monkeypatch):
     def failing_cswap(**_kwargs):
         raise RuntimeError("boom")
 
-    monkeypatch.setattr("ai.collectors.runner.collect_cswap", failing_cswap)
+    monkeypatch.setattr("aiuse.collectors.runner.collect_cswap", failing_cswap)
     monkeypatch.setattr(
-        "ai.collectors.runner.collect_codexbar",
+        "aiuse.collectors.runner.collect_codexbar",
         lambda **_kwargs: [_account("codexbar", "codex")],
     )
     monkeypatch.setattr(
-        "ai.collectors.runner.collect_tokscale",
+        "aiuse.collectors.runner.collect_tokscale",
         lambda **_kwargs: [_account("tokscale", "grok")],
     )
     snapshot = run_collectors({})

@@ -6,8 +6,8 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from ai.analysis.pace import classify_pace, compute_pace, governing_partition
-from ai.models import QuotaWindow
+from aiuse.analysis.pace import classify_pace, compute_pace, governing_partition
+from aiuse.models import QuotaWindow
 
 
 def _now() -> datetime:

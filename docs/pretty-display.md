@@ -6,7 +6,7 @@ for the default report.
 
 ## Default stdout: priority ladder
 
-Default `ai` prints **every provider account** on **stdout** as a ranked list
+Default `aiuse` prints **every provider account** on **stdout** as a ranked list
 (top → bottom), with **no blank lines**:
 
 1. **error** (red) — could not fetch usage for that provider/account  
@@ -18,7 +18,7 @@ Default `ai` prints **every provider account** on **stdout** as a ranked list
 Tags label each row; **order is a continuous use-urgency gradient** (not
 alphabetical within a band): most-empty-for-longest at the **top**,
 most-urgent-to-use-now at the **bottom**. Read **bottom → top** to pick what
-to use next. Collection time, capacity blurb, and `Detail: ai --full` go to
+to use next. Collection time, capacity blurb, and `Detail: aiuse --full` go to
 **stderr** (suppressed with `-q`).
 
 `--full` keeps the long report on stdout. `--brief` aliases the default.
@@ -32,7 +32,7 @@ to use next. Collection time, capacity blurb, and `Detail: ai --full` go to
 
 ## Why Textual was the wrong fit
 
-`ai` prints a **static report** that must remain in the terminal scrollback.
+`aiuse` prints a **static report** that must remain in the terminal scrollback.
 Textual and Rich `Layout` are **viewport-oriented**: they claim a rectangular
 region and redraw inside it — at odds with “dump every line into scrollback.”
 

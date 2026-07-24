@@ -1,11 +1,11 @@
-"""Styled static pretty display for `ai` (Rich; Textual stack)."""
+"""Styled static pretty display for `aiuse` (Rich; Textual stack)."""
 
 from __future__ import annotations
 
 import sys
 from typing import Any
 
-from ai.models import Snapshot, UseOrLoseAlert
+from aiuse.models import Snapshot, UseOrLoseAlert
 
 
 def textual_available() -> bool:
@@ -44,7 +44,7 @@ def run_inline_report(
     quiet: bool = False,
     color: bool | None = None,
 ) -> None:
-    from ai.tui.app import run_usage_app
+    from aiuse.tui.app import run_usage_app
 
     run_usage_app(
         snapshot,

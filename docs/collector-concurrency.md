@@ -84,7 +84,7 @@ result collection inside the `with` block.
 
 1. Keep **45s** as default; use `-t` only for tighter scripts.
 2. Prefer `--no-tokscale` when iterating on Claude-only workflows if tokscale is slow.
-3. Use `ai doctor` for PATH + version probe; full usage still needs `ai`.
+3. Use `aiuse doctor` for PATH + version probe; full usage still needs `ai`.
 4. Do not raise global timeout back toward 180s without evidence a tool needs it.
 
 ## Code map

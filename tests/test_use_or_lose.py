@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from ai.analysis.use_or_lose import (
+from aiuse.analysis.use_or_lose import (
     _classify_flexibility,
     _compute_flexibility_profile,
     _compute_value_at_risk,
@@ -14,7 +14,7 @@ from ai.analysis.use_or_lose import (
     _score_multi_dimension,
     analyze_use_or_lose,
 )
-from ai.models import (
+from aiuse.models import (
     AccountUsage,
     BillingKind,
     FlexibilityClass,
@@ -636,11 +636,11 @@ def test_pace_mode_learned_rate_bypasses_early_window_confidence_gate(monkeypatc
     # Slow learned burn (under-use) → waste projection → burn once early-window
     # confidence gate is bypassed by has_learned_rate.
     monkeypatch.setattr(
-        "ai.analysis.use_or_lose.compute_learned_burn_rates",
+        "aiuse.analysis.use_or_lose.compute_learned_burn_rates",
         lambda **_k: {"codex:weekly": (0.01, 5)},  # 1% of window / day
     )
     monkeypatch.setattr(
-        "ai.analysis.use_or_lose.compute_learned_flexibility",
+        "aiuse.analysis.use_or_lose.compute_learned_flexibility",
         lambda **_k: {},
     )
     cfg = _pace_cfg()

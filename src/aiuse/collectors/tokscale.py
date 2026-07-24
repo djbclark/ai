@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from ai.models import (
+from aiuse.models import (
     AccountUsage,
     BillingKind,
     QuotaWindow,

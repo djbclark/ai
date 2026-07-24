@@ -6,7 +6,7 @@ import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
-from ai.models import (
+from aiuse.models import (
     AccountUsage,
     BillingKind,
     QuotaWindow,
@@ -15,8 +15,8 @@ from ai.models import (
     keep_copilot_report_window,
     parse_dt,
 )
-from ai.models import coerce_float as _f
-from ai.models import coerce_int as _int_or_none
+from aiuse.models import coerce_float as _f
+from aiuse.models import coerce_int as _int_or_none
 
 from .base import CollectorError, run_json, which
 

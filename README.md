@@ -4,7 +4,7 @@ Aggregate live **subscription quota** and **prepaid balance** information across
 your local AI tooling, then highlight allotments you should use **before they
 reset** (use-it-or-lose-it).
 
-CLI command: **`ai`**
+CLI command: **`aiuse`**
 
 > **AI agents:** start at [`AGENTS.md`](AGENTS.md) for a map of this repo,
 > active priorities, Claude/cswap reliability notes
@@ -23,94 +23,108 @@ This project shells out to tools already on your `PATH`; it does not scrape bill
 
 ## Install
 
+**End users (pipx):**
+
 ```bash
-cd /path/to/ai
+pipx install 'git+https://github.com/djbclark/aiuse.git'
+aiuse doctor
+```
+
+(`ai` is installed as a stub that runs the same CLI.)
+
+**Developers (editable):**
+
+```bash
+cd /path/to/aiuse
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
 ```
 
-Optional config (standard location: **`~/.config/ai/`**, or `$XDG_CONFIG_HOME/ai/`):
+More channels: [`docs/packaging.md`](docs/packaging.md).
+
+
+Optional config (standard location: **`~/.config/aiuse/`**, or `$XDG_CONFIG_HOME/aiuse/`):
 
 ```bash
 # Create directories + default files (never overwrites existing files)
-ai --generate-config
+aiuse --generate-config
 
 # Or copy examples by hand:
-mkdir -p "${XDG_CONFIG_HOME:-$HOME/.config}/ai"
+mkdir -p "${XDG_CONFIG_HOME:-$HOME/.config}/aiuse"
 cp config/services.example.yaml "${XDG_CONFIG_HOME:-$HOME/.config}/ai/services.yaml"
 cp config/config.example.toml "${XDG_CONFIG_HOME:-$HOME/.config}/ai/config.toml"
 ```
 
 | File | Purpose |
 | --- | --- |
-| `~/.config/ai/services.yaml` | Plans, analysis thresholds, which collectors are enabled |
-| `~/.config/ai/config.toml` | Tool settings: subprocess **timeouts** (default **45s**), room for more later |
+| `~/.config/aiuse/services.yaml` | Plans, analysis thresholds, which collectors are enabled |
+| `~/.config/aiuse/config.toml` | Tool settings: subprocess **timeouts** (default **45s**), room for more later |
 
-Run `ai --show-config-path` to print both paths. `ai --generate-config` creates
-missing parent dirs (`~/.config`, `~/.config/ai`) and writes defaults; if a file
+Run `aiuse --show-config-path` to print both paths. `aiuse --generate-config` creates
+missing parent dirs (`~/.config`, `~/.config/aiuse`) and writes defaults; if a file
 already exists it is left alone and reported on stderr. Provider credentials stay
 with cswap, CodexBar, and tokscale — these files do not hold tokens or emails.
 
 ## Daily workflow
 
 ```bash
-# Once: create defaults under ~/.config/ai/ (never overwrites)
-ai --generate-config
-ai doctor                 # PATH tools + config presence + timeouts
+# Once: create defaults under ~/.config/aiuse/ (never overwrites)
+aiuse --generate-config
+aiuse doctor                 # PATH tools + config presence + timeouts
 
 # Morning / before a long coding block
-ai                        # priority ladder on stdout (use-soon at bottom); meta on stderr
-ai --full                 # long report: per-provider, tips, detailed plan
-ai --brief                # same as default (compat alias)
-ai --no-tui               # classic plain-text report (also used when piping)
-ai -q                     # ladder only (no stderr meta / Collecting…)
+aiuse                        # priority ladder on stdout (use-soon at bottom); meta on stderr
+aiuse --full                 # long report: per-provider, tips, detailed plan
+aiuse --brief                # same as default (compat alias)
+aiuse --no-tui               # classic plain-text report (also used when piping)
+aiuse -q                     # ladder only (no stderr meta / Collecting…)
 
 # Scripting / cron (JSON on stdout; use exit codes)
-ai -q --json
+aiuse -q --json
 # exit 0 = ok, no burn/conserve alerts
 # exit 1 = hard failure (collectors failed, no accounts)
 # exit 2 = success with at least one burn/conserve alert
 # field contract: docs/json-contract.md
 
 # Shell completion (bash or zsh)
-eval "$(ai --print-completion bash)"
+eval "$(aiuse --print-completion bash)"
 # or: source completions/ai.bash
 
 # Tighter thresholds for “only what resets soon”
-ai --min-remaining 50 --max-days 7
+aiuse --min-remaining 50 --max-days 7
 ```
 
 ## Usage
 
 ```bash
 # Pretty human-readable report (default)
-ai
-ai --format pretty
-ai --no-color          # plain text, no ANSI
-ai -q / --quiet        # suppress progress on stderr
+aiuse
+aiuse --format pretty
+aiuse --no-color          # plain text, no ANSI
+aiuse -q / --quiet        # suppress progress on stderr
 
 # or without install:
 PYTHONPATH=src python -m ai
 
 # Machine-readable JSON on stdout (progress on stderr unless -q)
-ai --json
-ai --format json
-ai --json --alerts-only
-ai --save ~/tmp/ai-snapshot.json   # also write JSON file
+aiuse --json
+aiuse --format json
+aiuse --json --alerts-only
+aiuse --save ~/tmp/ai-snapshot.json   # also write JSON file
 
 # Faster / partial
-ai --providers copilot,grok,codex   # query these separately
-ai --no-tokscale
-ai --min-remaining 50 --max-days 10
+aiuse --providers copilot,grok,codex   # query these separately
+aiuse --no-tokscale
+aiuse --min-remaining 50 --max-days 10
 
 # Subprocess timeout for external tools (default 45s; also in config.toml)
-ai --timeout 45
-ai -t45
+aiuse --timeout 45
+aiuse -t45
 
 # Environment check (tools on PATH, config files, timeouts) — no usage collection
-ai doctor
-ai --doctor
+aiuse doctor
+aiuse --doctor
 ```
 
 | Flag                                             | Effect                                                             |
@@ -128,7 +142,7 @@ ai --doctor
 | `--no-tokscale` / `--no-cswap` / `--no-codexbar` | Skip specific collectors                                           |
 | `--providers copilot,grok`                       | Query specific CodexBar providers (CSV, one per subprocess)        |
 | `-t` / `--timeout SECONDS`                       | Force subprocess timeout for all external tools (default **45**)   |
-| `--generate-config`                              | Write default `~/.config/ai/*` files; never overwrites existing    |
+| `--generate-config`                              | Write default `~/.config/aiuse/*` files; never overwrites existing    |
 | `--show-config-path`                             | Print services.yaml and config.toml paths                          |
 | `doctor` / `--doctor`                            | Check tools on PATH, config presence, effective timeouts; no collect |
 | `--min-remaining 50 --max-days 10`               | Override alert thresholds                                          |
@@ -139,10 +153,10 @@ ai --doctor
 | Code | When |
 | --- | --- |
 | **0** | Collect succeeded (or nothing to report) and there are **no** burn/conserve alerts. INFO-only notes still count as 0. |
-| **1** | Hard failure: collectors reported errors and **no** accounts were collected. Also used by `ai doctor` when an **enabled** tool is missing from `PATH`, and by `--generate-config` when nothing was written / overwrite refused. |
+| **1** | Hard failure: collectors reported errors and **no** accounts were collected. Also used by `aiuse doctor` when an **enabled** tool is missing from `PATH`, and by `--generate-config` when nothing was written / overwrite refused. |
 | **2** | Collect succeeded and at least one **burn** or **conserve** alert is present. Cross-check disagreements alone do **not** set 2. Bad `--timeout` values also use 2. |
 
-`ai doctor` checks config file presence, **config validation** (unknown keys, bad
+`aiuse doctor` checks config file presence, **config validation** (unknown keys, bad
 timeouts, dead plan aliases), tools on `PATH`, and a light **version probe**
 (`cswap --version`, `codexbar -V`, `tokscale --version`). It does **not** call
 usage APIs or verify login sessions.
@@ -157,7 +171,7 @@ This tool:
 2. Scores windows with **pace-based** logic (default): compare how far through the cycle you are vs how much you've used, then project waste or early lockout.
 3. Classifies each window as **Burn** (will leave capacity unused), **Conserve** (on track to exhaust before reset — slow down), or **On pace** (no alert).
 4. For **shared-allotment** providers (Claude, Gemini by default), scores the longest governing window only so a fresh 5-hour bar does not outrank the weekly budget it draws from.
-5. Default pretty output is a **priority ladder** on stdout (depleted → conserve → mid → use-soon at bottom; read bottom→top). Meta goes to stderr. Use `ai --full` for per-provider detail.
+5. Default pretty output is a **priority ladder** on stdout (depleted → conserve → mid → use-soon at bottom; read bottom→top). Meta goes to stderr. Use `aiuse --full` for per-provider detail.
 6. On `--full`, keeps the trailing plan within ~**23 lines × console width** when possible; if the detailed plan is taller, both detailed and **at a glance** are printed (glance last).
 7. Cross-checks overlapping sources; Claude multi-account stays canonical in cswap (with cache hydrate + fallbacks).
 
@@ -202,7 +216,7 @@ Codex · account=you@example.com · plan=plus · selected live source: CodexBar
 ## Project layout
 
 ```
-src/ai/
+src/aiuse/
   cli.py                 # entrypoint
   collectors/            # cswap, codexbar, tokscale
   analysis/use_or_lose.py
@@ -255,17 +269,18 @@ Shared allotment: `analysis.provider_overrides.<provider>.shared_allotment: true
 - [`docs/consumption-flexibility-plan.md`](docs/consumption-flexibility-plan.md) — historical multi-dimensional scoring design (**superseded** by pace-based scoring in Phase 2 of the fix plan).
 - [`docs/code-review-2026-07-23.html`](docs/code-review-2026-07-23.html) — a 79-agent adversarial code review (45 findings) plus design proposals for containing tokscale's collector timeouts and fixing the rating algorithm. Open it directly in a browser for the styled version; GitHub's file viewer only shows the source.
 - [`docs/fix-implementation-plan.md`](docs/fix-implementation-plan.md) — review-derived fix plan (Steps **1–32** and **34** done; Phase 7 optional 33/35 remain). Start at [`AGENTS.md`](AGENTS.md) for current priorities, not Step 1.
-- [Issue #1](https://github.com/djbclark/ai/issues/1) — track consuming upstream cswap display-grade last-good JSON ([claude-swap#170](https://github.com/realiti4/claude-swap/issues/170)).
+- [Issue #1](https://github.com/djbclark/aiuse/issues/1) — track consuming upstream cswap display-grade last-good JSON ([claude-swap#170](https://github.com/realiti4/claude-swap/issues/170)).
 - [`docs/cswap-reliability.md`](docs/cswap-reliability.md) — Claude multi-account reliability: why `cswap list --json` can drop usable quota, and how cache hydration + fallbacks work.
-- [`docs/opencode-go-quota.md`](docs/opencode-go-quota.md) — OpenCode Go: why CodexBar `auto`/local can show remaining % when the TUI says limit reached, and how `ai` prefers web.
+- [`docs/opencode-go-quota.md`](docs/opencode-go-quota.md) — OpenCode Go: why CodexBar `auto`/local can show remaining % when the TUI says limit reached, and how `aiuse` prefers web.
 - [`docs/cursor-quota.md`](docs/cursor-quota.md) — Cursor Included/Auto/API + on-demand vs CodexBar slots.
-- [`docs/pretty-display.md`](docs/pretty-display.md) — why pretty output uses Rich (not Textual / not Rich `Layout`) so the full report stays in scrollback.
+- [`docs/pretty-display.md`](docs/pretty-display.md)
+- [`docs/packaging.md`](docs/packaging.md) — pipx / PyPI / Homebrew notes. — why pretty output uses Rich (not Textual / not Rich `Layout`) so the full report stays in scrollback.
 - [`docs/claude-local-usage.md`](docs/claude-local-usage.md) — Local Claude Code files / ccusage (token burn) vs subscription 5h/7d % from the OAuth usage API.
 - [`docs/tokscale-per-provider-investigation.md`](docs/tokscale-per-provider-investigation.md) — why tokscale cannot yet fan out per provider like CodexBar.
 - [`docs/json-contract.md`](docs/json-contract.md) — stable JSON fields and exit codes for scripts.
 - [`docs/collector-concurrency.md`](docs/collector-concurrency.md) — parallel collect + 45s timeout audit.
 - [`docs/handoff.md`](docs/handoff.md) — latest session wrap-up and loose ends (for agents and future you).
-- [`completions/`](completions/) — bash/zsh completion (`ai --print-completion bash`).
+- [`completions/`](completions/) — bash/zsh completion (`aiuse --print-completion bash`).
 - [`docs/review-workflow.js`](docs/review-workflow.js) — the Claude Code Workflow script that generated the review, checked in for reproducibility.
 - [`docs/memory/`](docs/memory/) — thin Claude symlink target for this project; see `AGENTS.md` for persistence policy and links to `~/ops/site-private` generic memory.
 - Local quota dashboards in the same category as OpenUsage / CodexBar menu bar tools

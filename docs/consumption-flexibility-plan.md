@@ -462,7 +462,7 @@ Available capacity this cycle: $42.18 across 8 windows (3 providers).
 1. Implement `_score_multi_dimension()` with continuous weight blending.
 2. Gate behind `analysis.use_multi_dim_scoring: true` config flag.
 3. Implement `_throttled_waste_summary()` with rolling 7-day average utilization
-   (requires Phase 1 snapshot persistence — add `~/.cache/ai/snapshots/`).
+   (requires Phase 1 snapshot persistence — add `~/.cache/aiuse/snapshots/`).
 4. `--alerts-only` supports both old and new scoring.
 5. Add tests:
    - Continuous weight redistribution at flex=0.0, 0.5, 1.0.
@@ -491,7 +491,7 @@ Available capacity this cycle: $42.18 across 8 windows (3 providers).
 
 **Goal:** Replace configured flexibility estimates with observed burn rates.
 
-1. Persist snapshots to `~/.cache/ai/snapshots/` (started in Phase 2 for waste tracking).
+1. Persist snapshots to `~/.cache/aiuse/snapshots/` (started in Phase 2 for waste tracking).
 2. Diff consecutive snapshots to compute *actual* per-window burn rate.
 3. Feed learned rates back into flexibility scoring.
 4. Detect chronic waste patterns and suggest config tuning or subscription changes.

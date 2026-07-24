@@ -22,7 +22,7 @@ Step 1**.
 2. **Blocked / wait on upstream (Step 33).** When
    [realiti4/claude-swap#170](https://github.com/realiti4/claude-swap/issues/170)
    merges, consume official `lastGoodUsage` in `collectors/cswap.py` (cache
-   hydrate → fallback). Tracked: [djbclark/ai#1](https://github.com/djbclark/ai/issues/1).
+   hydrate → fallback). Tracked: [djbclark/aiuse#1](https://github.com/djbclark/aiuse/issues/1).
    Design: [`docs/cswap-reliability.md`](docs/cswap-reliability.md).
 3. **Operator-driven only** — live smoke (A, operator-owned), packaging, cron
    recipe, history insights, or new features. Nothing else is queued.
@@ -81,7 +81,7 @@ project knowledge in **their own** repo.
 
 ## What this project is
 
-`ai` is a CLI that aggregates live AI-subscription quota data (Claude, Codex,
+`aiuse` is a CLI that aggregates live AI-subscription quota data (Claude, Codex,
 Copilot, Grok, Gemini/Antigravity, OpenCode Go, prepaid balances, …) from
 three external tools already on `PATH` (`cswap`, `CodexBar`, `tokscale`), then
 tells the user what to burn before it resets unused. See `README.md` for the
@@ -95,20 +95,21 @@ full description, install steps, CLI flags, and config.
 | `AGENTS.md` (this file) | Agent orientation, doc map, persistence policy, **active priorities**. | First, for "where is everything / what next." |
 | `docs/handoff.md` | Latest session wrap-up, loose ends, verify commands. | First stop after this file when resuming. |
 | `docs/fix-implementation-plan.md` | Review-derived task list (Steps 1–32 + Phase 7 optional 33–35). **1–32 and 34 done.** | Historical scope / remaining optional steps only. |
-| `docs/json-contract.md` | Stable `ai --json` fields and exit codes for scripts. | Cron / automation consumers. |
+| `docs/json-contract.md` | Stable `aiuse --json` fields and exit codes for scripts. | Cron / automation consumers. |
 | `docs/collector-concurrency.md` | How collectors run in parallel and timeout (45s). | Perf / hang questions. |
 | `completions/` | bash/zsh completion scripts. | Shell UX. |
-| `https://github.com/djbclark/ai/issues/1` | Tracks consuming cswap#170 last-good JSON (Step 33). | When #170 merges or when checking upstream status. |
+| `https://github.com/djbclark/aiuse/issues/1` | Tracks consuming cswap#170 last-good JSON (Step 33). | When #170 merges or when checking upstream status. |
 | `docs/cswap-reliability.md` | Claude/cswap reliability: decision-stale JSON, cache hydration, fallbacks. | When Claude rows go missing or multi-account looks wrong. |
 | `docs/opencode-go-quota.md` | OpenCode Go: CodexBar local estimate vs web billing; shared allotment. | When Go % disagrees with the OpenCode TUI. |
 | `docs/cursor-quota.md` | Cursor Included/Auto/API + on-demand vs CodexBar slots. | When Cursor % or CONSERVE disagrees with the Cursor usage UI. |
 | `docs/pretty-display.md` | Rich vs Textual for long scrollback-safe reports. | When changing pretty/TTY display. |
+| `docs/packaging.md` | pipx / PyPI / Homebrew distribution. | When releasing or changing install UX. |
 | `docs/claude-local-usage.md` | Local `stats-cache` / JSONL / ccusage vs subscription 5h/7d %. | When someone proposes parsing `~/.claude` instead of cswap. |
 | `docs/code-review-2026-07-23.html` | Adversarial code review (45 findings) that the plan was derived from. Open in a browser. | For the *why* behind a plan step. |
 | `docs/consumption-flexibility-plan.md` | Original scoring design. **Superseded** by pace-based scoring in the fix plan Phase 2. | Historical context only. |
 | `docs/review-workflow.js` | Workflow script that generated the review. | Methodology / re-run. |
 | `docs/memory/` | Thin Claude memory symlink target for this project (`MEMORY.md` index). | Rarely — prefer this file and `docs/` prose. |
-| `src/ai/` | Source: collectors, analysis, report, cli, config, models. | When implementing. |
+| `src/aiuse/` | Source: collectors, analysis, report, cli, config, models. | When implementing. |
 | `tests/` | Pytest suite. | Run `.venv/bin/python -m pytest -q` before and after any change. |
 | `config/services.example.yaml` | Example user config. | Keep in sync with `config.py`'s `DEFAULT_CONFIG`. |
 

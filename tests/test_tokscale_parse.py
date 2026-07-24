@@ -1,7 +1,7 @@
 """Tests for tokscale window inference cleanups (Step 27)."""
 
-from ai.collectors.tokscale import _from_row, _infer_window_minutes
-from ai.models import WINDOW_NOMINAL_MINUTES, keep_copilot_report_window
+from aiuse.collectors.tokscale import _from_row, _infer_window_minutes
+from aiuse.models import WINDOW_NOMINAL_MINUTES, keep_copilot_report_window
 
 
 def test_premium_label_monthly_only_for_copilot():

@@ -1,5 +1,5 @@
-from ai import cli
-from ai.models import CrossCheck, Snapshot, utcnow
+from aiuse import cli
+from aiuse.models import CrossCheck, Snapshot, utcnow
 
 
 def test_help_epilog_mentions_setup_flags(capsys):
@@ -34,9 +34,9 @@ def test_doctor_exits_without_collecting(monkeypatch, tmp_path, capsys):
 
     assert cli.main(["--doctor"]) == 0
     out = capsys.readouterr().out
-    assert "ai doctor" in out
+    assert "aiuse doctor" in out
     assert "No hard problems" in out or "No problems" in out
-    assert str(tmp_path / "ai") in out
+    assert str(tmp_path / "aiuse") in out
     assert "probe" in out.lower() or "cswap-probe" in out
 
 
@@ -46,7 +46,7 @@ def test_doctor_subcommand_synonym(monkeypatch, tmp_path, capsys):
     _stub_probe(monkeypatch)
     monkeypatch.setattr(cli, "run_collectors", lambda _c: (_ for _ in ()).throw(AssertionError("no collect")))
     assert cli.main(["doctor"]) == 0
-    assert "ai doctor" in capsys.readouterr().out
+    assert "aiuse doctor" in capsys.readouterr().out
 
 
 def test_doctor_missing_enabled_tool_exits_1(monkeypatch, tmp_path, capsys):
@@ -124,7 +124,7 @@ def test_print_completion_bash(capsys):
 
 
 def test_brief_mode_skips_usage_section(monkeypatch, capsys):
-    from ai.models import AccountUsage, Urgency, UseOrLoseAlert
+    from aiuse.models import AccountUsage, Urgency, UseOrLoseAlert
 
     snap = Snapshot(
         collected_at=utcnow(),
@@ -154,7 +154,7 @@ def test_brief_mode_skips_usage_section(monkeypatch, capsys):
 
 
 def test_default_pretty_is_priority_ladder(monkeypatch, capsys):
-    from ai.models import AccountUsage, Urgency, UseOrLoseAlert
+    from aiuse.models import AccountUsage, Urgency, UseOrLoseAlert
 
     snap = Snapshot(
         collected_at=utcnow(),
@@ -184,7 +184,7 @@ def test_default_pretty_is_priority_ladder(monkeypatch, capsys):
 
 
 def test_full_mode_includes_providers(monkeypatch, capsys):
-    from ai.models import AccountUsage, Urgency, UseOrLoseAlert
+    from aiuse.models import AccountUsage, Urgency, UseOrLoseAlert
 
     snap = Snapshot(
         collected_at=utcnow(),
@@ -264,8 +264,8 @@ def test_show_config_path_exits_without_collecting(monkeypatch, tmp_path, capsys
 
     assert cli.main(["--show-config-path"]) == 0
     out = capsys.readouterr().out
-    assert f"services: {tmp_path / 'ai' / 'services.yaml'}" in out
-    assert f"settings: {tmp_path / 'ai' / 'config.toml'}" in out
+    assert f"services: {tmp_path / 'aiuse' / 'services.yaml'}" in out
+    assert f"settings: {tmp_path / 'aiuse' / 'config.toml'}" in out
 
 
 def test_cli_timeout_flag_sets_force(monkeypatch):
@@ -311,7 +311,7 @@ def test_main_exits_1_when_all_collectors_fail(monkeypatch):
 
 
 def test_main_exits_2_when_actionable_alerts(monkeypatch):
-    from ai.models import Urgency, UseOrLoseAlert
+    from aiuse.models import Urgency, UseOrLoseAlert
 
     snap = Snapshot(collected_at=utcnow())
     alert = UseOrLoseAlert(
@@ -333,7 +333,7 @@ def test_main_exits_2_when_actionable_alerts(monkeypatch):
 
 
 def test_main_exits_0_when_no_actionable_alerts(monkeypatch):
-    from ai.models import AccountUsage, Urgency, UseOrLoseAlert
+    from aiuse.models import AccountUsage, Urgency, UseOrLoseAlert
 
     snap = Snapshot(
         collected_at=utcnow(),
@@ -375,7 +375,7 @@ def test_without_quiet_prints_progress(monkeypatch, capsys):
 
 
 def test_collect_exit_code_helper():
-    from ai.models import Urgency, UseOrLoseAlert
+    from aiuse.models import Urgency, UseOrLoseAlert
 
     empty = Snapshot(collected_at=utcnow())
     assert cli.collect_exit_code(empty, []) == 0
@@ -407,8 +407,8 @@ def test_generate_config_creates_files_and_refuses_overwrite(monkeypatch, tmp_pa
     assert cli.main(["--generate-config"]) == 0
     out = capsys.readouterr()
     assert "created:" in out.out
-    assert (tmp_path / "ai" / "config.toml").is_file()
-    assert (tmp_path / "ai" / "services.yaml").is_file()
+    assert (tmp_path / "aiuse" / "config.toml").is_file()
+    assert (tmp_path / "aiuse" / "services.yaml").is_file()
 
     assert cli.main(["--generate-config"]) == 1
     err = capsys.readouterr().err

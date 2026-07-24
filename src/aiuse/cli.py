@@ -1,4 +1,4 @@
-"""CLI entrypoint for the `ai` command.
+"""CLI entrypoint for the `aiuse` command.
 
 Default output is a pretty human-readable report on stdout.
 Use --json / --format json for machine-readable output.
@@ -13,12 +13,12 @@ import sys
 from pathlib import Path
 from typing import Any, Callable
 
-from ai.__init__ import __version__
-from ai.analysis.history import save_snapshot
-from ai.analysis.use_or_lose import analyze_use_or_lose
-from ai.collectors.base import which
-from ai.collectors.runner import run_collectors
-from ai.config import (
+from aiuse.__init__ import __version__
+from aiuse.analysis.history import save_snapshot
+from aiuse.analysis.use_or_lose import analyze_use_or_lose
+from aiuse.collectors.base import which
+from aiuse.collectors.runner import run_collectors
+from aiuse.config import (
     DEFAULT_SUBPROCESS_TIMEOUT,
     default_config_dir,
     default_config_path,
@@ -28,8 +28,8 @@ from ai.config import (
     timeout_for,
     validate_config,
 )
-from ai.models import Snapshot, Urgency, UseOrLoseAlert, provider_display_name
-from ai.report import render_report, render_stderr_meta
+from aiuse.models import Snapshot, Urgency, UseOrLoseAlert, provider_display_name
+from aiuse.report import render_report, render_stderr_meta
 
 # External CLIs this project shells out to (must already be installed/auth'd).
 # Version argv is a light probe only (no usage/auth API).
@@ -49,16 +49,16 @@ EXIT_ALERTS = 2
 
 _HELP_EPILOG = f"""\
 config & setup:
-  ai --generate-config     write defaults under ~/.config/ai/ (never overwrites)
-  ai --show-config-path    print services.yaml and config.toml paths
-  ai doctor                PATH tools, version probe, config validation, timeouts
-  ai -t / --timeout SEC    force subprocess timeout for all tools this run
+  aiuse --generate-config     write defaults under ~/.config/aiuse/ (never overwrites)
+  aiuse --show-config-path    print services.yaml and config.toml paths
+  aiuse doctor                PATH tools, version probe, config validation, timeouts
+  aiuse -t / --timeout SEC    force subprocess timeout for all tools this run
                            (default {DEFAULT_SUBPROCESS_TIMEOUT:g}s; also [timeouts] in config.toml)
-  ai -q / --quiet          no progress on stderr (JSON stdout stays clean either way)
-  ai --brief               alias of default priority-ladder report
-  ai --full                long pretty report (per-provider, tips, detailed plan)
-  ai --no-tui              classic plain-text report (skip Rich styling)
-  ai --print-completion bash|zsh   shell completion script to stdout
+  aiuse -q / --quiet          no progress on stderr (JSON stdout stays clean either way)
+  aiuse --brief               alias of default priority-ladder report
+  aiuse --full                long pretty report (per-provider, tips, detailed plan)
+  aiuse --no-tui              classic plain-text report (skip Rich styling)
+  aiuse --print-completion bash|zsh   shell completion script to stdout
 
 exit codes (collect runs):
   0  success, no burn/conserve alerts
@@ -72,7 +72,7 @@ See docs/json-contract.md for machine-readable JSON field stability.
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog="ai",
+        prog="aiuse",
         description=(
             "Aggregate live AI subscription and API usage from cswap, "
             "codexbar, and tokscale; flag allotments that will reset unused. "
@@ -85,7 +85,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--config",
         "-c",
-        help=("Path to services.yaml (default: $XDG_CONFIG_HOME/ai/services.yaml or ~/.config/ai/services.yaml)"),
+        help=("Path to services.yaml (default: $XDG_CONFIG_HOME/aiuse/services.yaml or ~/.config/aiuse/services.yaml)"),
     )
     p.add_argument(
         "--show-config-path",
@@ -96,7 +96,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--generate-config",
         action="store_true",
         help=(
-            "Create default config files under ~/.config/ai/ (or $XDG_CONFIG_HOME/ai/). "
+            "Create default config files under ~/.config/aiuse/ (or $XDG_CONFIG_HOME/aiuse/). "
             "Creates missing directories; refuses to overwrite existing files"
         ),
     )
@@ -105,7 +105,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help=(
             "Check tools on PATH (plus light --version probe), config validation, "
-            "and timeouts; no usage collection (also: ai doctor)"
+            "and timeouts; no usage collection (also: aiuse doctor)"
         ),
     )
     p.add_argument(
@@ -217,7 +217,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _normalize_argv(argv: list[str] | None) -> list[str] | None:
-    """Allow ``ai doctor`` as a synonym for ``ai --doctor``."""
+    """Allow ``aiuse doctor`` as a synonym for ``aiuse --doctor``."""
     if argv is None:
         # Mutate a copy of sys.argv[1:] so argparse still sees full process argv
         # only through parse_args; we pass an explicit list instead.
@@ -315,7 +315,7 @@ def main(argv: list[str] | None = None) -> int:
             print("No use-or-lose alerts or cross-check notes.")
         return exit_code
 
-    from ai.tui import run_inline_report, should_use_tui
+    from aiuse.tui import run_inline_report, should_use_tui
 
     if should_use_tui(
         as_json=False,
@@ -483,7 +483,7 @@ def diagnose(
     Does not collect usage. Version probe is optional and non-auth.
     """
     lookup = which_fn if which_fn is not None else which
-    lines: list[str] = [f"ai doctor  (v{__version__})", ""]
+    lines: list[str] = [f"aiuse doctor  (v{__version__})", ""]
     problems = 0
 
     services = default_config_path()
@@ -551,19 +551,19 @@ def diagnose(
 
     lines.append("")
     lines.append("Hints")
-    lines.append("  ai --generate-config   # create ~/.config/ai defaults (no overwrite)")
-    lines.append("  ai --show-config-path  # print config file paths")
-    lines.append("  ai --full              # long report (per-provider + detailed plan)")
-    lines.append("  ai --brief             # same as default glance-first report")
-    lines.append("  ai --no-tui            # classic plain-text pretty report")
-    lines.append("  ai -t 45               # force all tool timeouts for one run")
-    lines.append("  ai --help              # full flag list + setup epilog")
+    lines.append("  aiuse --generate-config   # create ~/.config/aiuse defaults (no overwrite)")
+    lines.append("  aiuse --show-config-path  # print config file paths")
+    lines.append("  aiuse --full              # long report (per-provider + detailed plan)")
+    lines.append("  aiuse --brief             # same as default glance-first report")
+    lines.append("  aiuse --no-tui            # classic plain-text pretty report")
+    lines.append("  aiuse -t 45               # force all tool timeouts for one run")
+    lines.append("  aiuse --help              # full flag list + setup epilog")
     lines.append("  docs/json-contract.md  # stable JSON fields for scripts")
     return exit_code, lines
 
 
 def _print_completion(shell: str) -> int:
-    path = _COMPLETIONS_DIR / f"ai.{shell}"
+    path = _COMPLETIONS_DIR / f"aiuse.{shell}"
     if not path.is_file():
         print(f"error: completion file not found: {path}", file=sys.stderr)
         return 1

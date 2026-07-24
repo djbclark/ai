@@ -840,7 +840,7 @@ has_learned_rate=True)`.
 **Done when:** new/updated tests pass, full suite green. If there is no existing
 snapshot history on the machine this runs on, this whole feature is inert
 (`learn_from_history` defaults to `false`) — do not let its tests depend on real
-`~/.cache/ai/snapshots` data; construct fixtures in-memory as the existing history
+`~/.cache/aiuse/snapshots` data; construct fixtures in-memory as the existing history
 tests already do.
 
 ---

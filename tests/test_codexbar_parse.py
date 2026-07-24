@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import time
 
-from ai.collectors.base import CollectorError
-from ai.collectors.codexbar import _from_row, _normalize_providers, _parse_enabled_providers, _query_providers
-from ai.models import BillingKind
+from aiuse.collectors.base import CollectorError
+from aiuse.collectors.codexbar import _from_row, _normalize_providers, _parse_enabled_providers, _query_providers
+from aiuse.models import BillingKind
 
 
 def test_parse_copilot_style():
@@ -227,7 +227,7 @@ def test_query_providers_merges_results_in_deterministic_order(monkeypatch):
             raise CollectorError("session expired")
         return [{"provider": provider, "usage": {"primary": {"usedPercent": 1}}}]
 
-    monkeypatch.setattr("ai.collectors.codexbar.run_json", fake_run_json)
+    monkeypatch.setattr("aiuse.collectors.codexbar.run_json", fake_run_json)
 
     results = _query_providers(["codex", "cursor", "claude"])
 
@@ -254,10 +254,10 @@ def test_collect_codexbar_discovers_and_queries_enabled_providers_individually(m
         provider = argv[argv.index("--provider") + 1]
         return [{"provider": provider, "usage": {"primary": {"usedPercent": 1}}}]
 
-    monkeypatch.setattr("ai.collectors.codexbar.which", lambda _cmd: "/usr/bin/codexbar")
-    monkeypatch.setattr("ai.collectors.codexbar.run_json", fake_run_json)
+    monkeypatch.setattr("aiuse.collectors.codexbar.which", lambda _cmd: "/usr/bin/codexbar")
+    monkeypatch.setattr("aiuse.collectors.codexbar.run_json", fake_run_json)
 
-    from ai.collectors.codexbar import collect_codexbar
+    from aiuse.collectors.codexbar import collect_codexbar
 
     accounts = collect_codexbar()
 
@@ -273,7 +273,7 @@ def test_one_slow_or_hanging_provider_does_not_delay_the_others(monkeypatch):
             time.sleep(0.15)  # stands in for a slow/hanging provider
         return [{"provider": provider, "usage": {}}]
 
-    monkeypatch.setattr("ai.collectors.codexbar.run_json", fake_run_json)
+    monkeypatch.setattr("aiuse.collectors.codexbar.run_json", fake_run_json)
 
     start = time.monotonic()
     results = _query_providers(["codex", "claude", "grok", "cursor"])
@@ -298,7 +298,7 @@ def test_duplicate_providers_are_queried_once_not_raced(monkeypatch):
             call_count["codex"] += 1
         return [{"provider": provider, "usage": {}}]
 
-    monkeypatch.setattr("ai.collectors.codexbar.run_json", fake_run_json)
+    monkeypatch.setattr("aiuse.collectors.codexbar.run_json", fake_run_json)
 
     results = _query_providers(["codex", "codex", "claude"])
 
@@ -313,7 +313,7 @@ def test_non_collector_error_from_one_provider_does_not_abort_the_batch(monkeypa
             raise ValueError("unexpected non-CollectorError failure")
         return [{"provider": provider, "usage": {}}]
 
-    monkeypatch.setattr("ai.collectors.codexbar.run_json", fake_run_json)
+    monkeypatch.setattr("aiuse.collectors.codexbar.run_json", fake_run_json)
 
     results = _query_providers(["codex", "claude", "grok"])
 
@@ -330,10 +330,10 @@ def test_discovery_failure_via_non_collector_error_falls_back_gracefully(monkeyp
             raise ValueError("codexbar config providers exploded")
         return [{"provider": "codex", "usage": {}}]
 
-    monkeypatch.setattr("ai.collectors.codexbar.which", lambda _cmd: "/usr/bin/codexbar")
-    monkeypatch.setattr("ai.collectors.codexbar.run_json", fake_run_json)
+    monkeypatch.setattr("aiuse.collectors.codexbar.which", lambda _cmd: "/usr/bin/codexbar")
+    monkeypatch.setattr("aiuse.collectors.codexbar.run_json", fake_run_json)
 
-    from ai.collectors.codexbar import collect_codexbar
+    from aiuse.collectors.codexbar import collect_codexbar
 
     accounts = collect_codexbar()
 
@@ -350,10 +350,10 @@ def test_single_discovered_provider_uses_configured_timeout(monkeypatch):
         captured_timeouts.append(timeout)
         return [{"provider": "openrouter", "usage": {}}]
 
-    monkeypatch.setattr("ai.collectors.codexbar.which", lambda _cmd: "/usr/bin/codexbar")
-    monkeypatch.setattr("ai.collectors.codexbar.run_json", fake_run_json)
+    monkeypatch.setattr("aiuse.collectors.codexbar.which", lambda _cmd: "/usr/bin/codexbar")
+    monkeypatch.setattr("aiuse.collectors.codexbar.run_json", fake_run_json)
 
-    from ai.collectors.codexbar import collect_codexbar
+    from aiuse.collectors.codexbar import collect_codexbar
 
     collect_codexbar(timeout=45.0, discovery_timeout=45.0)
 
@@ -361,7 +361,7 @@ def test_single_discovered_provider_uses_configured_timeout(monkeypatch):
 
 
 def test_unnamed_same_duration_slots_keep_distinct_labels():
-    from ai.collectors.codexbar import _from_row
+    from aiuse.collectors.codexbar import _from_row
 
     row = {
         "provider": "mystery",
@@ -411,9 +411,9 @@ def test_opencodego_prefers_web_source(monkeypatch):
             }
         ]
 
-    monkeypatch.setattr("ai.collectors.codexbar.run_json", fake_run_json)
+    monkeypatch.setattr("aiuse.collectors.codexbar.run_json", fake_run_json)
 
-    from ai.collectors.codexbar import _from_row, _query_provider
+    from aiuse.collectors.codexbar import _from_row, _query_provider
 
     outcome = _query_provider("opencodego")
     assert isinstance(outcome, list)
@@ -451,9 +451,9 @@ def test_opencodego_falls_back_to_auto_when_web_errors(monkeypatch):
             }
         ]
 
-    monkeypatch.setattr("ai.collectors.codexbar.run_json", fake_run_json)
+    monkeypatch.setattr("aiuse.collectors.codexbar.run_json", fake_run_json)
 
-    from ai.collectors.codexbar import _from_row, _query_provider
+    from aiuse.collectors.codexbar import _from_row, _query_provider
 
     outcome = _query_provider("opencodego")
     assert isinstance(outcome, list)
@@ -466,8 +466,8 @@ def test_opencodego_falls_back_to_auto_when_web_errors(monkeypatch):
 
 
 def test_usable_usage_payload_rejects_error_only_rows():
-    from ai.collectors.base import CollectorError
-    from ai.collectors.codexbar import _usable_usage_payload
+    from aiuse.collectors.base import CollectorError
+    from aiuse.collectors.codexbar import _usable_usage_payload
 
     assert _usable_usage_payload(CollectorError("boom")) is False
     assert _usable_usage_payload([{"provider": "opencodego", "error": {"message": "x"}}]) is False
@@ -475,8 +475,8 @@ def test_usable_usage_payload_rejects_error_only_rows():
 
 
 def test_dollar_in_reset_description_does_not_flip_subscription_billing():
-    from ai.collectors.codexbar import _from_row
-    from ai.models import BillingKind
+    from aiuse.collectors.codexbar import _from_row
+    from aiuse.models import BillingKind
 
     row = {
         "provider": "codex",

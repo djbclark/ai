@@ -4,8 +4,8 @@ import time
 
 import pytest
 
-from ai.collectors.cswap import _account_from_item
-from ai.models import BillingKind
+from aiuse.collectors.cswap import _account_from_item
+from aiuse.models import BillingKind
 
 
 def test_missing_number_does_not_mark_slot_active():
@@ -291,7 +291,7 @@ def test_stale_cached_countdown_is_recomputed_from_resets_at():
     """lastGood freezes countdown at fetch; we must not report a 17h string ~2h later."""
     from datetime import datetime, timedelta, timezone
 
-    from ai.collectors.cswap import _countdown_from_reset, _window_from_block
+    from aiuse.collectors.cswap import _countdown_from_reset, _window_from_block
 
     now = datetime(2026, 7, 23, 18, 50, 0, tzinfo=timezone.utc)
     resets = now + timedelta(hours=15, minutes=10)

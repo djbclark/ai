@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from ai.config import (
+from aiuse.config import (
     DEFAULT_SUBPROCESS_TIMEOUT,
     default_config_dir,
     default_config_path,
@@ -18,12 +18,12 @@ from ai.config import (
 def test_default_config_path_uses_xdg_config_home(monkeypatch, tmp_path):
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
 
-    assert default_config_path() == tmp_path / "ai" / "services.yaml"
-    assert default_toml_config_path() == tmp_path / "ai" / "config.toml"
+    assert default_config_path() == tmp_path / "aiuse" / "services.yaml"
+    assert default_toml_config_path() == tmp_path / "aiuse" / "config.toml"
 
 
 def test_load_config_reads_xdg_ai_directory(monkeypatch, tmp_path):
-    config_path = tmp_path / "ai" / "services.yaml"
+    config_path = tmp_path / "aiuse" / "services.yaml"
     config_path.parent.mkdir()
     config_path.write_text("analysis:\n  min_remaining_percent: 55\n", encoding="utf-8")
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
@@ -36,7 +36,12 @@ def test_load_config_reads_xdg_ai_directory(monkeypatch, tmp_path):
 def test_relative_xdg_config_home_is_ignored(monkeypatch):
     monkeypatch.setenv("XDG_CONFIG_HOME", "relative/path")
 
-    assert default_config_path() == Path.home() / ".config" / "ai" / "services.yaml"
+    path = default_config_path()
+    # Prefer aiuse; legacy ~/.config/ai is still accepted when present.
+    assert path in {
+        Path.home() / ".config" / "aiuse" / "services.yaml",
+        Path.home() / ".config" / "ai" / "services.yaml",
+    }
 
 
 def test_load_config_explicit_missing_path_exits():
@@ -59,7 +64,7 @@ def test_timeout_for_per_tool_and_force_precedence():
 
 
 def test_load_config_merges_toml_timeouts(monkeypatch, tmp_path):
-    ai_dir = tmp_path / "ai"
+    ai_dir = tmp_path / "aiuse"
     ai_dir.mkdir()
     (ai_dir / "config.toml").write_text(
         "[timeouts]\ndefault = 30\ntokscale = 12\n",
@@ -77,7 +82,7 @@ def test_ensure_config_dir_creates_nested_levels(monkeypatch, tmp_path):
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
     assert not (tmp_path / "xdg").exists()
     ai_dir = ensure_config_dir()
-    assert ai_dir == tmp_path / "xdg" / "ai"
+    assert ai_dir == tmp_path / "xdg" / "aiuse"
     assert ai_dir.is_dir()
 
 
@@ -121,13 +126,13 @@ def test_generate_user_config_writes_defaults_without_overwrite(monkeypatch, tmp
     assert sorted(Path(p).name for p in first["created"]) == ["config.toml", "services.yaml"]
     assert first["skipped"] == []
     assert first["errors"] == []
-    assert (tmp_path / "ai" / "config.toml").is_file()
-    assert (tmp_path / "ai" / "services.yaml").is_file()
-    assert "default = 45" in (tmp_path / "ai" / "config.toml").read_text(encoding="utf-8")
+    assert (tmp_path / "aiuse" / "config.toml").is_file()
+    assert (tmp_path / "aiuse" / "services.yaml").is_file()
+    assert "default = 45" in (tmp_path / "aiuse" / "config.toml").read_text(encoding="utf-8")
 
     # Second run must not overwrite
     stamp = "KEEP-ME"
-    toml_path = tmp_path / "ai" / "config.toml"
+    toml_path = tmp_path / "aiuse" / "config.toml"
     toml_path.write_text(stamp, encoding="utf-8")
     second = generate_user_config()
     assert second["created"] == []
@@ -137,4 +142,4 @@ def test_generate_user_config_writes_defaults_without_overwrite(monkeypatch, tmp
 
 def test_default_config_dir_is_under_xdg_ai(monkeypatch, tmp_path):
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
-    assert default_config_dir() == tmp_path / "ai"
+    assert default_config_dir() == tmp_path / "aiuse"

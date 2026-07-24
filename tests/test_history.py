@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 import pytest
 
-from ai.analysis.history import (
+from aiuse.analysis.history import (
     _account_window_key,
     _burn_rate_to_flexibility,
     _duration_key,
@@ -21,7 +21,7 @@ from ai.analysis.history import (
     merge_learned_flexibility,
     save_snapshot,
 )
-from ai.models import (
+from aiuse.models import (
     AccountUsage,
     BillingKind,
     QuotaWindow,
@@ -97,7 +97,7 @@ def test_merge_learned_flexibility_no_duration():
 
 
 def test_save_and_load_snapshot(tmp_path: Path):
-    with patch("ai.analysis.history.snapshot_dir", return_value=tmp_path):
+    with patch("aiuse.analysis.history.snapshot_dir", return_value=tmp_path):
         snap = Snapshot(
             collected_at=_now(),
             accounts=[
@@ -147,12 +147,12 @@ def test_save_and_load_snapshot(tmp_path: Path):
 
 
 def test_load_recent_snapshots_empty_dir(tmp_path: Path):
-    with patch("ai.analysis.history.snapshot_dir", return_value=tmp_path):
+    with patch("aiuse.analysis.history.snapshot_dir", return_value=tmp_path):
         assert load_recent_snapshots() == []
 
 
 def test_load_recent_snapshots_filters_old(tmp_path: Path):
-    with patch("ai.analysis.history.snapshot_dir", return_value=tmp_path):
+    with patch("aiuse.analysis.history.snapshot_dir", return_value=tmp_path):
         old = tmp_path / "old.json"
         old_data = {"collected_at": (_now() - timedelta(days=100)).isoformat(), "accounts": []}
         old.write_text(json.dumps(old_data))
@@ -166,14 +166,14 @@ def test_load_recent_snapshots_filters_old(tmp_path: Path):
 
 
 def test_compute_learned_flexibility_needs_min_snapshots(tmp_path: Path):
-    with patch("ai.analysis.history.snapshot_dir", return_value=tmp_path):
+    with patch("aiuse.analysis.history.snapshot_dir", return_value=tmp_path):
         snap = Snapshot(collected_at=_now(), accounts=[])
         learned = compute_learned_flexibility(current=snap, retention_days=90, min_snapshots=5)
         assert learned == {}
 
 
 def test_compute_learned_flexibility_with_data(tmp_path: Path):
-    with patch("ai.analysis.history.snapshot_dir", return_value=tmp_path):
+    with patch("aiuse.analysis.history.snapshot_dir", return_value=tmp_path):
         now = _now()
 
         snap1 = {
@@ -233,7 +233,7 @@ def test_compute_learned_flexibility_with_data(tmp_path: Path):
 
 
 def test_chronic_waste_detection(tmp_path: Path):
-    with patch("ai.analysis.history.snapshot_dir", return_value=tmp_path):
+    with patch("aiuse.analysis.history.snapshot_dir", return_value=tmp_path):
         now = _now()
         for i in range(1, 8):
             data = {
@@ -254,7 +254,7 @@ def test_chronic_waste_detection(tmp_path: Path):
 
 
 def test_short_interval_pair_has_negligible_weight_in_burn_rate(tmp_path: Path):
-    with patch("ai.analysis.history.snapshot_dir", return_value=tmp_path):
+    with patch("aiuse.analysis.history.snapshot_dir", return_value=tmp_path):
         now = _now()
         # Two day-scale samples: 20% consumed over ~1 day each → moderate rate.
         for i, (ago, rem) in enumerate([(2.0, 80.0), (1.0, 60.0)]):
@@ -324,7 +324,7 @@ def test_short_interval_pair_has_negligible_weight_in_burn_rate(tmp_path: Path):
 
 
 def test_chronic_waste_requires_distinct_reset_cycles(tmp_path: Path):
-    with patch("ai.analysis.history.snapshot_dir", return_value=tmp_path):
+    with patch("aiuse.analysis.history.snapshot_dir", return_value=tmp_path):
         now = _now()
         same_reset = (now + timedelta(days=1)).isoformat()
         for i in range(5):

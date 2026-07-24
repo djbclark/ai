@@ -1,6 +1,6 @@
 from datetime import timedelta
 
-from ai.models import (
+from aiuse.models import (
     AccountUsage,
     CrossCheck,
     FlexibilityClass,
@@ -11,7 +11,7 @@ from ai.models import (
     UseOrLoseAlert,
     utcnow,
 )
-from ai.report import (
+from aiuse.report import (
     ACTION_PLAN_MAX_LINES,
     ACTION_PLAN_WIDTH,
     _action_plan_line,
@@ -163,7 +163,7 @@ def test_render_report_shows_conserve_before_burn_buckets():
 
 
 def test_render_report_shows_usage_credits_section():
-    from ai.models import BillingKind, UsageCredits
+    from aiuse.models import BillingKind, UsageCredits
 
     now = utcnow()
     acc = AccountUsage(
@@ -365,7 +365,7 @@ def test_brief_action_plan_respects_max_lines():
 
 
 def test_brief_action_plan_caps_lines_per_provider():
-    from ai.report import BRIEF_MAX_LINES_PER_PROVIDER
+    from aiuse.report import BRIEF_MAX_LINES_PER_PROVIDER
 
     alerts = [
         UseOrLoseAlert(
@@ -406,7 +406,7 @@ def test_brief_action_plan_caps_lines_per_provider():
 
 
 def test_default_report_is_priority_ladder():
-    from ai.report import render_stderr_meta
+    from aiuse.report import render_stderr_meta
 
     now = utcnow()
     acc = AccountUsage(provider="codex", source="codexbar", account="a@x.com")
@@ -469,7 +469,7 @@ def test_default_report_is_priority_ladder():
 
 def test_priority_ladder_sorts_by_use_urgency_not_alphabet():
     """Sooner high-score burn sorts below a later lower-score burn (tags may match)."""
-    from ai.report import alert_use_urgency, render_priority_ladder
+    from aiuse.report import alert_use_urgency, render_priority_ladder
 
     later = UseOrLoseAlert(
         urgency=Urgency.HIGH,
@@ -507,8 +507,8 @@ def test_priority_ladder_sorts_by_use_urgency_not_alphabet():
 def test_priority_ladder_includes_on_pace_providers():
     from datetime import timedelta
 
-    from ai.models import BillingKind, QuotaWindow
-    from ai.report import render_priority_ladder
+    from aiuse.models import BillingKind, QuotaWindow
+    from aiuse.report import render_priority_ladder
 
     now = utcnow()
     ok = AccountUsage(
@@ -563,7 +563,7 @@ def test_full_report_includes_providers():
 def test_brief_report_omits_usage_and_tips():
     from datetime import timedelta
 
-    from ai.models import BillingKind, QuotaWindow
+    from aiuse.models import BillingKind, QuotaWindow
 
     now = utcnow()
     acc = AccountUsage(
@@ -647,7 +647,7 @@ def test_throttled_monthly_waste_stays_near_plan_scale_for_realistic_value():
     value_usd = monthly_price * remaining_frac  # max per-cycle after Fix #4 clamp
     window_minutes = 300
     waking = 16.0
-    from ai.analysis.use_or_lose import DAYS_PER_MONTH
+    from aiuse.analysis.use_or_lose import DAYS_PER_MONTH
 
     cycles = (waking * DAYS_PER_MONTH * 60) / window_minutes
     monthly_waste = value_usd * cycles

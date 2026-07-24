@@ -1,4 +1,4 @@
-# JSON contract (`ai --json`)
+# JSON contract (`aiuse --json`)
 
 Stable machine-readable fields for scripts and cron. Prefer these keys over
 pretty text parsing.
@@ -8,7 +8,7 @@ pretty text parsing.
 
 ## Top-level payload
 
-Default `ai --json` stdout:
+Default `aiuse --json` stdout:
 
 ```json
 {
@@ -17,7 +17,7 @@ Default `ai --json` stdout:
 }
 ```
 
-`ai --json --alerts-only`:
+`aiuse --json --alerts-only`:
 
 ```json
 {

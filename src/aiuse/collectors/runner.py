@@ -6,8 +6,8 @@ from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
-from ai.config import timeout_for
-from ai.models import AccountUsage, CrossCheck, QuotaWindow, Snapshot, provider_display_name, utcnow
+from aiuse.config import timeout_for
+from aiuse.models import AccountUsage, CrossCheck, QuotaWindow, Snapshot, provider_display_name, utcnow
 
 from .codexbar import collect_codexbar
 from .cswap import collect_cswap

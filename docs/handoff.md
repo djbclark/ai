@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-24  
 **Branch:** `main`  
-**Tests:** `.venv/bin/python -m pytest -q` — **199** passing
+**Tests:** `.venv/bin/python -m pytest -q` — **201** passing
 
 Fresh agents: start at [`AGENTS.md`](../AGENTS.md). This file is the short
 “where we left off” note so the next session does not re-discover status.
@@ -14,8 +14,8 @@ Fresh agents: start at [`AGENTS.md`](../AGENTS.md). This file is the short
 | Fix plan Steps **1–32** | Review-derived correctness pass complete |
 | Step **34** | cswap `usage.spend` → `UsageCredits` + pretty section |
 | cswap reliability (interim) | Cache hydrate, countdown recompute, CodexBar/tokscale fallback — [`cswap-reliability.md`](cswap-reliability.md) |
-| Tracker | [ai#1](https://github.com/djbclark/ai/issues/1) documents consumer contract for upstream #170 |
-| CLI discoverability | `ai doctor`, `--help` epilog, `--generate-config` under `~/.config/ai/` |
+| Tracker | [ai#1](https://github.com/djbclark/aiuse/issues/1) documents consumer contract for upstream #170 |
+| CLI discoverability | `aiuse doctor`, `--help` epilog, `--generate-config` under `~/.config/aiuse/` |
 | Product polish batch | Exit codes 0/1/2, `-q`, soft cross-checks, daily workflow README |
 | Second polish batch | Doctor version probe + config validation, `--brief`, completions, JSON contract, concurrency audit |
 | Action plan last | Report ends on action plan (≤~23×80); if detailed is taller, detailed + **at a glance** brief trailer |
@@ -38,7 +38,7 @@ Recent commits (newest first): see `git log -5 --oneline`
 
 1. **Step 33 — consume cswap last-good JSON**  
    Upstream: [realiti4/claude-swap#170](https://github.com/realiti4/claude-swap/issues/170)  
-   Ours: [djbclark/ai#1](https://github.com/djbclark/ai/issues/1)  
+   Ours: [djbclark/aiuse#1](https://github.com/djbclark/aiuse/issues/1)  
    Work: prefer `lastGoodUsage` (+ age) in `collectors/cswap.py`; keep cache hydrate as fallback; document min cswap version.
 
 ### Explicitly deferred (operator owns or said no)
@@ -47,7 +47,7 @@ Recent commits (newest first): see `git log -5 --oneline`
 | --- | --- |
 | **A — Live smoke checklist** | Operator said they will do later (manual multi-account Claude / credits / exit codes) |
 | **Step 35 — local burn (ccusage)** | Do not start unless asked |
-| **E — Packaging** (Homebrew/pipx) | Not started |
+| **E — Packaging** (Homebrew/pipx) | In progress — name `aiuse`; see [`packaging.md`](packaging.md) |
 | **G — History burn insights** | Not started |
 | **H — Cron/LaunchAgent recipe** | Not started (exit codes + JSON contract already enable it) |
 
@@ -68,10 +68,10 @@ Medium: history-backed pace note, consume #170 when merged.
 | [`docs/opencode-go-quota.md`](opencode-go-quota.md) | OpenCode Go web vs local CodexBar source |
 | [`docs/cursor-quota.md`](cursor-quota.md) | Cursor Included/Auto/API + on-demand |
 | [`docs/fix-implementation-plan.md`](fix-implementation-plan.md) | Historical steps + Phase 7 optional |
-| [`src/ai/cli.py`](../src/ai/cli.py) | doctor, exit codes, quiet, brief, completions |
-| [`src/ai/collectors/cswap.py`](../src/ai/collectors/cswap.py) | Claude collect + hydrate |
-| [`src/ai/collectors/codexbar.py`](../src/ai/collectors/codexbar.py) | CodexBar fan-out; OpenCode Go prefers `--source web` |
-| [`src/ai/tui/`](../src/ai/tui/) | Rich pretty report (scrollback-safe; see [`pretty-display.md`](pretty-display.md)) |
+| [`src/aiuse/cli.py`](../src/aiuse/cli.py) | doctor, exit codes, quiet, brief, completions |
+| [`src/aiuse/collectors/cswap.py`](../src/aiuse/collectors/cswap.py) | Claude collect + hydrate |
+| [`src/aiuse/collectors/codexbar.py`](../src/aiuse/collectors/codexbar.py) | CodexBar fan-out; OpenCode Go prefers `--source web` |
+| [`src/aiuse/tui/`](../src/aiuse/tui/) | Rich pretty report (scrollback-safe; see [`pretty-display.md`](pretty-display.md)) |
 | [`docs/pretty-display.md`](pretty-display.md) | Why Rich not Textual for long reports |
 | [`completions/`](../completions/) | bash/zsh |
 
@@ -79,9 +79,9 @@ Medium: history-backed pace note, consume #170 when merged.
 
 ```bash
 .venv/bin/python -m pytest -q
-ai doctor
-ai --brief -q
-ai --full -q
+aiuse doctor
+aiuse --brief -q
+aiuse --full -q
 # OpenCode Go should match TUI when cookies work:
 codexbar usage --provider opencodego --source web --no-color
 ```

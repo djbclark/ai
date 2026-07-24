@@ -8,9 +8,9 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-from ai.models import Snapshot, utcnow
+from aiuse.models import Snapshot, utcnow
 
-_DEFAULT_SNAPSHOT_DIR = "~/.cache/ai/snapshots"
+_DEFAULT_SNAPSHOT_DIR = "~/.cache/aiuse/snapshots"
 _DEFAULT_RETENTION_DAYS = 90
 _DEFAULT_MIN_SNAPSHOTS = 2
 _DEFAULT_LOOKBACK_DAYS = 7

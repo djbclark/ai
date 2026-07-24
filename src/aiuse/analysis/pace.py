@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
-from ai.models import PaceProfile, QuotaWindow, classify_window_minutes, nominal_window_minutes
+from aiuse.models import PaceProfile, QuotaWindow, classify_window_minutes, nominal_window_minutes
 
 
 def compute_pace(

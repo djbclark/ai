@@ -22,7 +22,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from ai.models import (
+from aiuse.models import (
     AccountUsage,
     BillingKind,
     QuotaWindow,
@@ -30,8 +30,8 @@ from ai.models import (
     classify_window_minutes,
     parse_dt,
 )
-from ai.models import coerce_float as _number
-from ai.models import coerce_int as _int_or_none
+from aiuse.models import coerce_float as _number
+from aiuse.models import coerce_int as _int_or_none
 
 from .base import CollectorError, run_json, which
 
