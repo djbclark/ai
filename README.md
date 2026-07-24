@@ -38,6 +38,7 @@ aiuse doctor
 
 ```bash
 brew tap djbclark/aiuse
+brew trust djbclark/aiuse
 brew install aiuse
 ```
 

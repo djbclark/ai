@@ -9,8 +9,8 @@ calls the same entrypoint (`aiuse.ai_stub:main`).
 | --- | --- |
 | Editable / venv (`pip install -e .`) | Supported (dev) |
 | **pipx** from GitHub | Ready |
-| **pipx** from PyPI | Ready after first `v2.1.0` publish (trusted publishing) |
-| **Homebrew** personal tap | Formula at [`packaging/homebrew/aiuse.rb`](../packaging/homebrew/aiuse.rb); tap `djbclark/aiuse` |
+| **pipx** from PyPI | Blocked on one-time Trusted Publisher setup (release `v2.1.0` + workflow ready) |
+| **Homebrew** personal tap | Live: `brew tap djbclark/aiuse && brew trust djbclark/aiuse && brew install aiuse` |
 | homebrew-core | Not submitted |
 
 External tools (`cswap`, `codexbar`, `tokscale`) stay separate PATH installs —
@@ -19,7 +19,8 @@ this package only ships the aggregator CLI.
 ## Version note
 
 Git tag **`v2.0.0`** is historical (pre-rename `src/ai/`). First release of the
-renamed package is **`2.1.0`** / tag **`v2.1.0`**.
+renamed package is **`2.1.0`** / tag **`v2.1.0`**
+([GitHub Release](https://github.com/djbclark/aiuse/releases/tag/v2.1.0)).
 
 ## pipx
 
@@ -31,7 +32,7 @@ aiuse doctor
 ai --version   # stub → same app
 ```
 
-From GitHub tip:
+From GitHub tip (works today):
 
 ```bash
 pipx install 'git+https://github.com/djbclark/aiuse.git'
@@ -54,18 +55,26 @@ uv run --with build --with twine python -m build
 uv run --with twine twine check dist/*
 ```
 
-**Automated publish:** pushing a GitHub Release for tag `vX.Y.Z` runs
+**Automated publish:** GitHub Release `published` runs
 [`.github/workflows/publish.yml`](../.github/workflows/publish.yml) with
-Trusted Publishing (OIDC). One-time PyPI setup:
+Trusted Publishing (OIDC). Environment **`pypi`** already exists on the repo.
 
-1. Create project **`aiuse`** on PyPI (or let the first trusted upload create it).
-2. PyPI → Account settings → Publishing → Add a new pending publisher:
+### One-time operator setup (remaining)
+
+1. Sign in at https://pypi.org (create account if needed).
+2. Account settings → Publishing → **Add a new pending publisher**:
+   - PyPI Project Name: `aiuse`
    - Owner: `djbclark`
-   - Repository: `aiuse`
+   - Repository name: `aiuse`
    - Workflow name: `publish.yml`
    - Environment name: `pypi`
-3. In GitHub → Settings → Environments, create environment **`pypi`**
-   (optional protection rules).
+3. Re-run the failed publish workflow (or `workflow_dispatch` / republish):
+
+```bash
+gh run rerun 30098017371 -R djbclark/aiuse --failed
+```
+
+Keep the PyPI project name **`aiuse`** (not `ai` — taken by Vercel’s AI SDK).
 
 Manual upload (API token) if needed:
 
@@ -73,41 +82,37 @@ Manual upload (API token) if needed:
 twine upload dist/*
 ```
 
-Keep the PyPI project name **`aiuse`** (not `ai` — taken by Vercel’s AI SDK).
-
 ## Homebrew
 
-Canonical formula copy lives in this repo:
+Canonical formula copy:
 [`packaging/homebrew/aiuse.rb`](../packaging/homebrew/aiuse.rb).
 
-Install from the personal tap:
+Tap repo: https://github.com/djbclark/homebrew-aiuse
 
 ```bash
 brew tap djbclark/aiuse
+brew trust djbclark/aiuse   # Homebrew requires trusting third-party taps
 brew install aiuse
 ```
 
-The formula uses the tagged GitHub archive (`v2.1.0`) plus `sha256`. After
-cutting a new release:
+Verified locally: Cellar installs `aiuse` / `ai` at **2.1.0**.
+
+After cutting a new release, refresh formula `url` / `version` / `sha256` here
+and sync `Formula/aiuse.rb` in the tap:
 
 ```bash
-# compute archive checksum
 curl -sL "https://github.com/djbclark/aiuse/archive/refs/tags/vX.Y.Z.tar.gz" \
   | shasum -a 256
-# update url / version / sha256 in packaging/homebrew/aiuse.rb
-# sync the same file into the homebrew-aiuse tap Formula/aiuse.rb
 ```
-
-Tap repo naming: GitHub repo `djbclark/homebrew-aiuse` → `brew tap djbclark/aiuse`.
 
 ## Release checklist (maintainers)
 
 1. Bump `version` in `pyproject.toml` and `__version__` in `src/aiuse/__init__.py`.
-2. `.venv/bin/python -m pytest -q` (or `uv run pytest`) — green.
-3. `git tag -a vX.Y.Z -m "…"` && `git push origin vX.Y.Z`.
-4. `python -m build` && attach `dist/*` to a GitHub Release (or let Actions build).
-5. Publish the GitHub Release → publish workflow uploads to PyPI.
-6. Refresh Homebrew formula `url` / `sha256` / `version`; push tap.
+2. `.venv/bin/python -m pytest -q` — green.
+3. `git tag -a vX.Y.Z -m "…"` && push tag (SSH if HTTPS lacks `workflow` scope).
+4. `python -m build` && `gh release create vX.Y.Z dist/* …`
+5. Publish workflow uploads to PyPI (after trusted publisher is configured).
+6. Refresh Homebrew formula + tap `sha256`.
 
 ## Config paths
 
