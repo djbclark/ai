@@ -43,7 +43,9 @@ def _print_section(console: Console, section: ReportSection) -> None:
     body = _body_group(section.lines)
 
     if section.kind == "header":
-        console.print(Panel(body, title=title, border_style="cyan", padding=(0, 1)))
+        # Title + meta only — no Panel box (empty-looking chrome around one dim line).
+        console.print(title)
+        console.print(body)
         console.print()
         return
 
