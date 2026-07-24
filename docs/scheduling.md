@@ -27,10 +27,10 @@ and `./packaging/launchd/install.sh`.
 
 Exit codes (for log / monitor tooling): see [`json-contract.md`](json-contract.md).
 
-| Code | Meaning for a scheduled run |
-| --- | --- |
-| **0** | OK, no burn/conserve alerts |
-| **1** | Hard failure (treat as error) |
+| Code  | Meaning for a scheduled run                                               |
+| ----- | ------------------------------------------------------------------------- |
+| **0** | OK, no burn/conserve alerts                                               |
+| **1** | Hard failure (treat as error)                                             |
 | **2** | OK collection; at least one burn/conserve alert (not a scheduler failure) |
 
 ## Verify (site-djbclark)

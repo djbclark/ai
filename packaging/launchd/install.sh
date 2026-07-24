@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
-# Install a LaunchAgent that runs `aiuse -q --json` every 6 hours and enables
-# analysis.persist_snapshots in ~/.config/aiuse/services.yaml when missing.
+# Generic (non-Ansible) installer for com.djbclark.aiuse.
+#
+# Preferred on this operator's Macs: manage via ~/ops/site-djbclark
+#   cd ~/ops/site-djbclark && just site-agents-apply
+#
+# This script remains for machines without the site repo.
 set -euo pipefail
 
 LABEL="com.djbclark.aiuse"

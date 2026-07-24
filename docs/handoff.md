@@ -13,7 +13,8 @@ Fresh agents: start at [`AGENTS.md`](../AGENTS.md).
 
 1. Open Cursor workspace at **`~/src/aiuse`**.
 2. Confirm config: `aiuse doctor` → `~/.config/aiuse/`.
-3. Optional: install LaunchAgent — `./packaging/launchd/install.sh`
+3. Optional: LaunchAgent is managed by site-djbclark —
+   `cd ~/ops/site-djbclark && just site-agents-apply`
    ([`scheduling.md`](scheduling.md)).
 
 ## Done this stretch
