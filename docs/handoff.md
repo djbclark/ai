@@ -1,39 +1,50 @@
 # Session handoff (current)
 
-**Date:** 2026-07-24  
-**Branch:** `main`  
+**Date:** 2026-07-24 (session close)  
+**Branch:** `main` (clean, synced with `origin/main`)  
 **Local tree:** `~/src/aiuse`  
 **Remote:** https://github.com/djbclark/aiuse  
-**Tests:** `.venv/bin/python -m pytest -q` — expect **200+** passing  
-**Version:** **2.1.4** (PyPI + Homebrew published)
+**Tests:** `.venv/bin/python -m pytest -q` — **210** passing  
+**Version:** **2.1.4** on PyPI + Homebrew + local `pipx` / `brew`
 
 Fresh agents: start at [`AGENTS.md`](../AGENTS.md).
 
 ## Reopen checklist (operator)
 
 1. Open Cursor workspace at **`~/src/aiuse`**.
-2. Confirm config: `aiuse doctor` → `~/.config/aiuse/`.
-3. LaunchAgent: managed by **site-djbclark** —
-   `cd ~/ops/site-djbclark && just site-agents-apply && just site-agents-status`
-   ([`scheduling.md`](scheduling.md)).
+2. Confirm: `aiuse --version` → `2.1.4`; `aiuse doctor` → `~/.config/aiuse/`.
+3. LaunchAgent: `just -f ~/ops/site-djbclark/justfile site-agents-status`
+   — expect `com.djbclark.aiuse` loaded ([`scheduling.md`](scheduling.md)).
 
-## Done this stretch
+## Done this stretch (2026-07-24)
 
-| Area                             | Notes                                                               |
-| -------------------------------- | ------------------------------------------------------------------- |
-| Fix plan Steps **1–32** + **34** | Complete                                                            |
-| Packaging                        | **2.1.4** on PyPI + Homebrew tap                                    |
-| **H — LaunchAgent**              | Live: `com.djbclark.aiuse` via site-djbclark `site_agents` (hourly) |
-| **G — History UX**               | `--full` History section + blended-with-history pace notes          |
+| Area | Notes |
+| --- | --- |
+| Fix plan Steps **1–32** + **34** | Complete (no restart) |
+| **E — Packaging** | Through **2.1.4**: OIDC PyPI, Homebrew tap, MIT, releases |
+| **H — LaunchAgent** | Hourly `com.djbclark.aiuse` via site-djbclark `site_agents` |
+| **G — History** | `persist_snapshots` + `learn_from_history: auto` |
+| **G — deeper UX** | `--full` **History** section; blended-with-history pace notes; `learned_sample_count` in JSON |
 
-## Packaging / scheduling
+Release: https://github.com/djbclark/aiuse/releases/tag/v2.1.4  
+PyPI: https://pypi.org/project/aiuse/2.1.4/
 
-| Channel                | State                                                               |
-| ---------------------- | ------------------------------------------------------------------- |
-| PyPI / Homebrew / OIDC | **2.1.4 published** ([release](https://github.com/djbclark/aiuse/releases/tag/v2.1.4)) |
-| LaunchAgent            | **Rolled out** via `~/ops/site-djbclark` (`just site-agents-apply`) |
-| `persist_snapshots`    | **true** (set by site_agents)                                       |
-| `learn_from_history`   | **`auto`** — learns once ≥ 2 snapshots exist                        |
+## Loose-ends scan (close-out)
+
+| Item | Status | Action |
+| --- | --- | --- |
+| Working tree / push | Clean; `main` == `origin/main` | None |
+| Tests | 210 green | None |
+| Installers | 2.1.4 on PyPI + `djbclark/homebrew-aiuse` | None |
+| Local PATH | `~/.local/bin/aiuse` (pipx) shadows Homebrew; both **2.1.4** | Prefer one channel if confused |
+| LaunchAgent | Loaded; interval **3600s**; persist + learn auto | Let it run |
+| Snapshot cache | ~80+ files under `~/.cache/aiuse/snapshots` | Learning already active |
+| **Step 33** | Blocked: [claude-swap#170](https://github.com/realiti4/claude-swap/issues/170) **open**; [aiuse#1](https://github.com/djbclark/aiuse/issues/1) open | Wait for upstream merge |
+| **A — Live smoke** | Not done this session | Operator-owned when convenient |
+| **Step 35** | Parked (ccusage / local burn ≠ plan %) | Do not start unless asked |
+| New features | None queued | Operator pick |
+
+Nothing else actionable in-repo without operator choice or upstream #170.
 
 ## Operator preferences (standing)
 
@@ -43,21 +54,12 @@ Fresh agents: start at [`AGENTS.md`](../AGENTS.md).
 - Open-ended “what next?” → **do not restart fix plan at Step 1**.
 - Scheduled agents / LaunchAgents for this Mac → **site-djbclark** `site_agents`, not ad-hoc plists.
 
-## Loose ends / next options
+## Next options (when resuming)
 
-### Blocked (upstream)
-
-1. **Step 33** — [claude-swap#170](https://github.com/realiti4/claude-swap/issues/170) → [aiuse#1](https://github.com/djbclark/aiuse/issues/1)
-
-### Deferred
-
-| Item                        | Status                                 |
-| --------------------------- | -------------------------------------- |
-| **A — Live smoke**          | Operator-owned                         |
-| **Step 35**                 | Parked                                 |
-| **E — Packaging**           | Done (**2.1.4** on PyPI + Homebrew)    |
-| **H — LaunchAgent**         | Done (site-djbclark)                   |
-| **G — History learning**    | **`auto`** + deeper `--full` UX        |
+1. **Wait / poll Step 33** — when #170 merges, implement official `lastGoodUsage` in `collectors/cswap.py` (cache hydrate → fallback). Design: [`cswap-reliability.md`](cswap-reliability.md).
+2. **Live smoke (A)** — eyeball `aiuse --full` History + collectors against real accounts.
+3. **Let it run** — hourly collect densifies history; no code needed.
+4. **New feature** — only if operator names one.
 
 ## Quick verification
 
@@ -65,7 +67,8 @@ Fresh agents: start at [`AGENTS.md`](../AGENTS.md).
 just -f ~/ops/site-djbclark/justfile site-agents-status
 aiuse --version   # 2.1.4
 ls ~/.cache/aiuse/snapshots | wc -l
-aiuse --full -q --no-tui | head -25
+aiuse --full -q --no-tui | head -30
+.venv/bin/python -m pytest -q
 ```
 
 ## Handoff rule

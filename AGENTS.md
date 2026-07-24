@@ -14,9 +14,11 @@ three gets you to the other two immediately.
 **Status (2026-07-24):** Package/CLI renamed to **`aiuse`**. Fix-plan Steps
 **1–32** and **34** are done. Product polish through doctor/brief/exit
 codes/completions/JSON contract is done. Config is **`~/.config/aiuse/`** only
-(legacy `~/.config/ai/` no longer read). There is **no mandatory numbered
-step**. Open-ended “what next?” → read [`docs/handoff.md`](docs/handoff.md),
-then offer choices — **do not restart at Step 1**.
+(legacy `~/.config/ai/` no longer read). Packaging **2.1.4** (PyPI + Homebrew),
+hourly LaunchAgent, history learning `auto`, and `--full` History UX are done.
+There is **no mandatory numbered step**. Open-ended “what next?” → read
+[`docs/handoff.md`](docs/handoff.md), then offer choices — **do not restart at
+Step 1**.
 
 1. **Session handoff / loose ends:** [`docs/handoff.md`](docs/handoff.md)
    (latest wrap-up, deferred items, verification commands).
@@ -25,8 +27,8 @@ then offer choices — **do not restart at Step 1**.
    merges, consume official `lastGoodUsage` in `collectors/cswap.py` (cache
    hydrate → fallback). Tracked: [djbclark/aiuse#1](https://github.com/djbclark/aiuse/issues/1).
    Design: [`docs/cswap-reliability.md`](docs/cswap-reliability.md).
-3. **Operator-driven only** — live smoke (A), richer history UX, or new
-   features. Packaging + hourly LaunchAgent + `learn_from_history: auto` are done.
+3. **Operator-driven only** — live smoke (A), new features, or leave the
+   hourly agent collecting. Do **not** restart completed packaging / History UX.
 4. **Parked (do not start unless asked):**
    - **Step 35** — local ccusage / stats-cache burn (not plan %). See Phase 7
      and [`docs/claude-local-usage.md`](docs/claude-local-usage.md).
