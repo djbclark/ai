@@ -54,7 +54,7 @@ pip install -e ".[dev]"
 More channels and **release / OIDC publish** docs:
 [`docs/packaging.md`](docs/packaging.md).
 
-**Scheduled runs (macOS LaunchAgent, 6h):** [`docs/scheduling.md`](docs/scheduling.md)
+**Scheduled runs (macOS LaunchAgent, hourly):** [`docs/scheduling.md`](docs/scheduling.md)
 (`./packaging/launchd/install.sh`). Snapshot history:
 [`docs/history-learning.md`](docs/history-learning.md).
 
@@ -289,7 +289,7 @@ Shared allotment: `analysis.provider_overrides.<provider>.shared_allotment: true
 - [`docs/cursor-quota.md`](docs/cursor-quota.md) — Cursor Included/Auto/API + on-demand vs CodexBar slots.
 - [`docs/pretty-display.md`](docs/pretty-display.md) — why pretty output uses Rich (not Textual / not Rich `Layout`) so the full report stays in scrollback.
 - [`docs/packaging.md`](docs/packaging.md) — pipx / PyPI / Homebrew; Trusted Publishing (OIDC) release flow.
-- [`docs/scheduling.md`](docs/scheduling.md) — LaunchAgent every 6h (`persist_snapshots`).
+- [`docs/scheduling.md`](docs/scheduling.md) — LaunchAgent hourly (`persist_snapshots`).
 - [`docs/history-learning.md`](docs/history-learning.md) — snapshot history vs `learn_from_history`.
 - [`docs/claude-local-usage.md`](docs/claude-local-usage.md) — Local Claude Code files / ccusage (token burn) vs subscription 5h/7d % from the OAuth usage API.
 - [`docs/tokscale-per-provider-investigation.md`](docs/tokscale-per-provider-investigation.md) — why tokscale cannot yet fan out per provider like CodexBar.

@@ -5,7 +5,7 @@
   Install: see docs/scheduling.md or packaging/launchd/install.sh
 
   AIUSE_BIN is replaced by install.sh with the absolute path to `aiuse`.
-  StartInterval 21600 = every 6 hours.
+  StartInterval 3600 = every hour.
 -->
 <plist version="1.0">
 <dict>
@@ -18,7 +18,7 @@
 		<string>--json</string>
 	</array>
 	<key>StartInterval</key>
-	<integer>21600</integer>
+	<integer>3600</integer>
 	<key>RunAtLoad</key>
 	<true/>
 	<key>StandardOutPath</key>

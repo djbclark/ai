@@ -26,7 +26,7 @@ Recommended sequence:
 
 1. Install the LaunchAgent ([`scheduling.md`](scheduling.md)) with
    `persist_snapshots: true`.
-2. Wait until `aiuse --full` shows several snapshots (a few days at 6h cadence).
+2. Wait until `aiuse --full` shows several snapshots (a day or two at hourly cadence).
 3. Set `learn_from_history: true`.
 
 ## Status line

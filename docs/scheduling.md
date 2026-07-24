@@ -7,7 +7,7 @@ you opt into `learn_from_history`.
 
 **Primary for this operator:** manage the agent from
 [`~/ops/site-djbclark`](https://github.com/djbclark/site-djbclark) role
-`site_agents` (label `com.djbclark.aiuse`, every 6 hours).
+`site_agents` (label `com.djbclark.aiuse`, every hour).
 
 ```bash
 cd ~/ops/site-djbclark
@@ -22,7 +22,7 @@ Requires `~/.local/bin/aiuse` (`pipx install aiuse`). The role enables
 **Generic template** (other machines / non-Ansible): [`packaging/launchd/`](../packaging/launchd/)
 and `./packaging/launchd/install.sh`.
 
-**Cadence:** every **6 hours** (`StartInterval` 21600) + `RunAtLoad`.  
+**Cadence:** every **hour** (`StartInterval` 3600) + `RunAtLoad`.  
 **Footnote:** cron one-liner at the bottom.
 
 Exit codes (for log / monitor tooling): see [`json-contract.md`](json-contract.md).
@@ -54,7 +54,7 @@ launchctl bootout "gui/$uid/com.djbclark.aiuse"
 ## Cron footnote
 
 ```cron
-0 */6 * * *  /path/to/aiuse -q --json >>"$HOME/.local/state/aiuse.cron.stdout.log" 2>>"$HOME/.local/state/aiuse.cron.stderr.log"
+0 * * * *  /path/to/aiuse -q --json >>"$HOME/.local/state/aiuse.cron.stdout.log" 2>>"$HOME/.local/state/aiuse.cron.stderr.log"
 ```
 
 Prefer LaunchAgent on macOS (sleep/wake and `RunAtLoad` behave better than cron).

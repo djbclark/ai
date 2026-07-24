@@ -19,12 +19,12 @@ Fresh agents: start at [`AGENTS.md`](../AGENTS.md).
 
 ## Done this stretch
 
-| Area                             | Notes                                                           |
-| -------------------------------- | --------------------------------------------------------------- |
-| Fix plan Steps **1–32** + **34** | Complete                                                        |
-| Packaging                        | PyPI + Homebrew + OIDC; current **2.1.2**                       |
-| **H — LaunchAgent**              | Live: `com.djbclark.aiuse` via site-djbclark `site_agents` (6h) |
-| **G — History (thin)**           | `persist_snapshots` on; learning still opt-in                   |
+| Area                             | Notes                                                               |
+| -------------------------------- | ------------------------------------------------------------------- |
+| Fix plan Steps **1–32** + **34** | Complete                                                            |
+| Packaging                        | PyPI + Homebrew + OIDC; current **2.1.2**                           |
+| **H — LaunchAgent**              | Live: `com.djbclark.aiuse` via site-djbclark `site_agents` (hourly) |
+| **G — History (thin)**           | `persist_snapshots` on; learning still opt-in                       |
 
 ## Packaging / scheduling
 
