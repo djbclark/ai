@@ -86,7 +86,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         },
         "copilot": {
             "name": "GitHub Copilot",
-            "notes": "Premium request quotas typically reset monthly.",
+            "notes": "Premium-request quota only (completions/chat omitted — not comparable burn windows).",
             "monthly_price": 10,
         },
         "grok": {

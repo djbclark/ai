@@ -11,6 +11,7 @@ from ai.models import (
     BillingKind,
     QuotaWindow,
     classify_window_minutes,
+    keep_copilot_report_window,
     parse_dt,
 )
 from ai.models import coerce_float as _f
@@ -43,10 +44,13 @@ _MAX_CONCURRENT_PROVIDER_QUERIES = 16
 _WEB_PREFERRED_PROVIDERS = frozenset({"opencodego"})
 
 _SLOT_LABELS: dict[str, tuple[str, str, str]] = {
+    # CodexBar maps Copilot primary→premium, secondary→chat (no tertiary /
+    # completions slot). Completions are intentionally not surfaced — see
+    # `_keep_copilot_window`.
     "copilot": (
-        "GitHub Copilot completions",
-        "GitHub Copilot chat messages",
         "GitHub Copilot premium requests",
+        "GitHub Copilot chat messages",
+        "GitHub Copilot quota 3",
     ),
     "grok": ("Grok usage limit", "Grok quota 2", "Grok quota 3"),
     "warp": ("Warp credits", "Warp quota 2", "Warp quota 3"),
@@ -260,6 +264,9 @@ def _from_row(row: dict[str, Any]) -> AccountUsage:
         # a prepaid balance blob also exists.
         if window and not any(window.same_measurement(extra) for extra in extra_windows):
             windows.append(window)
+
+    if provider == "copilot":
+        windows = [window for window in windows if keep_copilot_report_window(window.label)]
 
     # Provider-specific balance/usage blobs that are not subscription windows.
     for nested_key, label in (

@@ -151,6 +151,22 @@ def _select_and_cross_check(
         codexbar_live = [account for account in codexbar_rows if _has_live_data(account)]
         tokscale_live = [account for account in tokscale_rows if _has_live_data(account)]
 
+        # Copilot: prefer tokscale. CodexBar only exposes premium+chat slots and may
+        # substitute completions into the premium slot when premium_interactions is a
+        # 0/0 placeholder — tokscale keeps the three GitHub counters distinct.
+        if provider == "copilot":
+            if tokscale_live:
+                selected.extend(tokscale_live)
+            elif codexbar_live:
+                selected.extend(codexbar_live)
+            elif tokscale_rows:
+                selected.extend(tokscale_rows)
+            else:
+                selected.extend(codexbar_rows)
+            selected.extend(other_rows)
+            checks.append(_provider_cross_check(provider, codexbar_rows, tokscale_rows))
+            continue
+
         if codexbar_live:
             selected.extend(codexbar_live)
         elif tokscale_live:

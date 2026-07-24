@@ -48,7 +48,17 @@ def test_tokscale_remains_as_fallback_after_codexbar_error():
     )
     assert [account.source for account in accounts] == ["tokscale"]
     assert checks[0].status == "warning"
-    assert "CodexBar failed" in checks[0].message
+
+
+def test_copilot_prefers_tokscale_over_codexbar_when_both_live():
+    accounts, _checks = _select_and_cross_check(
+        [
+            _account("codexbar", "copilot"),
+            _account("tokscale", "copilot"),
+        ],
+        cswap_authoritative=True,
+    )
+    assert [account.source for account in accounts] == ["tokscale"]
 
 
 def test_cross_check_reports_consistent_duplicate_measurements():

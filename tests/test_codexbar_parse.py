@@ -16,7 +16,7 @@ def test_parse_copilot_style():
         "account": "example-user (Individual)",
         "usage": {
             "primary": {
-                "usedPercent": 0,
+                "usedPercent": 100,
                 "resetsAt": "2026-08-01T00:00:00Z",
                 "windowMinutes": 44640,
             },
@@ -32,11 +32,10 @@ def test_parse_copilot_style():
     acc = _from_row(row)
     assert acc.provider == "copilot"
     assert acc.billing_kind == BillingKind.SUBSCRIPTION_WINDOW
-    assert len(acc.windows) == 2
-    assert acc.windows[0].remaining_percent == 100
-    assert acc.windows[0].label == "GitHub Copilot completions"
-    assert acc.windows[1].label == "GitHub Copilot chat messages"
-    assert all("secondary" not in window.label.lower() for window in acc.windows)
+    # Completions/chat are dropped; CodexBar primary is premium requests.
+    assert len(acc.windows) == 1
+    assert acc.windows[0].remaining_percent == 0
+    assert acc.windows[0].label == "GitHub Copilot premium requests"
 
 
 def test_parse_error_row():

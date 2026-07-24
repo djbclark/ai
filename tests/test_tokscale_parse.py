@@ -1,7 +1,7 @@
 """Tests for tokscale window inference cleanups (Step 27)."""
 
-from ai.collectors.tokscale import _infer_window_minutes
-from ai.models import WINDOW_NOMINAL_MINUTES
+from ai.collectors.tokscale import _from_row, _infer_window_minutes
+from ai.models import WINDOW_NOMINAL_MINUTES, keep_copilot_report_window
 
 
 def test_premium_label_monthly_only_for_copilot():
@@ -20,3 +20,25 @@ def test_5h_uses_nominal_300_not_bucket_max():
 
 def test_15h_label_does_not_match_5h_bucket():
     assert _infer_window_minutes("claude", "15h window", "15h window") is None
+
+
+def test_keep_copilot_report_window_premium_only():
+    assert keep_copilot_report_window("GitHub Copilot premium requests")
+    assert not keep_copilot_report_window("GitHub Copilot completions")
+    assert not keep_copilot_report_window("GitHub Copilot chat messages")
+
+
+def test_tokscale_copilot_drops_completions_and_chat():
+    acc = _from_row(
+        {
+            "provider": "Copilot",
+            "plan": "Individual",
+            "metrics": [
+                {"label": "Chat", "used_percent": 36, "remaining_percent": 64, "resets_at": "2026-08-01"},
+                {"label": "Completions", "used_percent": 0, "remaining_percent": 100, "resets_at": "2026-08-01"},
+                {"label": "Premium", "used_percent": 100, "remaining_percent": 0, "resets_at": "2026-08-01"},
+            ],
+        }
+    )
+    assert [w.label for w in acc.windows] == ["GitHub Copilot premium requests"]
+    assert acc.windows[0].remaining_percent == 0

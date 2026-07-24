@@ -73,6 +73,15 @@ def provider_config_key(provider: str) -> str:
     return PROVIDER_CONFIG_ALIASES.get(key, key)
 
 
+def keep_copilot_report_window(label: str) -> bool:
+    """Whether a Copilot quota window belongs in the use-or-lose report.
+
+    Completions (inline autocomplete) and chat-message caps are not comparable to
+    Claude/Codex/OpenCode subscription burn windows. Only premium requests are.
+    """
+    return "premium" in (label or "").lower()
+
+
 def parse_dt(value: str | None) -> datetime | None:
     if not value:
         return None

@@ -11,6 +11,7 @@ from ai.models import (
     QuotaWindow,
     WINDOW_NOMINAL_MINUTES,
     coerce_float,
+    keep_copilot_report_window,
     parse_dt,
 )
 
@@ -44,6 +45,8 @@ def _from_row(row: dict[str, Any]) -> AccountUsage:
         if remaining is None and used is not None:
             remaining = max(0.0, 100.0 - used)
         label = _metric_label(provider_key, str(m.get("label") or "unnamed quota"))
+        if provider_key == "copilot" and not keep_copilot_report_window(label):
+            continue
         windows.append(
             QuotaWindow(
                 label=label,
