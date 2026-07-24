@@ -1,0 +1,110 @@
+/* Inline Textual report — fr sizing + narrow class (set from on_resize) */
+
+Screen {
+    layout: vertical;
+    overflow-y: auto;
+}
+
+Screen:inline {
+    border: none;
+    height: auto;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+#header {
+    dock: top;
+    height: auto;
+    max-height: 4;
+    padding: 0 1;
+    background: $boost;
+}
+
+#header .section-title {
+    text-style: bold;
+    color: $accent;
+    text-overflow: ellipsis;
+    height: 1;
+}
+
+#header .section-meta {
+    color: $text-muted;
+    text-overflow: ellipsis;
+    height: 1;
+}
+
+#body {
+    layout: grid;
+    grid-size: 2;
+    grid-columns: 1fr 2fr;
+    grid-gutter: 1;
+    height: 1fr;
+    min-height: 12;
+    padding: 0 1;
+}
+
+#providers {
+    width: 100%;
+    min-width: 28;
+    height: 1fr;
+    overflow-y: auto;
+}
+
+#plan {
+    width: 100%;
+    min-width: 32;
+    height: 1fr;
+    overflow-y: auto;
+}
+
+#meta-row {
+    layout: horizontal;
+    height: auto;
+    max-height: 10;
+    padding: 0 1 1 1;
+}
+
+#meta-row SectionPanel {
+    width: 1fr;
+    height: auto;
+    max-height: 8;
+    min-height: 3;
+}
+
+#errors {
+    height: auto;
+    max-height: 6;
+    padding: 0 1;
+}
+
+#footer-hint {
+    dock: bottom;
+    height: 1;
+    color: $text-muted;
+    text-align: center;
+    text-overflow: ellipsis;
+}
+
+/* Termux / narrow: toggled by UsageApp.on_resize when width < 80 */
+Screen.-narrow #body {
+    layout: vertical;
+    grid-size: 1;
+    grid-columns: 1fr;
+}
+
+Screen.-narrow #plan {
+    dock: top;
+    height: auto;
+    max-height: 40vh;
+    min-width: 0;
+    min-height: 6;
+}
+
+Screen.-narrow #providers {
+    min-width: 0;
+    height: 1fr;
+}
+
+Screen.-narrow #meta-row {
+    display: none;
+}

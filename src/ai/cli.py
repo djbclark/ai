@@ -56,6 +56,7 @@ config & setup:
                            (default {DEFAULT_SUBPROCESS_TIMEOUT:g}s; also [timeouts] in config.toml)
   ai -q / --quiet          no progress on stderr (JSON stdout stays clean either way)
   ai --brief               errors + action plan only (pretty)
+  ai --no-tui              classic plain-text report (skip inline Textual)
   ai --print-completion bash|zsh   shell completion script to stdout
 
 exit codes (collect runs):
@@ -137,7 +138,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--no-color",
         action="store_true",
-        help="Disable ANSI colors in pretty output",
+        help="Disable ANSI colors in pretty output (string fallback; ignored by Textual theme)",
+    )
+    p.add_argument(
+        "--no-tui",
+        action="store_true",
+        help="Force classic plain-text pretty report instead of inline Textual",
     )
     p.add_argument(
         "-q",
@@ -301,6 +307,26 @@ def main(argv: list[str] | None = None) -> int:
         if not alerts and not cross_check_warnings:
             print("No use-or-lose alerts or cross-check notes.")
         return exit_code
+
+    from ai.tui import run_inline_report, should_use_tui
+
+    if should_use_tui(
+        as_json=False,
+        alerts_only=False,
+        no_tui=bool(args.no_tui),
+    ):
+        try:
+            run_inline_report(
+                snapshot,
+                alerts,
+                config=config,
+                brief=bool(args.brief),
+                traditional_summary=args.traditional_summary,
+            )
+            return exit_code
+        except Exception as exc:  # noqa: BLE001 — fall back to classic text
+            if not args.quiet:
+                print(f"Warning: Textual display failed ({exc}); using plain text.", file=sys.stderr)
 
     print(
         render_report(
@@ -512,6 +538,7 @@ def diagnose(
     lines.append("  ai --generate-config   # create ~/.config/ai defaults (no overwrite)")
     lines.append("  ai --show-config-path  # print config file paths")
     lines.append("  ai --brief             # errors + trailing action plan")
+    lines.append("  ai --no-tui            # classic plain-text pretty report")
     lines.append("  ai -t 45               # force all tool timeouts for one run")
     lines.append("  ai --help              # full flag list + setup epilog")
     lines.append("  docs/json-contract.md  # stable JSON fields for scripts")

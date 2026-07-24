@@ -60,7 +60,8 @@ ai --generate-config
 ai doctor                 # PATH tools + config presence + timeouts
 
 # Morning / before a long coding block
-ai                        # detail first; action plan last (fits ~23 lines)
+ai                        # inline Textual report on a TTY (q to quit)
+ai --no-tui               # classic plain-text report (also used when piping)
 ai --brief                # errors + action plan only
 ai -q                     # same report, no “Collecting…” on stderr
 
@@ -113,9 +114,10 @@ ai --doctor
 
 | Flag                                             | Effect                                                             |
 | ------------------------------------------------ | ------------------------------------------------------------------ |
-| _(none)_ / `--format pretty`                     | Colorized report; action plan last (≤~23×80 when possible)         |
+| _(none)_ / `--format pretty`                     | Inline Textual report on a TTY (`q` to quit); plain text when piped |
 | `--json` / `--format json`                       | Full snapshot + alerts as JSON                                     |
-| `--no-color`                                     | Disable ANSI colors in pretty mode                                 |
+| `--no-tui`                                       | Force classic plain-text pretty report                             |
+| `--no-color`                                     | Disable ANSI colors in plain-text pretty mode                      |
 | `-q` / `--quiet`                                 | Suppress progress messages on stderr                               |
 | `--brief`                                        | Pretty: collector errors + action plan only                        |
 | `--alerts-only`                                  | Recommendations only (respects pretty vs json)                     |

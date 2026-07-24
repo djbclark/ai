@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-24  
 **Branch:** `main`  
-**Tests:** `.venv/bin/python -m pytest -q` — **177** passing
+**Tests:** `.venv/bin/python -m pytest -q` — **190** passing
 
 Fresh agents: start at [`AGENTS.md`](../AGENTS.md). This file is the short
 “where we left off” note so the next session does not re-discover status.
@@ -20,6 +20,7 @@ Fresh agents: start at [`AGENTS.md`](../AGENTS.md). This file is the short
 | Second polish batch | Doctor version probe + config validation, `--brief`, completions, JSON contract, concurrency audit |
 | Action plan last | Report ends on action plan (≤~23×80); if detailed is taller, detailed + **at a glance** brief trailer |
 | **OpenCode Go quota** | Prefer CodexBar `--source web` for `opencodego` (local SQLite/$caps heuristic lied vs TUI “limit reached”); `opencode` shared_allotment on; docs — [`opencode-go-quota.md`](opencode-go-quota.md) |
+| **Inline Textual** | Pretty `ai` on a TTY uses inline Textual (`q` to quit); `--no-tui` / pipes keep classic text |
 
 Recent commits (newest first): see `git log -5 --oneline`
 
@@ -68,6 +69,7 @@ Medium: history-backed pace note, consume #170 when merged.
 | [`src/ai/cli.py`](../src/ai/cli.py) | doctor, exit codes, quiet, brief, completions |
 | [`src/ai/collectors/cswap.py`](../src/ai/collectors/cswap.py) | Claude collect + hydrate |
 | [`src/ai/collectors/codexbar.py`](../src/ai/collectors/codexbar.py) | CodexBar fan-out; OpenCode Go prefers `--source web` |
+| [`src/ai/tui/`](../src/ai/tui/) | Inline Textual pretty report |
 | [`completions/`](../completions/) | bash/zsh |
 
 ## Quick verification for next agent

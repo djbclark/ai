@@ -17,6 +17,7 @@ _ai() {
     '--format[output format]:format:(pretty json)'
     '--json[JSON output]'
     '--no-color[disable ANSI colors]'
+    '--no-tui[force classic plain-text report]'
     '(-q --quiet)'{-q,--quiet}'[suppress stderr progress]'
     '--alerts-only[recommendations only]'
     '--brief[action plan + errors only]'
