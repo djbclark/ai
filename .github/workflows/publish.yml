@@ -1,10 +1,9 @@
-# Publish aiuse to PyPI when a GitHub Release is published.
+# Publish aiuse to PyPI via Trusted Publishing (OIDC).
 #
-# One-time setup on https://pypi.org/manage/account/publishing/ :
-#   Owner: djbclark
-#   Project name: aiuse
-#   Workflow: publish.yml
-#   Environment name: pypi  (create matching GitHub Environment)
+# Publisher is configured on https://pypi.org/manage/project/aiuse/settings/publishing/
+#   Owner: djbclark | Repository: aiuse | Workflow: publish.yml | Environment: pypi
+# GitHub Environment "pypi" must exist on this repo.
+# Docs: docs/packaging.md — verified with release v2.1.1.
 name: publish
 
 "on":

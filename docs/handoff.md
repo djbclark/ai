@@ -34,7 +34,11 @@ Fresh agents: start at [`AGENTS.md`](../AGENTS.md).
 | PyPI                      | Live (`pipx install aiuse`)                              |
 | Trusted Publishing (OIDC) | Done — publisher on pypi.org; `publish.yml` + env `pypi` |
 
-Details: [`packaging.md`](packaging.md). Token path (`secretspec` / `.env`) remains for optional local `uv publish`.
+Details: [`packaging.md`](packaging.md) (OIDC fields, release checklist, brew
+sha256). Optional local token: `secretspec` / `.env` (`PYPI_TOKEN`, not required).
+
+**Proof:** [publish run `v2.1.1`](https://github.com/djbclark/aiuse/actions/runs/30099193664)
+→ https://pypi.org/project/aiuse/2.1.1/
 
 **Note:** HTTPS `git push` from this environment lacks `workflow` scope — push
 workflow file changes via SSH (`git@github.com:djbclark/aiuse.git`).

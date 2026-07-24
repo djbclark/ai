@@ -3,116 +3,121 @@
 Distribution name / CLI: **`aiuse`**. Compatibility console script **`ai`**
 calls the same entrypoint (`aiuse.ai_stub:main`).
 
+External tools (`cswap`, `codexbar`, `tokscale`) stay separate PATH installs —
+this package only ships the aggregator CLI.
+
 ## Status
 
 | Channel                              | Status                                                                             |
 | ------------------------------------ | ---------------------------------------------------------------------------------- |
 | Editable / venv (`pip install -e .`) | Supported (dev)                                                                    |
-| **pipx** from GitHub                 | Ready                                                                              |
-| **pipx** from PyPI                   | Live: `pipx install aiuse`                                                         |
-| Trusted Publishing (OIDC)            | Configured — Release / `workflow_dispatch` via `publish.yml`                       |
+| **pipx** from PyPI                   | Live: `pipx install aiuse` → https://pypi.org/project/aiuse/                       |
+| **pipx** from GitHub                 | `pipx install 'git+https://github.com/djbclark/aiuse.git'`                         |
+| **PyPI Trusted Publishing (OIDC)**   | **Live and verified** — see below                                                  |
 | **Homebrew** personal tap            | Live: `brew tap djbclark/aiuse && brew trust djbclark/aiuse && brew install aiuse` |
 | homebrew-core                        | Not submitted                                                                      |
 
-External tools (`cswap`, `codexbar`, `tokscale`) stay separate PATH installs —
-this package only ships the aggregator CLI.
-
 ## Version note
 
-Git tag **`v2.0.0`** is historical (pre-rename `src/ai/`). First renamed
-release was **`2.1.0`**; current is **`2.1.1`** (OIDC publish verify).
+Git tag **`v2.0.0`** is historical (pre-rename `src/ai/`). First renamed PyPI
+release was **`2.1.0`** (API token). **`2.1.1`** was the first release uploaded
+by GitHub Actions via Trusted Publishing.
 
-## pipx
-
-From PyPI (preferred once published):
+## Install (end users)
 
 ```bash
+# preferred
 pipx install aiuse
-aiuse doctor
-ai --version   # stub → same app
+
+# Homebrew
+brew tap djbclark/aiuse
+brew trust djbclark/aiuse
+brew install aiuse
 ```
 
-From GitHub tip (works today):
+Upgrade: `pipx upgrade aiuse` or `brew upgrade aiuse`.
+
+## PyPI Trusted Publishing (OIDC) — how releases publish
+
+**Preferred path for every release.** No PyPI token in GitHub Actions secrets.
+
+| Piece              | Value                                                               |
+| ------------------ | ------------------------------------------------------------------- |
+| Workflow           | [`.github/workflows/publish.yml`](../.github/workflows/publish.yml) |
+| Trigger            | GitHub Release `published`, or `workflow_dispatch`                  |
+| GitHub Environment | `pypi` (repo Settings → Environments)                               |
+| PyPI project       | [`aiuse`](https://pypi.org/project/aiuse/)                          |
+| Publisher settings | https://pypi.org/manage/project/aiuse/settings/publishing/          |
+| Owner              | `djbclark`                                                          |
+| Repository         | `aiuse`                                                             |
+| Workflow name      | `publish.yml`                                                       |
+| Environment name   | `pypi`                                                              |
+
+**Verified:** [Actions run for `v2.1.1`](https://github.com/djbclark/aiuse/actions/runs/30099193664)
+uploaded https://pypi.org/project/aiuse/2.1.1/ with OIDC (no token).
+
+If the publisher is ever removed, re-add it on the PyPI publishing settings page
+with the table above (must match exactly). Keep the PyPI project name **`aiuse`**
+(not `ai` — taken by Vercel’s AI SDK).
+
+### Maintainer release flow (OIDC)
+
+1. Bump `version` in [`pyproject.toml`](../pyproject.toml) and `__version__` in
+   [`src/aiuse/__init__.py`](../src/aiuse/__init__.py); `uv lock`.
+2. `.venv/bin/python -m pytest -q` — green.
+3. Commit, push `main` (use SSH if HTTPS lacks `workflow` scope for
+   `.github/workflows/*` changes).
+4. `git tag -a vX.Y.Z -m "…"` && `git push origin vX.Y.Z` (SSH ok).
+5. Build and attach artifacts (optional but nice):
+
+   ```bash
+   uv run --with build python -m build
+   gh release create vX.Y.Z dist/* --title "aiuse X.Y.Z" --notes "…"
+   ```
+
+6. The **publish** workflow runs on that Release and uploads to PyPI via OIDC.
+   Confirm: `gh run list --workflow=publish.yml -L 1` and
+   https://pypi.org/project/aiuse/.
+7. Refresh Homebrew (below) and push the tap.
+
+Do **not** re-run an old publish job for a version already on PyPI — uploads
+will fail with “file already exists” even when OIDC is fine.
+
+## Manual upload via secretspec (optional fallback)
+
+Only for local/emergency publishes. Declarations:
+[`secretspec.toml`](../secretspec.toml). Value in gitignored `.env` (dotenv).
 
 ```bash
-pipx install 'git+https://github.com/djbclark/aiuse.git'
-```
-
-Upgrade:
-
-```bash
-pipx upgrade aiuse
-# or force reinstall from git:
-pipx install --force 'git+https://github.com/djbclark/aiuse.git'
-```
-
-## PyPI
-
-Build and check locally:
-
-```bash
-uv run --with build --with twine python -m build
-uv run --with twine twine check dist/*
-```
-
-**Automated publish:** GitHub Release `published` runs
-[`.github/workflows/publish.yml`](../.github/workflows/publish.yml) with
-Trusted Publishing (OIDC). Environment **`pypi`** already exists on the repo.
-
-### Trusted Publishing (OIDC) — configured
-
-PyPI trusted publisher is set for owner `djbclark`, repo `aiuse`, workflow
-`publish.yml`, environment `pypi`. Publishing a GitHub Release (or running
-`gh workflow run publish.yml`) uploads with OIDC — no token in Actions.
-
-Keep the PyPI project name **`aiuse`** (not `ai` — taken by Vercel’s AI SDK).
-
-### Manual upload via secretspec (token)
-
-Declarations: [`secretspec.toml`](../secretspec.toml). Value in gitignored `.env`
-(dotenv provider).
-
-```bash
-secretspec set PYPI_TOKEN          # one-time; prompts if omitted
+secretspec set PYPI_TOKEN          # prompts if omitted
 secretspec check -n --explain
 uv run --with build python -m build
 secretspec run --reason "publish aiuse to PyPI" -- \
   bash -lc 'uv publish --token "$PYPI_TOKEN" dist/*'
 ```
 
-OIDC is preferred for CI; the token path is for optional local `uv publish`.
+OIDC is the normal path; keep or revoke the API token as you prefer.
 
 ## Homebrew
 
-Canonical formula copy:
+Canonical formula in this repo:
 [`packaging/homebrew/aiuse.rb`](../packaging/homebrew/aiuse.rb).
 
-Tap repo: https://github.com/djbclark/homebrew-aiuse
+Tap: https://github.com/djbclark/homebrew-aiuse → `brew tap djbclark/aiuse`.
 
 ```bash
 brew tap djbclark/aiuse
-brew trust djbclark/aiuse   # Homebrew requires trusting third-party taps
+brew trust djbclark/aiuse   # required for third-party taps
 brew install aiuse
 ```
 
-Verified: Cellar installs `aiuse` / `ai` (refresh formula after each tag).
-
-After cutting a new release, refresh formula `url` / `version` / `sha256` here
-and sync `Formula/aiuse.rb` in the tap:
+After each tagged release, update `url` / `sha256` in the in-repo formula and
+sync `Formula/aiuse.rb` in the tap:
 
 ```bash
 curl -sL "https://github.com/djbclark/aiuse/archive/refs/tags/vX.Y.Z.tar.gz" \
   | shasum -a 256
 ```
-
-## Release checklist (maintainers)
-
-1. Bump `version` in `pyproject.toml` and `__version__` in `src/aiuse/__init__.py`.
-2. `.venv/bin/python -m pytest -q` — green.
-3. `git tag -a vX.Y.Z -m "…"` && push tag (SSH if HTTPS lacks `workflow` scope).
-4. `python -m build` && `gh release create vX.Y.Z dist/* …`
-5. Publish workflow uploads to PyPI (after trusted publisher is configured).
-6. Refresh Homebrew formula + tap `sha256`.
 
 ## Config paths
 

@@ -51,7 +51,8 @@ source .venv/bin/activate
 pip install -e ".[dev]"
 ```
 
-More channels: [`docs/packaging.md`](docs/packaging.md).
+More channels and **release / OIDC publish** docs:
+[`docs/packaging.md`](docs/packaging.md).
 
 Optional config (standard location: **`~/.config/aiuse/`**, or `$XDG_CONFIG_HOME/aiuse/`):
 
@@ -283,7 +284,7 @@ Shared allotment: `analysis.provider_overrides.<provider>.shared_allotment: true
 - [`docs/opencode-go-quota.md`](docs/opencode-go-quota.md) — OpenCode Go: why CodexBar `auto`/local can show remaining % when the TUI says limit reached, and how `aiuse` prefers web.
 - [`docs/cursor-quota.md`](docs/cursor-quota.md) — Cursor Included/Auto/API + on-demand vs CodexBar slots.
 - [`docs/pretty-display.md`](docs/pretty-display.md) — why pretty output uses Rich (not Textual / not Rich `Layout`) so the full report stays in scrollback.
-- [`docs/packaging.md`](docs/packaging.md) — pipx / PyPI / Homebrew notes.
+- [`docs/packaging.md`](docs/packaging.md) — pipx / PyPI / Homebrew; Trusted Publishing (OIDC) release flow.
 - [`docs/claude-local-usage.md`](docs/claude-local-usage.md) — Local Claude Code files / ccusage (token burn) vs subscription 5h/7d % from the OAuth usage API.
 - [`docs/tokscale-per-provider-investigation.md`](docs/tokscale-per-provider-investigation.md) — why tokscale cannot yet fan out per provider like CodexBar.
 - [`docs/json-contract.md`](docs/json-contract.md) — stable JSON fields and exit codes for scripts.
