@@ -285,23 +285,8 @@ def load_config(path: str | Path | None = None) -> dict[str, Any]:
 
 
 def default_config_dir() -> Path:
-    """Preferred user config directory: ``$XDG_CONFIG_HOME/aiuse`` or ``~/.config/aiuse``.
-
-    Falls back to legacy ``…/ai`` when that directory already has config files and
-    ``aiuse`` does not yet, so existing installs keep working after the rename.
-    """
-    xdg = _xdg_config_home()
-    preferred = xdg / "aiuse"
-    legacy = xdg / "ai"
-    if _dir_has_config(preferred):
-        return preferred
-    if _dir_has_config(legacy):
-        return legacy
-    return preferred
-
-
-def _dir_has_config(path: Path) -> bool:
-    return (path / "services.yaml").is_file() or (path / "config.toml").is_file()
+    """User config directory: ``$XDG_CONFIG_HOME/aiuse`` or ``~/.config/aiuse``."""
+    return _xdg_config_home() / "aiuse"
 
 
 def default_config_path() -> Path:
@@ -328,7 +313,6 @@ def _xdg_config_home() -> Path:
 def ensure_config_dir() -> Path:
     """Create ``~/.config`` (or XDG home) and ``…/aiuse`` if missing; return it.
 
-    Always creates the preferred ``aiuse`` directory (not the legacy ``ai`` path).
     Raises ``OSError`` if a component exists but is not a directory.
     """
     xdg = _xdg_config_home()

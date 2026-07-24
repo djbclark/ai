@@ -11,11 +11,12 @@ three gets you to the other two immediately.
 
 ## Active priorities (what to do next)
 
-**Status (2026-07-23):** fix-plan Steps **1–32** and **34** are done. Product
-polish through doctor/brief/exit codes/completions/JSON contract is done.
-There is **no mandatory numbered step**. Open-ended “what next?” → read
-[`docs/handoff.md`](docs/handoff.md), then offer choices — **do not restart at
-Step 1**.
+**Status (2026-07-24):** Package/CLI renamed to **`aiuse`**. Fix-plan Steps
+**1–32** and **34** are done. Product polish through doctor/brief/exit
+codes/completions/JSON contract is done. Config is **`~/.config/aiuse/`** only
+(legacy `~/.config/ai/` no longer read). There is **no mandatory numbered
+step**. Open-ended “what next?” → read [`docs/handoff.md`](docs/handoff.md),
+then offer choices — **do not restart at Step 1**.
 
 1. **Session handoff / loose ends:** [`docs/handoff.md`](docs/handoff.md)
    (latest wrap-up, deferred items, verification commands).
@@ -24,8 +25,8 @@ Step 1**.
    merges, consume official `lastGoodUsage` in `collectors/cswap.py` (cache
    hydrate → fallback). Tracked: [djbclark/aiuse#1](https://github.com/djbclark/aiuse/issues/1).
    Design: [`docs/cswap-reliability.md`](docs/cswap-reliability.md).
-3. **Operator-driven only** — live smoke (A, operator-owned), packaging, cron
-   recipe, history insights, or new features. Nothing else is queued.
+3. **Operator-driven only** — live smoke (A, operator-owned), packaging
+   finish (PyPI/Homebrew), cron recipe, history insights, or new features.
 4. **Parked (do not start unless asked):**
    - **Step 35** — local ccusage / stats-cache burn (not plan %). See Phase 7
      and [`docs/claude-local-usage.md`](docs/claude-local-usage.md).
@@ -53,8 +54,9 @@ not any other tool-specific cache/history/rules directory. Concretely:
 
 ### Claude memory symlink (this project)
 
-`~/.claude/projects/-Users-djbclark-src-ai/memory` is a **symlink** to
-[`docs/memory/`](docs/memory/) in this repo. Keep that directory thin
+`~/.claude/projects/-Users-djbclark-src-aiuse/memory` is a **symlink** to
+[`docs/memory/`](docs/memory/) in this repo (older `-src-ai` path may still
+exist as a leftover). Keep that directory thin
 ([`MEMORY.md`](docs/memory/MEMORY.md) index only unless a short pointer is
 truly needed). Writing a Claude memory for this project *is* writing into this
 git tree — commit it if it should persist.
@@ -130,7 +132,7 @@ full description, install steps, CLI flags, and config.
 ## Conventions
 
 - Python 3.14, `src/` layout, dependencies via `pyproject.toml` + `.venv`.
-- Run tests with `.venv/bin/python -m pytest -q` (currently 80+ passing).
+- Run tests with `.venv/bin/python -m pytest -q` (currently 200+ passing).
 - This repo shells out to three external tools that must already be
   installed/authenticated (`cswap`, `codexbar`, `tokscale`) — do not attempt
   to install, configure, or authenticate them as part of a code change.

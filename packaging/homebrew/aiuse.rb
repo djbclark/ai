@@ -18,7 +18,7 @@ class Aiuse < Formula
   def caveats
     <<~EOS
       External tools must already be on PATH: cswap, codexbar, tokscale.
-      Config lives under ~/.config/aiuse/ (legacy ~/.config/ai/ still read).
+      Config lives under ~/.config/aiuse/.
     EOS
   end
 

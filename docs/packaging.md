@@ -49,15 +49,14 @@ Point a personal tap at [`packaging/homebrew/aiuse.rb`](../packaging/homebrew/ai
 or copy into `homebrew-core` later. The formula installs via `pip` inside the
 Cellar using the GitHub archive URL.
 
-## Config paths after rename
+## Config paths
 
-- Preferred: `~/.config/aiuse/`
-- Legacy still read: `~/.config/ai/` if it already has files and `aiuse` does not
+- Config: `~/.config/aiuse/` (`services.yaml`, `config.toml`)
 - Snapshots: `~/.cache/aiuse/snapshots`
 
-Migrate when convenient:
+The old `~/.config/ai/` path is no longer read. If you still have files there:
 
 ```bash
 mkdir -p ~/.config/aiuse
-cp -n ~/.config/ai/* ~/.config/aiuse/ 2>/dev/null || true
+cp -n ~/.config/ai/* ~/.config/aiuse/
 ```

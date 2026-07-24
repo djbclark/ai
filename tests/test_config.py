@@ -37,11 +37,7 @@ def test_relative_xdg_config_home_is_ignored(monkeypatch):
     monkeypatch.setenv("XDG_CONFIG_HOME", "relative/path")
 
     path = default_config_path()
-    # Prefer aiuse; legacy ~/.config/ai is still accepted when present.
-    assert path in {
-        Path.home() / ".config" / "aiuse" / "services.yaml",
-        Path.home() / ".config" / "ai" / "services.yaml",
-    }
+    assert path == Path.home() / ".config" / "aiuse" / "services.yaml"
 
 
 def test_load_config_explicit_missing_path_exits():

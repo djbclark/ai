@@ -1,5 +1,5 @@
-# Optional tool settings for the `ai` CLI.
-# Copy to: $XDG_CONFIG_HOME/ai/config.toml  (or ~/.config/ai/config.toml)
+# Optional tool settings for the `aiuse` CLI.
+# Copy to: $XDG_CONFIG_HOME/aiuse/config.toml  (or ~/.config/aiuse/config.toml)
 #
 # This file is separate from services.yaml (plans / analysis thresholds).
 # Both are optional; built-in defaults apply when a file is missing.

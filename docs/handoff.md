@@ -2,28 +2,34 @@
 
 **Date:** 2026-07-24  
 **Branch:** `main`  
-**Tests:** `.venv/bin/python -m pytest -q` — **201** passing
+**Local tree:** `~/src/aiuse` (reopen Cursor here — old `~/src/ai` is gone)  
+**Remote:** https://github.com/djbclark/aiuse  
+**Tests:** `.venv/bin/python -m pytest -q` — expect **200+** passing
 
 Fresh agents: start at [`AGENTS.md`](../AGENTS.md). This file is the short
 “where we left off” note so the next session does not re-discover status.
 
-## Done (do not re-open unless asked)
+## Reopen checklist (operator)
+
+1. Open Cursor workspace at **`~/src/aiuse`** (not `~/src/ai`).
+2. Confirm config: `aiuse doctor` should show `~/.config/aiuse/`.
+3. Optional: delete backup dirs when satisfied —
+   `~/.config/ai.bak-migrated-to-aiuse`, `~/.cache/ai.bak-migrated-to-aiuse`.
+
+## Done this stretch (do not re-open unless asked)
 
 | Area | Notes |
 | --- | --- |
-| Fix plan Steps **1–32** | Review-derived correctness pass complete |
-| Step **34** | cswap `usage.spend` → `UsageCredits` + pretty section |
-| cswap reliability (interim) | Cache hydrate, countdown recompute, CodexBar/tokscale fallback — [`cswap-reliability.md`](cswap-reliability.md) |
-| Tracker | [ai#1](https://github.com/djbclark/aiuse/issues/1) documents consumer contract for upstream #170 |
-| CLI discoverability | `aiuse doctor`, `--help` epilog, `--generate-config` under `~/.config/aiuse/` |
-| Product polish batch | Exit codes 0/1/2, `-q`, soft cross-checks, daily workflow README |
-| Second polish batch | Doctor version probe + config validation, `--brief`, completions, JSON contract, concurrency audit |
-| Action plan last | Report ends on action plan (≤~23×80); if detailed is taller, detailed + **at a glance** brief trailer |
-| **OpenCode Go quota** | Prefer CodexBar `--source web` for `opencodego` (local SQLite/$caps heuristic lied vs TUI “limit reached”); `opencode` shared_allotment on; docs — [`opencode-go-quota.md`](opencode-go-quota.md) |
-| **Cursor quota** | Label Included/Auto/API; shared_allotment on Included; on-demand via `providerCost` — [`cursor-quota.md`](cursor-quota.md) |
-| **Styled pretty output** | Priority ladder on stdout (empty→slow→mid→use); meta on stderr; `--full` long report — [`pretty-display.md`](pretty-display.md) |
+| Fix plan Steps **1–32** + **34** | Review-derived correctness pass complete |
+| Package rename | Python package + CLI **`aiuse`**; stub **`ai`** → same entrypoint |
+| GitHub + local path | Repo `djbclark/aiuse`; working tree `~/src/aiuse` |
+| Config dir | **`~/.config/aiuse/` only** — local files migrated; legacy `~/.config/ai/` no longer read |
+| Cache | Snapshots under `~/.cache/aiuse/snapshots` |
+| Pretty / priority ladder | Rich stdout ladder; meta on stderr; `--full` long report — [`pretty-display.md`](pretty-display.md) |
+| Cursor / OpenCode Go quota | Docs: [`cursor-quota.md`](cursor-quota.md), [`opencode-go-quota.md`](opencode-go-quota.md) |
+| Packaging started | [`packaging.md`](packaging.md), draft Homebrew formula; PyPI name `ai` taken → ship as `aiuse` |
 
-Recent commits (newest first): see `git log -5 --oneline`
+Recent commits: `git log -8 --oneline`
 
 ## Operator preferences (standing)
 
@@ -45,15 +51,15 @@ Recent commits (newest first): see `git log -5 --oneline`
 
 | Item | Status |
 | --- | --- |
-| **A — Live smoke checklist** | Operator said they will do later (manual multi-account Claude / credits / exit codes) |
+| **A — Live smoke checklist** | Operator said they will do later |
 | **Step 35 — local burn (ccusage)** | Do not start unless asked |
-| **E — Packaging** (Homebrew/pipx) | In progress — name `aiuse`; see [`packaging.md`](packaging.md) |
+| **E — Packaging finish** | Draft done; still need PyPI publish / Homebrew tap + stable archive sha256 if desired |
 | **G — History burn insights** | Not started |
 | **H — Cron/LaunchAgent recipe** | Not started (exit codes + JSON contract already enable it) |
 
 ### Suggested if operator wants more product work
 
-Small: live smoke (A), cron recipe (H), packaging (C/E).  
+Small: live smoke (A), cron recipe (H), packaging finish (E).  
 Medium: history-backed pace note, consume #170 when merged.
 
 ## Key paths
@@ -62,28 +68,20 @@ Medium: history-backed pace note, consume #170 when merged.
 | --- | --- |
 | [`AGENTS.md`](../AGENTS.md) | Priorities, conventions, persistence |
 | [`README.md`](../README.md) | Install, flags, daily workflow, exit codes |
+| [`docs/packaging.md`](packaging.md) | pipx / PyPI / Homebrew |
+| [`docs/pretty-display.md`](pretty-display.md) | Rich priority ladder |
 | [`docs/json-contract.md`](json-contract.md) | Stable JSON for scripts |
-| [`docs/collector-concurrency.md`](collector-concurrency.md) | Parallel collect + 45s timeouts |
-| [`docs/cswap-reliability.md`](cswap-reliability.md) | Claude multi-account / stale JSON |
-| [`docs/opencode-go-quota.md`](opencode-go-quota.md) | OpenCode Go web vs local CodexBar source |
-| [`docs/cursor-quota.md`](cursor-quota.md) | Cursor Included/Auto/API + on-demand |
-| [`docs/fix-implementation-plan.md`](fix-implementation-plan.md) | Historical steps + Phase 7 optional |
-| [`src/aiuse/cli.py`](../src/aiuse/cli.py) | doctor, exit codes, quiet, brief, completions |
-| [`src/aiuse/collectors/cswap.py`](../src/aiuse/collectors/cswap.py) | Claude collect + hydrate |
-| [`src/aiuse/collectors/codexbar.py`](../src/aiuse/collectors/codexbar.py) | CodexBar fan-out; OpenCode Go prefers `--source web` |
-| [`src/aiuse/tui/`](../src/aiuse/tui/) | Rich pretty report (scrollback-safe; see [`pretty-display.md`](pretty-display.md)) |
-| [`docs/pretty-display.md`](pretty-display.md) | Why Rich not Textual for long reports |
-| [`completions/`](../completions/) | bash/zsh |
+| [`src/aiuse/`](../src/aiuse/) | Package source |
+| [`completions/`](../completions/) | bash/zsh (`aiuse.*`; old `ai.*` sources them) |
 
 ## Quick verification for next agent
 
 ```bash
+cd ~/src/aiuse
 .venv/bin/python -m pytest -q
-aiuse doctor
+aiuse doctor          # config dir must be ~/.config/aiuse
 aiuse --brief -q
 aiuse --full -q
-# OpenCode Go should match TUI when cookies work:
-codexbar usage --provider opencodego --source web --no-color
 ```
 
 ## Handoff rule
