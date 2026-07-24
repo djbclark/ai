@@ -37,8 +37,8 @@ def build_report_sections(
 ) -> list[ReportSection]:
     """Build structured plain-text sections matching ``render_report`` content.
 
-    Uses the same formatters as the classic string report with styles disabled
-    so Textual widgets and ``--no-tui`` stay wording-consistent.
+    Order matches the classic report: detail first, action plan last so the
+    terminal scrollback lands on what to do.
     """
     del traditional_summary  # TUI always uses the unified action plan
     s = _Style(False)
@@ -67,6 +67,38 @@ def build_report_sections(
             )
         )
 
+    if brief:
+        sections.append(
+            ReportSection(
+                title="Brief mode",
+                lines=["Omit per-provider, cross-checks, tips; full: ai"],
+                kind="meta",
+            )
+        )
+    else:
+        provider_lines: list[str] = []
+        if accounts:
+            for acc in accounts:
+                provider_lines.extend(_render_account(acc, s, config=config))
+        else:
+            provider_lines.append("(no provider data collected)")
+        sections.append(
+            ReportSection(title="Per-provider usage", lines=provider_lines, kind="providers")
+        )
+
+        cross_lines = [
+            "Tools poll at different times; multi-account Claude is cswap-only. "
+            "Gaps rarely mean both tools are wrong."
+        ]
+        if snapshot.cross_checks:
+            cross_lines.extend(_render_cross_checks(snapshot.cross_checks, s))
+        else:
+            cross_lines.append("(no overlapping live measurements were available)")
+        sections.append(
+            ReportSection(title="Cross-checks (informational)", lines=cross_lines, kind="meta")
+        )
+        sections.append(ReportSection(title="Tips", lines=list(_tips_lines(s)), kind="tips"))
+
     analysis_cfg = (config or {}).get("analysis") or {}
     waking_hours = float(analysis_cfg.get("waking_hours_per_day", 16))
     plan_lines = _render_action_plan(
@@ -79,41 +111,6 @@ def build_report_sections(
             kind="plan",
         )
     )
-
-    if brief:
-        sections.append(
-            ReportSection(
-                title="Brief mode",
-                lines=["Omit per-provider, cross-checks, tips; full: ai"],
-                kind="meta",
-            )
-        )
-        return sections
-
-    provider_lines: list[str] = []
-    if accounts:
-        for acc in accounts:
-            provider_lines.extend(_render_account(acc, s, config=config))
-    else:
-        provider_lines.append("(no provider data collected)")
-    sections.append(
-        ReportSection(title="Per-provider usage", lines=provider_lines, kind="providers")
-    )
-
-    cross_lines = [
-        "Tools poll at different times; multi-account Claude is cswap-only. "
-        "Gaps rarely mean both tools are wrong."
-    ]
-    if snapshot.cross_checks:
-        cross_lines.extend(_render_cross_checks(snapshot.cross_checks, s))
-    else:
-        cross_lines.append("(no overlapping live measurements were available)")
-    sections.append(
-        ReportSection(title="Cross-checks (informational)", lines=cross_lines, kind="meta")
-    )
-
-    tip_lines = list(_tips_lines(s))
-    sections.append(ReportSection(title="Tips", lines=tip_lines, kind="tips"))
     return sections
 
 

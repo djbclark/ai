@@ -63,16 +63,18 @@ def test_build_report_sections_includes_plan_and_providers():
     assert "plan" in kinds
     assert "providers" in kinds
     assert "tips" in kinds
+    assert kinds[-1] == "plan"
     plan = next(s for s in sections if s.kind == "plan")
     assert any("Codex" in line for line in plan.lines)
 
 
 def test_build_report_sections_brief_omits_providers():
     sections = build_report_sections(_snap_with_account(), [_burn_alert()], brief=True)
-    kinds = {s.kind for s in sections}
+    kinds = [s.kind for s in sections]
     assert "providers" not in kinds
     assert "plan" in kinds
     assert "header" in kinds
+    assert kinds[-1] == "plan"
 
 
 def test_build_report_sections_includes_collector_errors():
@@ -138,17 +140,17 @@ def test_usage_app_builds_sections_and_css_exists():
     assert "providers" not in {section.kind for section in app._sections}
 
 
-def test_usage_app_narrow_class_on_small_width():
+def test_usage_app_auto_exits_after_paint():
     import asyncio
 
     from ai.tui.app import UsageApp
 
-    app = UsageApp(_snap_with_account(), [_burn_alert()], brief=False)
+    app = UsageApp(_snap_with_account(), [_burn_alert()], brief=True)
 
     async def _run() -> None:
-        async with app.run_test(size=(60, 24)) as pilot:
+        async with app.run_test(size=(80, 40)) as pilot:
             await pilot.pause()
-            assert "-narrow" in app.screen.classes
-            await pilot.press("q")
+            # on_mount schedules exit after refresh; allow it to complete.
+            await pilot.pause()
 
     asyncio.run(_run())

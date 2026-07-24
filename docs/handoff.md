@@ -20,7 +20,7 @@ Fresh agents: start at [`AGENTS.md`](../AGENTS.md). This file is the short
 | Second polish batch | Doctor version probe + config validation, `--brief`, completions, JSON contract, concurrency audit |
 | Action plan last | Report ends on action plan (≤~23×80); if detailed is taller, detailed + **at a glance** brief trailer |
 | **OpenCode Go quota** | Prefer CodexBar `--source web` for `opencodego` (local SQLite/$caps heuristic lied vs TUI “limit reached”); `opencode` shared_allotment on; docs — [`opencode-go-quota.md`](opencode-go-quota.md) |
-| **Inline Textual** | Pretty `ai` on a TTY uses inline Textual (`q` to quit); `--no-tui` / pipes keep classic text |
+| **Inline Textual** | Pretty `ai` on a TTY paints a static inline Textual document (no scroll panes; auto-exits); `--no-tui` / pipes keep classic text |
 
 Recent commits (newest first): see `git log -5 --oneline`
 

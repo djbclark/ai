@@ -56,7 +56,7 @@ config & setup:
                            (default {DEFAULT_SUBPROCESS_TIMEOUT:g}s; also [timeouts] in config.toml)
   ai -q / --quiet          no progress on stderr (JSON stdout stays clean either way)
   ai --brief               errors + action plan only (pretty)
-  ai --no-tui              classic plain-text report (skip inline Textual)
+  ai --no-tui              classic plain-text report (skip Textual styling)
   ai --print-completion bash|zsh   shell completion script to stdout
 
 exit codes (collect runs):
