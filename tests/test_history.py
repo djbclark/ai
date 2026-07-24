@@ -17,6 +17,7 @@ from aiuse.analysis.history import (
     chronic_waste_summary,
     compute_learned_burn_rates,
     compute_learned_flexibility,
+    history_section_lines,
     history_status_line,
     load_recent_snapshots,
     merge_learned_flexibility,
@@ -168,6 +169,18 @@ def test_history_status_line(tmp_path: Path):
         assert "learning on" in line2
         line_auto_on = history_status_line(analysis_cfg={"learn_from_history": "auto"})
         assert "learning auto/on" in line_auto_on
+
+
+def test_history_section_lines_waiting_and_disabled(tmp_path: Path):
+    snap = Snapshot(collected_at=_now(), accounts=[])
+    with patch("aiuse.analysis.history.snapshot_dir", return_value=tmp_path):
+        waiting = history_section_lines(snap, analysis_cfg={"learn_from_history": "auto"})
+        assert any("History:" in line for line in waiting)
+        assert any("Learning waits" in line for line in waiting)
+
+        off = history_section_lines(snap, analysis_cfg={"learn_from_history": False})
+        assert any("Learning disabled" in line for line in off)
+        assert not any("Learning waits" in line for line in off)
 
 
 def test_should_learn_from_history_auto(tmp_path: Path):

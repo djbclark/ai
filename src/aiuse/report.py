@@ -7,7 +7,11 @@ import sys
 from datetime import datetime
 from typing import Any, TextIO
 
-from aiuse.analysis.history import history_status_line
+from aiuse.analysis.history import (
+    compute_learned_burn_rates,
+    history_section_lines,
+    should_learn_from_history,
+)
 from aiuse.analysis.pace import compute_pace
 from aiuse.analysis.use_or_lose import DAYS_PER_MONTH, _classify_flexibility, _compute_value_at_risk
 from aiuse.models import (
@@ -147,17 +151,35 @@ def render_report(
     analysis_cfg = (config or {}).get("analysis") or {}
     if not isinstance(analysis_cfg, dict):
         analysis_cfg = {}
-    lines.append(s.dim(history_status_line(analysis_cfg=analysis_cfg)))
     lines.append(s.bold("=" * width))
 
     waking_hours = float(analysis_cfg.get("waking_hours_per_day", 16))
+    learned_burn_rates: dict[str, tuple[float, int]] = {}
+    if should_learn_from_history(analysis_cfg):
+        try:
+            retention = int(analysis_cfg.get("snapshot_retention_days") or 90)
+        except (TypeError, ValueError):
+            retention = 90
+        learned_burn_rates = compute_learned_burn_rates(
+            current=snapshot, retention_days=retention
+        )
+
+    lines.append("")
+    lines.append(s.bold("## History"))
+    lines.append(s.dim("-" * width))
+    for hist_line in history_section_lines(snapshot, analysis_cfg=analysis_cfg):
+        lines.append(s.dim(hist_line))
 
     lines.append("")
     lines.append(s.bold("## Per-provider usage"))
     lines.append(s.dim("-" * width))
     if accounts:
         for acc in accounts:
-            lines.extend(_render_account(acc, s, config=config))
+            lines.extend(
+                _render_account(
+                    acc, s, config=config, learned_burn_rates=learned_burn_rates
+                )
+            )
     else:
         lines.append(s.dim("  (no provider data collected)"))
 
@@ -894,6 +916,9 @@ def _action_plan_line(alert: UseOrLoseAlert, s: _Style) -> str:
             value_part += f" · pace {pace.pace_ratio:.1f}x — projected {waste:.0%} unused"
         else:
             value_part += f" · pace {pace.pace_ratio:.1f}x"
+        if pace.learned_sample_count > 0:
+            n = pace.learned_sample_count
+            value_part += f" · blended with history ({n} sample{'s' if n != 1 else ''})"
 
     return (
         f"  {badge} {s.bold(provider_display_name(alert.provider))} · "
@@ -976,13 +1001,20 @@ def _sorted_accounts(accounts: list[AccountUsage]) -> list[AccountUsage]:
     )
 
 
-def _render_account(acc: AccountUsage, s: _Style, *, config: dict[str, Any] | None = None) -> list[str]:
+def _render_account(
+    acc: AccountUsage,
+    s: _Style,
+    *,
+    config: dict[str, Any] | None = None,
+    learned_burn_rates: dict[str, tuple[float, int]] | None = None,
+) -> list[str]:
     lines: list[str] = []
     cfg = config or {}
     raw_plans = cfg.get("plans")
     raw_analysis = cfg.get("analysis")
     plans: dict[str, Any] = raw_plans if isinstance(raw_plans, dict) else {}
     analysis: dict[str, Any] = raw_analysis if isinstance(raw_analysis, dict) else {}
+    rates = learned_burn_rates or {}
 
     head = s.bold(provider_display_name(acc.provider))
     if acc.account:
@@ -1027,7 +1059,9 @@ def _render_account(acc: AccountUsage, s: _Style, *, config: dict[str, Any] | No
         lines.append(f"    {bar} {rem_colored} {used_s:10} {s.dim(reset_s)}")
 
         if rem is not None and w.window_minutes:
-            detail = _consumption_line(w, rem, acc.provider, plans, analysis, s)
+            detail = _consumption_line(
+                w, rem, acc.provider, plans, analysis, s, learned_burn_rates=rates
+            )
             if detail:
                 lines.append(s.dim(f"    {detail}"))
 
@@ -1138,7 +1172,14 @@ def _source_description(source: str) -> str:
 
 
 def _consumption_line(
-    window: Any, remaining: float, provider: str, plans: dict[str, Any], analysis: dict[str, Any], s: _Style
+    window: Any,
+    remaining: float,
+    provider: str,
+    plans: dict[str, Any],
+    analysis: dict[str, Any],
+    s: _Style,
+    *,
+    learned_burn_rates: dict[str, tuple[float, int]] | None = None,
 ) -> str | None:
     if not window.window_minutes:
         return None
@@ -1200,11 +1241,27 @@ def _consumption_line(
         parts.append(f"{capacity:.0f}{unit}/cycle")
 
     # Pace fragment for detail view (on-pace windows still show here).
+    learned_rate: float | None = None
+    learned_n = 0
+    rates = learned_burn_rates or {}
+    if rates and duration_kind:
+        rate_key = f"{provider_key}:{duration_kind}"
+        if rate_key in rates:
+            learned_rate, learned_n = rates[rate_key]
     try:
-        pace_profile = compute_pace(window, now=utcnow())
+        pace_profile = compute_pace(
+            window,
+            now=utcnow(),
+            learned_rate_per_day=learned_rate,
+            learned_sample_count=learned_n,
+        )
     except Exception:  # noqa: BLE001
         pace_profile = None
     if pace_profile is not None and pace_profile.pace_ratio is not None:
-        parts.append(f"pace {pace_profile.pace_ratio:.1f}x")
+        pace_s = f"pace {pace_profile.pace_ratio:.1f}x"
+        if pace_profile.learned_sample_count > 0:
+            n = pace_profile.learned_sample_count
+            pace_s += f" (blended w/ history, {n} sample{'s' if n != 1 else ''})"
+        parts.append(pace_s)
 
     return " · ".join(parts) if parts else None

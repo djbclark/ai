@@ -5,7 +5,7 @@
 **Local tree:** `~/src/aiuse`  
 **Remote:** https://github.com/djbclark/aiuse  
 **Tests:** `.venv/bin/python -m pytest -q` — expect **200+** passing  
-**Version:** **2.1.3**
+**Version:** **2.1.4**
 
 Fresh agents: start at [`AGENTS.md`](../AGENTS.md).
 
@@ -22,15 +22,15 @@ Fresh agents: start at [`AGENTS.md`](../AGENTS.md).
 | Area                             | Notes                                                               |
 | -------------------------------- | ------------------------------------------------------------------- |
 | Fix plan Steps **1–32** + **34** | Complete                                                            |
-| Packaging                        | PyPI + Homebrew + OIDC; current **2.1.2**                           |
+| Packaging                        | PyPI + Homebrew + OIDC; current **2.1.4**                           |
 | **H — LaunchAgent**              | Live: `com.djbclark.aiuse` via site-djbclark `site_agents` (hourly) |
-| **G — History (thin)**           | `persist_snapshots` + `learn_from_history: auto`                    |
+| **G — History UX**               | `--full` History section + blended-with-history pace notes          |
 
 ## Packaging / scheduling
 
 | Channel                | State                                                               |
 | ---------------------- | ------------------------------------------------------------------- |
-| PyPI / Homebrew / OIDC | Done                                                                |
+| PyPI / Homebrew / OIDC | Done (publish **2.1.4** when releasing)                             |
 | LaunchAgent            | **Rolled out** via `~/ops/site-djbclark` (`just site-agents-apply`) |
 | `persist_snapshots`    | **true** (set by site_agents)                                       |
 | `learn_from_history`   | **`auto`** — learns once ≥ 2 snapshots exist                        |
@@ -55,18 +55,17 @@ Fresh agents: start at [`AGENTS.md`](../AGENTS.md).
 | --------------------------- | -------------------------------------- |
 | **A — Live smoke**          | Operator-owned                         |
 | **Step 35**                 | Parked                                 |
-| **E — Packaging**           | Done                                   |
+| **E — Packaging**           | Done (bump/publish **2.1.4**)          |
 | **H — LaunchAgent**         | Done (site-djbclark)                   |
-| **G — History learning on** | **`auto`** (active once ≥ 2 snapshots) |
-| **G deeper UX**             | Thin status line done                  |
+| **G — History learning**    | **`auto`** + deeper `--full` UX        |
 
 ## Quick verification
 
 ```bash
 just -f ~/ops/site-djbclark/justfile site-agents-status
-aiuse --version   # 2.1.2+
+aiuse --version   # 2.1.4 after install
 ls ~/.cache/aiuse/snapshots | wc -l
-aiuse --full -q --no-tui | head -15
+aiuse --full -q --no-tui | head -25
 ```
 
 ## Handoff rule

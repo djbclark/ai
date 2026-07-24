@@ -74,6 +74,7 @@ def test_build_report_sections_full_includes_providers():
     assert "tips" in kinds
     assert "plan" in kinds
     assert "footer" not in kinds
+    assert any(s.title == "History" for s in sections)
     plan = next(s for s in sections if s.kind == "plan")
     assert any("Codex" in line for line in plan.lines)
 

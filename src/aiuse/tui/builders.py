@@ -5,7 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from aiuse.analysis.history import history_status_line
+from aiuse.analysis.history import (
+    compute_learned_burn_rates,
+    history_section_lines,
+    should_learn_from_history,
+)
 from aiuse.models import Snapshot, Urgency, UseOrLoseAlert, provider_display_name
 from aiuse.report import (
     ACTION_PLAN_MAX_LINES,
@@ -68,8 +72,6 @@ def build_report_sections(
     if not isinstance(analysis_cfg, dict):
         analysis_cfg = {}
     hist_lines = [s.dim(meta)]
-    if full:
-        hist_lines.append(s.dim(history_status_line(analysis_cfg=analysis_cfg)))
     title = "AI USAGE — USE IT OR LOSE IT"
     if full:
         title += " (full)"
@@ -92,14 +94,35 @@ def build_report_sections(
             )
         )
 
-    analysis_cfg = (config or {}).get("analysis") or {}
     waking_hours = float(analysis_cfg.get("waking_hours_per_day", 16))
+    learned_burn_rates: dict[str, tuple[float, int]] = {}
+    if full and should_learn_from_history(analysis_cfg):
+        try:
+            retention = int(analysis_cfg.get("snapshot_retention_days") or 90)
+        except (TypeError, ValueError):
+            retention = 90
+        learned_burn_rates = compute_learned_burn_rates(
+            current=snapshot, retention_days=retention
+        )
 
     if full:
+        sections.append(
+            ReportSection(
+                title="History",
+                title_ansi=s.bold(s.cyan("History")),
+                lines=[s.dim(line) for line in history_section_lines(snapshot, analysis_cfg=analysis_cfg)],
+                kind="meta",
+            )
+        )
+
         provider_lines: list[str] = []
         if accounts:
             for acc in accounts:
-                provider_lines.extend(_render_account(acc, s, config=config))
+                provider_lines.extend(
+                    _render_account(
+                        acc, s, config=config, learned_burn_rates=learned_burn_rates
+                    )
+                )
         else:
             provider_lines.append(s.dim("(no provider data collected)"))
         sections.append(

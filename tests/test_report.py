@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 
 from aiuse.models import (
     AccountUsage,
@@ -221,7 +221,51 @@ def test_action_plan_line_includes_pace_fragment():
     assert "projected 60% unused" in line
 
 
-def test_render_report_action_plan_is_last_after_detail():
+def test_action_plan_line_notes_blended_history():
+    alert = UseOrLoseAlert(
+        urgency=Urgency.MEDIUM,
+        provider="codex",
+        account=None,
+        window_label="Weekly",
+        remaining_percent=80.0,
+        days_until_reset=2.0,
+        plan=None,
+        message="x",
+        source="tokscale",
+        score=50.0,
+        kind="burn",
+        flexibility_profile=FlexibilityProfile(
+            flexibility_class=FlexibilityClass.SEMI_THROTTLED,
+            consumption_flexibility=0.5,
+            value_at_risk_usd=3.0,
+        ),
+        pace=PaceProfile(
+            elapsed_fraction=0.5,
+            used_fraction=0.2,
+            pace_ratio=0.4,
+            projected_used_fraction=0.4,
+            projected_waste_fraction=0.6,
+            projected_waste_usd=2.0,
+            projected_exhaust_at=None,
+            learned_sample_count=5,
+        ),
+    )
+    line = _action_plan_line(alert, _Style(False))
+    assert "blended with history (5 samples)" in line
+
+
+def test_render_report_full_includes_history_section():
+    snap = Snapshot(collected_at=datetime(2026, 7, 24, 12, 0, tzinfo=timezone.utc), accounts=[])
+    text = render_report(
+        snap,
+        [],
+        config={"analysis": {"learn_from_history": False}},
+        color=False,
+        full=True,
+    )
+    assert "## History" in text
+    assert "learning off" in text
+    assert "Learning disabled" in text
     now = utcnow()
     burn = UseOrLoseAlert(
         urgency=Urgency.HIGH,

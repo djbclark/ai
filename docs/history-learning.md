@@ -34,13 +34,23 @@ persist-only forever.
 
 Learning (when active) also implies snapshot persistence for that run.
 
-## Status line
+## Status on ``--full``
 
-`aiuse --full` includes:
+`aiuse --full` includes a **History** section with:
 
 ```text
+## History
 History: N snapshots in …/snapshots (learning auto/waiting|auto/on|on|off)
+  span: YYYY-MM-DD HH:MM → YYYY-MM-DD HH:MM UTC (…, N files)
+  Learned burn rates (blended into pace when present):
+    · Claude weekly: ~12%/day (5 samples)
+  Chronic underuse (short windows, multiple reset cycles):
+    · Claude 5-hour: 85% left avg over 3 cycles
 ```
+
+When learning is waiting or disabled, the section explains that instead of listing
+rates. Action-plan and per-window detail lines note `blended with history (N samples)`
+when pace used learned rates.
 
 ## What learning does
 

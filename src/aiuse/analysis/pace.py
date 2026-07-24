@@ -44,8 +44,10 @@ def compute_pace(
     if learned_rate_per_day is not None and learned_sample_count > 0:
         lam = learned_sample_count / (learned_sample_count + 2.0)
         r_hat = (1 - lam) * r_now + lam * learned_rate_per_day
+        blended_n = learned_sample_count
     else:
         r_hat = r_now
+        blended_n = 0
 
     projected_used = min(1.0, used_fraction + r_hat * t_left_days)
     waste = 1.0 - projected_used
@@ -60,6 +62,7 @@ def compute_pace(
         projected_waste_usd=None,  # filled in by the caller once it knows the plan price
         projected_exhaust_at=exhaust_at,
         confidence=confidence,
+        learned_sample_count=blended_n,
     )
 
 

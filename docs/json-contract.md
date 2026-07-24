@@ -147,6 +147,7 @@ Cross-check notes alone never set exit code 2.
 | `governing`                | bool           |
 | `gated_by`                 | string \| null |
 | `confidence`               | string         |
+| `learned_sample_count`     | int (0 if no history blend) |
 
 ## Stability policy
 

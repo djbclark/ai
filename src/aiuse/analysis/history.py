@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-from aiuse.models import Snapshot, utcnow
+from aiuse.models import Snapshot, provider_config_key, utcnow
 
 _DEFAULT_SNAPSHOT_DIR = "~/.cache/aiuse/snapshots"
 _DEFAULT_RETENTION_DAYS = 90
@@ -120,7 +120,7 @@ def compute_learned_burn_rates(
         weight = min(time_delta_days, 1.0)
 
         for prev_account in prev_data.get("accounts") or []:
-            provider = str(prev_account.get("provider", "")).lower()
+            provider = provider_config_key(str(prev_account.get("provider", "")))
             for prev_window in prev_account.get("windows") or []:
                 prev_remaining = prev_window.get("remaining_percent")
                 if prev_remaining is None:
@@ -255,7 +255,7 @@ def chronic_waste_summary(
             continue
 
         for prev_account in prev_data.get("accounts") or []:
-            provider = str(prev_account.get("provider", "")).lower()
+            provider = provider_config_key(str(prev_account.get("provider", "")))
             for prev_window in prev_account.get("windows") or []:
                 window_minutes = prev_window.get("window_minutes")
                 if not window_minutes or window_minutes > 360:
@@ -315,13 +315,13 @@ def _find_current_remaining(
     *,
     match_resets: bool = True,
 ) -> float | None:
-    prev_provider = str(prev_account.get("provider", "")).lower()
+    prev_provider = provider_config_key(str(prev_account.get("provider", "")))
     prev_account_id = str(prev_account.get("account", "")).lower()
     prev_label = str(prev_window.get("label", "")).lower()
     prev_resets = prev_window.get("resets_at") or ""
 
     for acc in snapshot.accounts:
-        if acc.provider.lower() != prev_provider:
+        if provider_config_key(acc.provider) != prev_provider:
             continue
         if (acc.account or "").lower() != prev_account_id:
             continue
@@ -428,3 +428,87 @@ def history_status_line(*, analysis_cfg: dict[str, Any] | None = None) -> str:
         mode = f"auto/{'on' if active else 'waiting'}"
     noun = "snapshot" if n == 1 else "snapshots"
     return f"History: {n} {noun} in {snapshot_dir()} (learning {mode})"
+
+
+def history_section_lines(
+    snapshot: Snapshot,
+    *,
+    analysis_cfg: dict[str, Any] | None = None,
+) -> list[str]:
+    """Plain-text body lines for the ``## History`` block on ``--full``."""
+    from aiuse.models import provider_display_name
+
+    cfg = analysis_cfg or {}
+    try:
+        retention = int(cfg.get("snapshot_retention_days") or _DEFAULT_RETENTION_DAYS)
+    except (TypeError, ValueError):
+        retention = _DEFAULT_RETENTION_DAYS
+
+    lines: list[str] = [history_status_line(analysis_cfg=cfg)]
+    recent = load_recent_snapshots(retention_days=retention, max_count=10_000)
+    if recent:
+        times: list[datetime] = []
+        for item in recent:
+            ts = item.get("collected_at")
+            if not ts:
+                continue
+            try:
+                dt = datetime.fromisoformat(str(ts))
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                times.append(dt)
+            except ValueError:
+                continue
+        if times:
+            oldest, newest = min(times), max(times)
+            span_h = max(0.0, (newest - oldest).total_seconds() / 3600.0)
+            if span_h >= 48:
+                span_s = f"{span_h / 24.0:.1f}d"
+            else:
+                span_s = f"{span_h:.0f}h"
+            lines.append(
+                f"  span: {oldest.strftime('%Y-%m-%d %H:%M')} → "
+                f"{newest.strftime('%Y-%m-%d %H:%M')} UTC ({span_s}, {len(times)} files)"
+            )
+
+    if not should_learn_from_history(cfg):
+        raw = cfg.get("learn_from_history", "auto")
+        explicitly_off = raw is False or (
+            isinstance(raw, str) and raw.strip().lower() in {"false", "no", "off", "0"}
+        )
+        if explicitly_off:
+            lines.append("  Learning disabled (learn_from_history: false).")
+        else:
+            n = len(recent)
+            need = max(0, _DEFAULT_MIN_SNAPSHOTS - n)
+            lines.append(
+                f"  Learning waits for {need} more snapshot{'s' if need != 1 else ''} "
+                f"(need {_DEFAULT_MIN_SNAPSHOTS}+)."
+            )
+        return lines
+
+    rates = compute_learned_burn_rates(current=snapshot, retention_days=retention)
+    if rates:
+        lines.append("  Learned burn rates (blended into pace when present):")
+        for key, (rate, n) in sorted(rates.items()):
+            provider, _, duration = key.partition(":")
+            name = provider_display_name(provider)
+            lines.append(
+                f"    · {name} {duration}: ~{rate * 100:.0f}%/day "
+                f"({n} sample{'s' if n != 1 else ''})"
+            )
+    else:
+        lines.append(
+            "  No learned burn rates yet (need enough same-window samples across time)."
+        )
+
+    chronic = chronic_waste_summary(current=snapshot, retention_days=retention)
+    if chronic:
+        lines.append("  Chronic underuse (short windows, multiple reset cycles):")
+        for item in chronic[:8]:
+            name = provider_display_name(str(item["provider"]))
+            lines.append(
+                f"    · {name} {item['label']}: {item['avg_remaining_pct']:.0f}% left avg "
+                f"over {item['sample_count']} cycles"
+            )
+    return lines

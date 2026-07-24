@@ -144,6 +144,8 @@ class PaceProfile:
     governing: bool = True
     gated_by: str | None = None  # label of the enclosing window, set on children
     confidence: str = "measured"  # measured | inferred | low
+    # Set when pace blends snapshot history (sample count > 0).
+    learned_sample_count: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
