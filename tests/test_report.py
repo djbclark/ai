@@ -467,6 +467,43 @@ def test_default_report_is_priority_ladder():
     assert "Detail: ai --full" in meta
 
 
+def test_priority_ladder_sorts_by_use_urgency_not_alphabet():
+    """Sooner high-score burn sorts below a later lower-score burn (tags may match)."""
+    from ai.report import alert_use_urgency, render_priority_ladder
+
+    later = UseOrLoseAlert(
+        urgency=Urgency.HIGH,
+        provider="aaa",
+        account="a",
+        window_label="Weekly",
+        remaining_percent=80.0,
+        days_until_reset=6.0,
+        plan=None,
+        message="later",
+        source="codexbar",
+        score=40.0,
+        kind="burn",
+    )
+    sooner = UseOrLoseAlert(
+        urgency=Urgency.HIGH,
+        provider="zzz",
+        account="z",
+        window_label="Weekly",
+        remaining_percent=80.0,
+        days_until_reset=1.0,
+        plan=None,
+        message="sooner",
+        source="codexbar",
+        score=90.0,
+        kind="burn",
+    )
+    assert alert_use_urgency(sooner) > alert_use_urgency(later)
+    text = render_priority_ladder([later, sooner], color=False)
+    assert text.index("Zzz") > text.index("Aaa")
+    assert text.strip().splitlines()[-1].startswith("use")
+    assert "Zzz" in text.strip().splitlines()[-1]
+
+
 def test_priority_ladder_includes_on_pace_providers():
     from datetime import timedelta
 

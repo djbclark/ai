@@ -195,12 +195,12 @@ def render_report(
     return "\n".join(lines)
 
 
-# Priority ladder bands (top → bottom). Read bottom→top for what to use next.
-_BAND_ERROR = 0  # could not fetch usage — listed first
-_BAND_EMPTY = 1  # totally depleted — nothing left to burn
+# Ladder display tags (not the sort order). Sort is a continuous use-urgency.
+_BAND_ERROR = 0  # could not fetch usage
+_BAND_EMPTY = 1  # totally depleted
 _BAND_CONSERVE = 2  # pace yourself
 _BAND_MID = 3  # on pace / advisory / low urgency
-_BAND_USE = 4  # important to use soon — printed last
+_BAND_USE = 4  # important to use soon
 
 _BAND_TAG = {
     _BAND_ERROR: ("error", "red"),
@@ -212,7 +212,7 @@ _BAND_TAG = {
 
 
 def alert_priority_band(alert: UseOrLoseAlert) -> int:
-    """Map an alert onto the default stdout priority ladder (1=empty … 4=use)."""
+    """Display tag only — sort order uses ``alert_use_urgency`` instead."""
     rem = alert.remaining_percent
     if alert.urgency == Urgency.NONE:
         return _BAND_MID
@@ -234,22 +234,57 @@ def alert_priority_band(alert: UseOrLoseAlert) -> int:
     return _BAND_MID
 
 
-def _priority_sort_key(alert: UseOrLoseAlert) -> tuple:
-    """Homogeneous sort key: (band, float, float, provider, account)."""
-    band = alert_priority_band(alert)
-    days = float(alert.days_until_reset) if alert.days_until_reset is not None else 999.0
-    rem = float(alert.remaining_percent)
+def alert_use_urgency(alert: UseOrLoseAlert) -> float:
+    """Higher = more urgent to use *now* (appears lower on the ladder).
+
+    Continuum from “most empty for the longest” (low) to “burn this soon” (high).
+    Display tags stay empty/slow/mid/use; they do not segment the sort.
+    """
+    rem = max(0.0, float(alert.remaining_percent))
+    days = float(alert.days_until_reset) if alert.days_until_reset is not None else 30.0
     score = float(alert.score)
-    prov = alert.provider.casefold()
-    acct = (alert.account or "").casefold()
-    # Within USE: farther reset / lower score first so hottest burns land at bottom.
-    if band == _BAND_USE:
-        return (band, -days, score, prov, acct)
-    if band == _BAND_EMPTY:
-        return (band, rem, -score, prov, acct)
-    if band == _BAND_CONSERVE:
-        return (band, -score, days, prov, acct)
-    return (band, days, -score, prov, acct)
+    days_clamped = min(max(days, 0.0), 60.0)
+
+    if alert.kind == "conserve" or (rem <= 1.0 and alert.kind != "burn"):
+        # Emptier + longer until reset → lower (top of list).
+        return 8.0 + rem * 0.25 - days_clamped * 0.55 + score * 0.04
+
+    if alert.urgency == Urgency.INFO:
+        return 38.0 + rem * 0.12 - days_clamped * 0.25
+
+    if alert.kind == "burn":
+        # Higher analysis score + sooner reset + remaining to burn → bottom.
+        soon = max(0.0, 1.0 - days_clamped / 14.0)
+        return 55.0 + score * 0.35 + soon * 25.0 + rem * 0.12
+
+    return 42.0 + rem * 0.18 - days_clamped * 0.3
+
+
+def _account_use_urgency(account: AccountUsage) -> float:
+    """On-pace / no-alert accounts: mild mid urgency from remaining + reset."""
+    windows = [w for w in account.windows if w.remaining() is not None]
+    if windows:
+        windows.sort(
+            key=lambda w: (
+                0 if "included" in (w.label or "").casefold() else 1,
+                -(w.window_minutes or 0),
+                -(w.remaining() or 0),
+            )
+        )
+        window = windows[0]
+        rem = float(window.remaining() or 0.0)
+        days = window.days_until_reset()
+        days_clamped = min(max(float(days) if days is not None else 30.0, 0.0), 60.0)
+        soon = max(0.0, 1.0 - days_clamped / 14.0)
+        return 42.0 + rem * 0.15 + soon * 12.0
+    if account.balance_usd is not None or account.credits_remaining is not None:
+        return 36.0
+    return 40.0
+
+
+def _ladder_sort_key(urgency: float, provider: str, account: str | None) -> tuple:
+    """Ascending urgency: empty-longest first, use-now last. Stable by name."""
+    return (urgency, provider.casefold(), (account or "").casefold())
 
 
 def _account_ladder_key(account: AccountUsage) -> tuple[str, str]:
@@ -277,15 +312,15 @@ def render_priority_ladder(
     color: bool | None = None,
     width: int = ACTION_PLAN_WIDTH,
 ) -> str:
-    """Stdout body: every provider, error→empty→slow→mid→use (no blank lines).
+    """Stdout body: every provider, sorted by use-urgency (no blank lines).
 
-    Failed fetches are ``error`` rows at the top. Accounts with live data but no
-    burn/conserve alert appear as ``mid``. Read bottom→top for what to burn next.
+    Tags (error/empty/slow/mid/use) label each row; order is a single continuum
+    from most-empty-longest (top) to most-urgent-to-use-now (bottom). Failed
+    fetches stay at the top as ``error``.
     """
     if s is None:
         s = _Style(use_color(force=color))
 
-    # (sort_key, line) — sort_key always (band, float, float, provider, account)
     entries: list[tuple[tuple, str]] = []
     covered: set[tuple[str, str]] = set()
 
@@ -293,7 +328,10 @@ def render_priority_ladder(
         if alert.urgency == Urgency.NONE:
             continue
         band = alert_priority_band(alert)
-        entries.append((_priority_sort_key(alert), _priority_alert_line(alert, s, band)))
+        key = _ladder_sort_key(
+            alert_use_urgency(alert), alert.provider, alert.account
+        )
+        entries.append((key, _priority_alert_line(alert, s, band)))
         covered.add(_alert_ladder_key(alert))
 
     accounts = _sorted_accounts(snapshot.accounts) if snapshot is not None else []
@@ -301,19 +339,19 @@ def render_priority_ladder(
         key = _account_ladder_key(account)
         if key in covered:
             continue
-        prov = account.provider.casefold()
-        acct = (account.account or "").casefold()
         if account.error or not _account_has_usage(account):
             entries.append(
                 (
-                    (_BAND_ERROR, 0.0, 0.0, prov, acct),
+                    _ladder_sort_key(-1000.0, account.provider, account.account),
                     _priority_error_line(account, s),
                 )
             )
             continue
         entries.append(
             (
-                (_BAND_MID, 0.0, 0.0, prov, acct),
+                _ladder_sort_key(
+                    _account_use_urgency(account), account.provider, account.account
+                ),
                 _priority_account_line(account, s, _BAND_MID),
             )
         )

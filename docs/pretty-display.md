@@ -13,12 +13,13 @@ Default `ai` prints **every provider account** on **stdout** as a ranked list
 2. **empty** (red) — totally depleted  
 3. **slow** (yellow) — conserve / pace yourself  
 4. **mid** (cyan) — on pace / advisory / no alert  
-5. **use** (green) — important to burn soon (**bottom**)
+5. **use** (green) — important to burn soon
 
-Accounts with live data but no burn/conserve alert still appear as ``mid``.
-Read **bottom → top** to pick what to use next. Tags are fixed-width text so
-meaning does not rely on color alone. Collection time, capacity blurb, and
-`Detail: ai --full` go to **stderr** (suppressed with `-q`).
+Tags label each row; **order is a continuous use-urgency gradient** (not
+alphabetical within a band): most-empty-for-longest at the **top**,
+most-urgent-to-use-now at the **bottom**. Read **bottom → top** to pick what
+to use next. Collection time, capacity blurb, and `Detail: ai --full` go to
+**stderr** (suppressed with `-q`).
 
 `--full` keeps the long report on stdout. `--brief` aliases the default.
 
