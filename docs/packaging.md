@@ -5,13 +5,13 @@ calls the same entrypoint (`aiuse.ai_stub:main`).
 
 ## Status
 
-| Channel | Status |
-| --- | --- |
-| Editable / venv (`pip install -e .`) | Supported (dev) |
-| **pipx** from GitHub | Ready |
-| **pipx** from PyPI | Blocked on one-time Trusted Publisher setup (release `v2.1.0` + workflow ready) |
-| **Homebrew** personal tap | Live: `brew tap djbclark/aiuse && brew trust djbclark/aiuse && brew install aiuse` |
-| homebrew-core | Not submitted |
+| Channel                              | Status                                                                             |
+| ------------------------------------ | ---------------------------------------------------------------------------------- |
+| Editable / venv (`pip install -e .`) | Supported (dev)                                                                    |
+| **pipx** from GitHub                 | Ready                                                                              |
+| **pipx** from PyPI                   | Blocked on one-time Trusted Publisher setup (release `v2.1.0` + workflow ready)    |
+| **Homebrew** personal tap            | Live: `brew tap djbclark/aiuse && brew trust djbclark/aiuse && brew install aiuse` |
+| homebrew-core                        | Not submitted                                                                      |
 
 External tools (`cswap`, `codexbar`, `tokscale`) stay separate PATH installs —
 this package only ships the aggregator CLI.

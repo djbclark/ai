@@ -37,7 +37,7 @@ then offer choices — **do not restart at Step 1**.
 ## Persistence policy: durable project knowledge goes in this git repo
 
 **If you are an AI agent — any tool, not just Claude Code — and you produce
-something about this project that a *future* agent session or a *different*
+something about this project that a _future_ agent session or a _different_
 tool should be able to find, put it under version control here, not in your
 own tool's private local state.** That means not Claude Code's per-machine
 memory store, not `.cursor/`, not `.aider.chat.history.md`, not `.copilot/`,
@@ -47,7 +47,7 @@ not any other tool-specific cache/history/rules directory. Concretely:
   this file and from `README.md`'s "Related reading".
 - A reusable script/tool config that produced a checked-in doc → check the
   script in next to what it produced (see `docs/review-workflow.js`).
-- Claude / vendor memory is fine as a *working* scratchpad inside one session;
+- Claude / vendor memory is fine as a _working_ scratchpad inside one session;
   before ending a task, promote anything durable into a repo-tracked file.
   Prefer **not** duplicating long essays under `docs/memory/` when
   `AGENTS.md` or another doc already states the rule (token cost for agents
@@ -59,7 +59,7 @@ not any other tool-specific cache/history/rules directory. Concretely:
 [`docs/memory/`](docs/memory/) in this repo (older `-src-ai` path may still
 exist as a leftover). Keep that directory thin
 ([`MEMORY.md`](docs/memory/MEMORY.md) index only unless a short pointer is
-truly needed). Writing a Claude memory for this project *is* writing into this
+truly needed). Writing a Claude memory for this project _is_ writing into this
 git tree — commit it if it should persist.
 
 ### Generic / private memory (sibling ops repo — not a symlink from here)
@@ -92,29 +92,29 @@ full description, install steps, CLI flags, and config.
 
 ## Where things live
 
-| Path | What it is | When to read it |
-| --- | --- | --- |
-| `README.md` | Project overview: install, usage, CLI flags, config, output format. | First, for "what does this tool do / how do I run it." |
-| `AGENTS.md` (this file) | Agent orientation, doc map, persistence policy, **active priorities**. | First, for "where is everything / what next." |
-| `docs/handoff.md` | Latest session wrap-up, loose ends, verify commands. | First stop after this file when resuming. |
-| `docs/fix-implementation-plan.md` | Review-derived task list (Steps 1–32 + Phase 7 optional 33–35). **1–32 and 34 done.** | Historical scope / remaining optional steps only. |
-| `docs/json-contract.md` | Stable `aiuse --json` fields and exit codes for scripts. | Cron / automation consumers. |
-| `docs/collector-concurrency.md` | How collectors run in parallel and timeout (45s). | Perf / hang questions. |
-| `completions/` | bash/zsh completion scripts. | Shell UX. |
-| `https://github.com/djbclark/aiuse/issues/1` | Tracks consuming cswap#170 last-good JSON (Step 33). | When #170 merges or when checking upstream status. |
-| `docs/cswap-reliability.md` | Claude/cswap reliability: decision-stale JSON, cache hydration, fallbacks. | When Claude rows go missing or multi-account looks wrong. |
-| `docs/opencode-go-quota.md` | OpenCode Go: CodexBar local estimate vs web billing; shared allotment. | When Go % disagrees with the OpenCode TUI. |
-| `docs/cursor-quota.md` | Cursor Included/Auto/API + on-demand vs CodexBar slots. | When Cursor % or CONSERVE disagrees with the Cursor usage UI. |
-| `docs/pretty-display.md` | Rich vs Textual for long scrollback-safe reports. | When changing pretty/TTY display. |
-| `docs/packaging.md` | pipx / PyPI / Homebrew distribution. | When releasing or changing install UX. |
-| `docs/claude-local-usage.md` | Local `stats-cache` / JSONL / ccusage vs subscription 5h/7d %. | When someone proposes parsing `~/.claude` instead of cswap. |
-| `docs/code-review-2026-07-23.html` | Adversarial code review (45 findings) that the plan was derived from. Open in a browser. | For the *why* behind a plan step. |
-| `docs/consumption-flexibility-plan.md` | Original scoring design. **Superseded** by pace-based scoring in the fix plan Phase 2. | Historical context only. |
-| `docs/review-workflow.js` | Workflow script that generated the review. | Methodology / re-run. |
-| `docs/memory/` | Thin Claude memory symlink target for this project (`MEMORY.md` index). | Rarely — prefer this file and `docs/` prose. |
-| `src/aiuse/` | Source: collectors, analysis, report, cli, config, models. | When implementing. |
-| `tests/` | Pytest suite. | Run `.venv/bin/python -m pytest -q` before and after any change. |
-| `config/services.example.yaml` | Example user config. | Keep in sync with `config.py`'s `DEFAULT_CONFIG`. |
+| Path                                         | What it is                                                                               | When to read it                                                  |
+| -------------------------------------------- | ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| `README.md`                                  | Project overview: install, usage, CLI flags, config, output format.                      | First, for "what does this tool do / how do I run it."           |
+| `AGENTS.md` (this file)                      | Agent orientation, doc map, persistence policy, **active priorities**.                   | First, for "where is everything / what next."                    |
+| `docs/handoff.md`                            | Latest session wrap-up, loose ends, verify commands.                                     | First stop after this file when resuming.                        |
+| `docs/fix-implementation-plan.md`            | Review-derived task list (Steps 1–32 + Phase 7 optional 33–35). **1–32 and 34 done.**    | Historical scope / remaining optional steps only.                |
+| `docs/json-contract.md`                      | Stable `aiuse --json` fields and exit codes for scripts.                                 | Cron / automation consumers.                                     |
+| `docs/collector-concurrency.md`              | How collectors run in parallel and timeout (45s).                                        | Perf / hang questions.                                           |
+| `completions/`                               | bash/zsh completion scripts.                                                             | Shell UX.                                                        |
+| `https://github.com/djbclark/aiuse/issues/1` | Tracks consuming cswap#170 last-good JSON (Step 33).                                     | When #170 merges or when checking upstream status.               |
+| `docs/cswap-reliability.md`                  | Claude/cswap reliability: decision-stale JSON, cache hydration, fallbacks.               | When Claude rows go missing or multi-account looks wrong.        |
+| `docs/opencode-go-quota.md`                  | OpenCode Go: CodexBar local estimate vs web billing; shared allotment.                   | When Go % disagrees with the OpenCode TUI.                       |
+| `docs/cursor-quota.md`                       | Cursor Included/Auto/API + on-demand vs CodexBar slots.                                  | When Cursor % or CONSERVE disagrees with the Cursor usage UI.    |
+| `docs/pretty-display.md`                     | Rich vs Textual for long scrollback-safe reports.                                        | When changing pretty/TTY display.                                |
+| `docs/packaging.md`                          | pipx / PyPI / Homebrew distribution.                                                     | When releasing or changing install UX.                           |
+| `docs/claude-local-usage.md`                 | Local `stats-cache` / JSONL / ccusage vs subscription 5h/7d %.                           | When someone proposes parsing `~/.claude` instead of cswap.      |
+| `docs/code-review-2026-07-23.html`           | Adversarial code review (45 findings) that the plan was derived from. Open in a browser. | For the _why_ behind a plan step.                                |
+| `docs/consumption-flexibility-plan.md`       | Original scoring design. **Superseded** by pace-based scoring in the fix plan Phase 2.   | Historical context only.                                         |
+| `docs/review-workflow.js`                    | Workflow script that generated the review.                                               | Methodology / re-run.                                            |
+| `docs/memory/`                               | Thin Claude memory symlink target for this project (`MEMORY.md` index).                  | Rarely — prefer this file and `docs/` prose.                     |
+| `src/aiuse/`                                 | Source: collectors, analysis, report, cli, config, models.                               | When implementing.                                               |
+| `tests/`                                     | Pytest suite.                                                                            | Run `.venv/bin/python -m pytest -q` before and after any change. |
+| `config/services.example.yaml`               | Example user config.                                                                     | Keep in sync with `config.py`'s `DEFAULT_CONFIG`.                |
 
 ## If you were asked to fix a bug or implement a feature here
 
@@ -127,7 +127,7 @@ full description, install steps, CLI flags, and config.
 3. If the task is not in the plan, check `docs/code-review-2026-07-23.html` and
    existing `docs/` before starting fresh analysis.
 4. When implementing: full pytest before and after (`.venv/bin/python -m pytest
-   -q`); one coherent change at a time; commit early and push (see
+-q`); one coherent change at a time; commit early and push (see
    Conventions).
 
 ## Conventions

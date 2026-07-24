@@ -18,20 +18,20 @@ Fresh agents: start at [`AGENTS.md`](../AGENTS.md).
 
 ## Done this stretch
 
-| Area | Notes |
-| --- | --- |
-| Fix plan Steps **1–32** + **34** | Complete |
-| Package rename | **`aiuse`** + stub **`ai`** |
-| Config / cache | `~/.config/aiuse/`, `~/.cache/aiuse/` |
-| Packaging **2.1.0** | LICENSE, GitHub Release + sdist/wheel, publish workflow, Homebrew tap live |
+| Area                             | Notes                                                                      |
+| -------------------------------- | -------------------------------------------------------------------------- |
+| Fix plan Steps **1–32** + **34** | Complete                                                                   |
+| Package rename                   | **`aiuse`** + stub **`ai`**                                                |
+| Config / cache                   | `~/.config/aiuse/`, `~/.cache/aiuse/`                                      |
+| Packaging **2.1.0**              | LICENSE, GitHub Release + sdist/wheel, publish workflow, Homebrew tap live |
 
 ## Packaging status (E)
 
-| Channel | State |
-| --- | --- |
-| GitHub Release `v2.1.0` | Done |
-| Homebrew `djbclark/aiuse` | Done (`brew trust` + install verified) |
-| PyPI | **One click left:** add Trusted Publisher for `aiuse` / `publish.yml` / env `pypi`, then `gh run rerun 30098017371 -R djbclark/aiuse --failed` |
+| Channel                   | State                                                                                                                                          |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| GitHub Release `v2.1.0`   | Done                                                                                                                                           |
+| Homebrew `djbclark/aiuse` | Done (`brew trust` + install verified)                                                                                                         |
+| PyPI                      | **One click left:** add Trusted Publisher for `aiuse` / `publish.yml` / env `pypi`, then `gh run rerun 30098017371 -R djbclark/aiuse --failed` |
 
 Details: [`packaging.md`](packaging.md).
 
@@ -53,13 +53,13 @@ workflow file changes via SSH (`git@github.com:djbclark/aiuse.git`).
 
 ### Deferred
 
-| Item | Status |
-| --- | --- |
-| **A — Live smoke** | Operator-owned |
-| **Step 35** | Parked |
+| Item                           | Status                                           |
+| ------------------------------ | ------------------------------------------------ |
+| **A — Live smoke**             | Operator-owned                                   |
+| **Step 35**                    | Parked                                           |
 | **E — PyPI trusted publisher** | Operator click on pypi.org (then re-run Actions) |
-| **G — History insights** | Not started |
-| **H — Cron recipe** | Not started |
+| **G — History insights**       | Not started                                      |
+| **H — Cron recipe**            | Not started                                      |
 
 ## Quick verification
 
