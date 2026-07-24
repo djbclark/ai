@@ -360,6 +360,47 @@ def test_brief_action_plan_respects_max_lines():
     assert any("more" in line for line in body)
 
 
+def test_brief_action_plan_caps_lines_per_provider():
+    from ai.report import BRIEF_MAX_LINES_PER_PROVIDER, _brief_alert_line, _strip_ansi
+
+    alerts = [
+        UseOrLoseAlert(
+            urgency=Urgency.HIGH,
+            provider="claude",
+            account=f"a{i}@x.com",
+            window_label=f"window-{i}",
+            remaining_percent=50.0,
+            days_until_reset=2.0,
+            plan=None,
+            message="x",
+            source="cswap",
+            score=float(100 - i),
+            kind="burn",
+        )
+        for i in range(8)
+    ] + [
+        UseOrLoseAlert(
+            urgency=Urgency.MEDIUM,
+            provider="codex",
+            account="c@x.com",
+            window_label="Weekly",
+            remaining_percent=80.0,
+            days_until_reset=3.0,
+            plan=None,
+            message="y",
+            source="codexbar",
+            score=10.0,
+            kind="burn",
+        )
+    ]
+    body = _render_brief_action_plan(alerts, _Style(False), width=80, max_lines=40)
+    plain = [_strip_ansi(line) for line in body]
+    claude_alert_lines = [line for line in plain if "Claude" in line and "window-" in line]
+    assert len(claude_alert_lines) == BRIEF_MAX_LINES_PER_PROVIDER
+    assert any("more" in line for line in plain)
+    assert any("Codex" in line for line in plain)
+
+
 def test_brief_report_omits_usage_and_tips():
     now = utcnow()
     acc = AccountUsage(provider="codex", source="codexbar", account="a@x.com")

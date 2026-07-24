@@ -35,6 +35,8 @@ URGENCY_ICON = {
 # scrolling back (header of the block + ~22 body lines ≈ 23 lines total).
 ACTION_PLAN_MAX_LINES = 23
 ACTION_PLAN_WIDTH = 80
+# Compact "at a glance" trailer: at most this many alert lines per provider.
+BRIEF_MAX_LINES_PER_PROVIDER = 3
 
 
 class _Style:
@@ -365,11 +367,14 @@ def _render_brief_action_plan(
     *,
     width: int,
     max_lines: int,
+    max_lines_per_provider: int = BRIEF_MAX_LINES_PER_PROVIDER,
 ) -> list[str]:
     """
     One-line-per-alert compact plan for the final viewport.
 
     Fits in ``max_lines`` physical rows (callers reserve title + rule outside).
+    At most ``max_lines_per_provider`` alert lines are kept per provider (highest
+    score first within each section), so one busy service cannot dominate.
     """
     action = [a for a in alerts if a.urgency not in (Urgency.INFO, Urgency.NONE)]
     conserve = sorted(
@@ -383,20 +388,36 @@ def _render_brief_action_plan(
         lines.append(s.green("  Nothing urgent under current thresholds."))
         return lines
 
+    provider_lines: dict[str, int] = {}
+    omitted = 0
+
+    def _take_alert(alert: UseOrLoseAlert) -> bool:
+        nonlocal omitted
+        key = alert.provider.casefold()
+        used = provider_lines.get(key, 0)
+        if used >= max_lines_per_provider:
+            omitted += 1
+            return False
+        provider_lines[key] = used + 1
+        return True
+
     # Flatten to ordered display rows (headers + alert lines), then take what fits.
     rows: list[str] = []
     if conserve:
-        rows.append(s.bold("  CONSERVE"))
-        for alert in conserve:
-            rows.append(_brief_alert_line(alert, s, kind="conserve"))
+        kept = [a for a in conserve if _take_alert(a)]
+        if kept:
+            rows.append(s.bold("  CONSERVE"))
+            for alert in kept:
+                rows.append(_brief_alert_line(alert, s, kind="conserve"))
     if burns:
         buckets = _action_buckets(burns)
         for bucket_label in ("THIS WEEK", "THIS WEEKEND", "LATER THIS MONTH", "THROTTLED"):
-            items = buckets.get(bucket_label, [])
-            if not items:
+            items = sorted(buckets.get(bucket_label, []), key=lambda a: (-a.score,))
+            kept = [a for a in items if _take_alert(a)]
+            if not kept:
                 continue
             rows.append(s.bold(f"  {bucket_label}"))
-            for alert in sorted(items, key=lambda a: (-a.score,)):
+            for alert in kept:
                 rows.append(_brief_alert_line(alert, s, kind="burn"))
 
     # Reserve one row for a possible "+N more" footer when we truncate.
@@ -406,12 +427,14 @@ def _render_brief_action_plan(
         row_h = _physical_line_count([row])
         if used + row_h > body_budget:
             remaining = len(rows) - len(lines)
-            # Count only remaining alert lines roughly: remaining rows not yet added
-            omitted = remaining
+            omitted += remaining
             lines.append(s.dim(f"  … +{omitted} more (see detailed plan above)"))
             break
         lines.append(_clamp_display_width(row, width))
         used += row_h
+    else:
+        if omitted:
+            lines.append(s.dim(f"  … +{omitted} more (see detailed plan above)"))
 
     return lines
 
