@@ -6,16 +6,18 @@ for the default report.
 
 ## Default stdout: priority ladder
 
-Default `ai` prints **only** a ranked list on **stdout** (top → bottom):
+Default `ai` prints **every provider account** on **stdout** as a ranked list
+(top → bottom), with **no blank lines**:
 
-1. **empty** (red) — totally depleted  
-2. **slow** (yellow) — conserve / pace yourself  
-3. **mid** (cyan) — advisory / low urgency / later  
-4. **use** (green) — important to burn soon (**bottom**)
+1. **error** (red) — could not fetch usage for that provider/account  
+2. **empty** (red) — totally depleted  
+3. **slow** (yellow) — conserve / pace yourself  
+4. **mid** (cyan) — on pace / advisory / no alert  
+5. **use** (green) — important to burn soon (**bottom**)
 
-Read **bottom → top** to pick what is most efficient to use next. Tags are
-fixed-width text so meaning does not rely on color alone (NO_COLOR /
-colorblind-safe). Collection time, capacity blurb, collector errors, and
+Accounts with live data but no burn/conserve alert still appear as ``mid``.
+Read **bottom → top** to pick what to use next. Tags are fixed-width text so
+meaning does not rely on color alone. Collection time, capacity blurb, and
 `Detail: ai --full` go to **stderr** (suppressed with `-q`).
 
 `--full` keeps the long report on stdout. `--brief` aliases the default.

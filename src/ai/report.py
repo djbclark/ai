@@ -122,7 +122,7 @@ def render_report(
     s = _Style(use_color(force=color))
     if not full:
         width = glance_width if glance_width is not None else ACTION_PLAN_WIDTH
-        return render_priority_ladder(alerts, s=s, width=width)
+        return render_priority_ladder(alerts, snapshot=snapshot, s=s, width=width)
 
     lines: list[str] = []
     width = ACTION_PLAN_WIDTH
@@ -196,12 +196,14 @@ def render_report(
 
 
 # Priority ladder bands (top → bottom). Read bottom→top for what to use next.
-_BAND_EMPTY = 0  # totally depleted — nothing left to burn
-_BAND_CONSERVE = 1  # pace yourself
-_BAND_MID = 2  # advisory / low urgency / later
-_BAND_USE = 3  # important to use soon — printed last
+_BAND_ERROR = 0  # could not fetch usage — listed first
+_BAND_EMPTY = 1  # totally depleted — nothing left to burn
+_BAND_CONSERVE = 2  # pace yourself
+_BAND_MID = 3  # on pace / advisory / low urgency
+_BAND_USE = 4  # important to use soon — printed last
 
 _BAND_TAG = {
+    _BAND_ERROR: ("error", "red"),
     _BAND_EMPTY: ("empty", "red"),
     _BAND_CONSERVE: ("slow ", "yellow"),
     _BAND_MID: ("mid  ", "cyan"),
@@ -210,7 +212,7 @@ _BAND_TAG = {
 
 
 def alert_priority_band(alert: UseOrLoseAlert) -> int:
-    """Map an alert onto the default stdout priority ladder (0=empty … 3=use)."""
+    """Map an alert onto the default stdout priority ladder (1=empty … 4=use)."""
     rem = alert.remaining_percent
     if alert.urgency == Urgency.NONE:
         return _BAND_MID
@@ -245,41 +247,88 @@ def _priority_sort_key(alert: UseOrLoseAlert) -> tuple:
     return (band, days, -alert.score)
 
 
+def _account_ladder_key(account: AccountUsage) -> tuple[str, str]:
+    return (account.provider.casefold(), (account.account or "").casefold())
+
+
+def _alert_ladder_key(alert: UseOrLoseAlert) -> tuple[str, str]:
+    return (alert.provider.casefold(), (alert.account or "").casefold())
+
+
+def _account_has_usage(account: AccountUsage) -> bool:
+    return not account.error and (
+        bool(account.windows)
+        or account.balance_usd is not None
+        or account.credits_remaining is not None
+        or account.usage_credits is not None
+    )
+
+
 def render_priority_ladder(
     alerts: list[UseOrLoseAlert],
     *,
+    snapshot: Snapshot | None = None,
     s: _Style | None = None,
     color: bool | None = None,
     width: int = ACTION_PLAN_WIDTH,
 ) -> str:
-    """Stdout body for default mode: depleted → conserve → mid → use-soon (bottom).
+    """Stdout body: every provider, error→empty→slow→mid→use (no blank lines).
 
-    Color is semantic and always paired with a fixed-width text tag (``empty`` /
-    ``slow`` / ``mid`` / ``use``) so meaning survives ``NO_COLOR`` and colorblind
-    viewing. Read the list bottom→top to pick what to burn next.
+    Failed fetches are ``error`` rows at the top. Accounts with live data but no
+    burn/conserve alert appear as ``mid``. Read bottom→top for what to burn next.
     """
     if s is None:
         s = _Style(use_color(force=color))
-    rows = [a for a in alerts if a.urgency != Urgency.NONE]
-    if not rows:
+
+    # (band, sort_tuple, line)
+    entries: list[tuple[int, tuple, str]] = []
+    covered: set[tuple[str, str]] = set()
+
+    for alert in alerts:
+        if alert.urgency == Urgency.NONE:
+            continue
+        band = alert_priority_band(alert)
+        entries.append((band, _priority_sort_key(alert), _priority_alert_line(alert, s, band)))
+        covered.add(_alert_ladder_key(alert))
+
+    accounts = _sorted_accounts(snapshot.accounts) if snapshot is not None else []
+    for account in accounts:
+        key = _account_ladder_key(account)
+        if key in covered:
+            continue
+        if account.error or not _account_has_usage(account):
+            entries.append(
+                (
+                    _BAND_ERROR,
+                    (_BAND_ERROR, account.provider.casefold(), (account.account or "").casefold()),
+                    _priority_error_line(account, s),
+                )
+            )
+            continue
+        band = _BAND_MID
+        entries.append(
+            (
+                band,
+                (band, account.provider.casefold(), (account.account or "").casefold()),
+                _priority_account_line(account, s, band),
+            )
+        )
+
+    if not entries:
         return s.green("use   nothing urgent under current thresholds")
 
-    lines: list[str] = []
-    sorted_rows = sorted(rows, key=_priority_sort_key)
-    last_band: int | None = None
-    for alert in sorted_rows:
-        band = alert_priority_band(alert)
-        if band != last_band:
-            if last_band is not None:
-                lines.append("")
-            last_band = band
-        lines.append(_clamp_display_width(_priority_alert_line(alert, s, band), width))
-    return "\n".join(lines)
+    entries.sort(key=lambda item: item[1])
+    return "\n".join(
+        _clamp_display_width(line, width) for _band, _key, line in entries
+    )
+
+
+def _priority_tag(s: _Style, band: int) -> str:
+    tag, color_name = _BAND_TAG[band]
+    return getattr(s, color_name)(s.bold(tag))
 
 
 def _priority_alert_line(alert: UseOrLoseAlert, s: _Style, band: int) -> str:
-    tag, color_name = _BAND_TAG[band]
-    colorize = getattr(s, color_name)
     who = alert.account or "default"
     when = _human_deadline(alert.days_until_reset)
     verb = "pace" if alert.kind == "conserve" else "use"
@@ -287,7 +336,40 @@ def _priority_alert_line(alert: UseOrLoseAlert, s: _Style, band: int) -> str:
         f"{s.bold(provider_display_name(alert.provider))} · {who} · "
         f"{alert.window_label}: {alert.remaining_percent:.0f}% left · {verb} {when}"
     )
-    return f"{colorize(s.bold(tag))} {body}"
+    return f"{_priority_tag(s, band)} {body}"
+
+
+def _priority_error_line(account: AccountUsage, s: _Style) -> str:
+    who = account.account or "default"
+    detail = (account.error or "no usage data").strip()
+    body = f"{s.bold(provider_display_name(account.provider))} · {who} · {detail}"
+    return f"{_priority_tag(s, _BAND_ERROR)} {body}"
+
+
+def _priority_account_line(account: AccountUsage, s: _Style, band: int) -> str:
+    """One mid/ok line for a live account that did not raise a burn/conserve alert."""
+    who = account.account or "default"
+    name = s.bold(provider_display_name(account.provider))
+    windows = [w for w in account.windows if w.remaining() is not None]
+    if windows:
+        # Prefer longest window (governing), then highest remaining.
+        windows.sort(
+            key=lambda w: (
+                -(w.window_minutes or 0),
+                -(w.remaining() or 0),
+            )
+        )
+        window = windows[0]
+        rem = window.remaining() or 0.0
+        when = _human_deadline(window.days_until_reset())
+        body = f"{name} · {who} · {window.label}: {rem:.0f}% left · ok {when}"
+    elif account.balance_usd is not None:
+        body = f"{name} · {who} · balance ${account.balance_usd:.2f}"
+    elif account.credits_remaining is not None:
+        body = f"{name} · {who} · credits {account.credits_remaining:g}"
+    else:
+        body = f"{name} · {who} · on pace"
+    return f"{_priority_tag(s, band)} {body}"
 
 
 def render_stderr_meta(

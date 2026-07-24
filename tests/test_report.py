@@ -410,6 +410,12 @@ def test_default_report_is_priority_ladder():
 
     now = utcnow()
     acc = AccountUsage(provider="codex", source="codexbar", account="a@x.com")
+    broken = AccountUsage(
+        provider="grok",
+        source="codexbar",
+        account="b@x.com",
+        error="session expired",
+    )
     burn = UseOrLoseAlert(
         urgency=Urgency.HIGH,
         provider="codex",
@@ -436,18 +442,59 @@ def test_default_report_is_priority_ladder():
         score=90.0,
         kind="conserve",
     )
-    snap = Snapshot(collected_at=now, accounts=[acc], collector_errors=["tokscale: boom"])
+    snap = Snapshot(
+        collected_at=now,
+        accounts=[acc, broken],
+        collector_errors=["tokscale: boom"],
+    )
     text = render_report(snap, [empty, burn], config={}, color=False)
     assert "(full)" not in text
     assert "## Per-provider usage" not in text
     assert "Detail: ai --full" not in text
-    assert "Collector errors" not in text
+    assert "\n\n" not in text
+    lines = text.splitlines()
+    assert lines[0].startswith("error")
+    assert "session expired" in lines[0]
+    assert text.index("error") < text.index("empty")
     assert text.index("empty") < text.index("use")
-    assert text.strip().splitlines()[-1].startswith("use")
+    assert lines[-1].startswith("use")
+    # Every account appears (broken as error; codex via burn alert)
+    assert "Grok" in text or "grok" in text.lower()
+    assert "Codex" in text
     meta = render_stderr_meta(snap, [empty, burn], color=False)
     assert "Collected at" in meta
     assert "tokscale: boom" in meta
     assert "Detail: ai --full" in meta
+
+
+def test_priority_ladder_includes_on_pace_providers():
+    from datetime import timedelta
+
+    from ai.models import BillingKind, QuotaWindow
+    from ai.report import render_priority_ladder
+
+    now = utcnow()
+    ok = AccountUsage(
+        provider="cursor",
+        source="codexbar",
+        account="c@x.com",
+        billing_kind=BillingKind.SUBSCRIPTION_WINDOW,
+        windows=[
+            QuotaWindow(
+                label="Cursor included",
+                used_percent=40.0,
+                remaining_percent=60.0,
+                resets_at=now + timedelta(days=10),
+                window_minutes=44640,
+            )
+        ],
+    )
+    snap = Snapshot(collected_at=now, accounts=[ok])
+    text = render_priority_ladder([], snapshot=snap, color=False)
+    assert text.startswith("mid")
+    assert "Cursor" in text
+    assert "60%" in text
+    assert "\n\n" not in text
 
 
 def test_brief_aliases_default_priority_ladder():
@@ -477,14 +524,33 @@ def test_full_report_includes_providers():
 
 
 def test_brief_report_omits_usage_and_tips():
+    from datetime import timedelta
+
+    from ai.models import BillingKind, QuotaWindow
+
     now = utcnow()
-    acc = AccountUsage(provider="codex", source="codexbar", account="a@x.com")
+    acc = AccountUsage(
+        provider="codex",
+        source="codexbar",
+        account="a@x.com",
+        billing_kind=BillingKind.SUBSCRIPTION_WINDOW,
+        windows=[
+            QuotaWindow(
+                label="Weekly",
+                used_percent=10.0,
+                remaining_percent=90.0,
+                resets_at=now + timedelta(days=5),
+                window_minutes=10080,
+            )
+        ],
+    )
     snap = Snapshot(collected_at=now, accounts=[acc], collector_errors=["tokscale: boom"])
     text = render_report(snap, [], config={}, color=False, brief=True)
     assert "## Per-provider usage" not in text
     assert "## Cross-checks" not in text
     assert "## Tips" not in text
-    assert "nothing urgent" in text
+    assert text.startswith("mid")
+    assert "Codex" in text
 
 
 def test_glance_respects_custom_width():

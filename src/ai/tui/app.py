@@ -94,6 +94,7 @@ def run_usage_app(
                 err.print(_as_text(line))
         ladder = render_priority_ladder(
             alerts,
+            snapshot=snapshot,
             color=color if color is not None else None,
             width=width,
         )
