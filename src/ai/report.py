@@ -235,16 +235,21 @@ def alert_priority_band(alert: UseOrLoseAlert) -> int:
 
 
 def _priority_sort_key(alert: UseOrLoseAlert) -> tuple:
+    """Homogeneous sort key: (band, float, float, provider, account)."""
     band = alert_priority_band(alert)
-    days = alert.days_until_reset if alert.days_until_reset is not None else 999.0
-    # Within USE: lower score / farther reset first so hottest burns land at bottom.
+    days = float(alert.days_until_reset) if alert.days_until_reset is not None else 999.0
+    rem = float(alert.remaining_percent)
+    score = float(alert.score)
+    prov = alert.provider.casefold()
+    acct = (alert.account or "").casefold()
+    # Within USE: farther reset / lower score first so hottest burns land at bottom.
     if band == _BAND_USE:
-        return (band, -days, alert.score)
+        return (band, -days, score, prov, acct)
     if band == _BAND_EMPTY:
-        return (band, alert.remaining_percent, -alert.score)
+        return (band, rem, -score, prov, acct)
     if band == _BAND_CONSERVE:
-        return (band, -alert.score, days)
-    return (band, days, -alert.score)
+        return (band, -score, days, prov, acct)
+    return (band, days, -score, prov, acct)
 
 
 def _account_ladder_key(account: AccountUsage) -> tuple[str, str]:
@@ -280,15 +285,15 @@ def render_priority_ladder(
     if s is None:
         s = _Style(use_color(force=color))
 
-    # (band, sort_tuple, line)
-    entries: list[tuple[int, tuple, str]] = []
+    # (sort_key, line) — sort_key always (band, float, float, provider, account)
+    entries: list[tuple[tuple, str]] = []
     covered: set[tuple[str, str]] = set()
 
     for alert in alerts:
         if alert.urgency == Urgency.NONE:
             continue
         band = alert_priority_band(alert)
-        entries.append((band, _priority_sort_key(alert), _priority_alert_line(alert, s, band)))
+        entries.append((_priority_sort_key(alert), _priority_alert_line(alert, s, band)))
         covered.add(_alert_ladder_key(alert))
 
     accounts = _sorted_accounts(snapshot.accounts) if snapshot is not None else []
@@ -296,31 +301,28 @@ def render_priority_ladder(
         key = _account_ladder_key(account)
         if key in covered:
             continue
+        prov = account.provider.casefold()
+        acct = (account.account or "").casefold()
         if account.error or not _account_has_usage(account):
             entries.append(
                 (
-                    _BAND_ERROR,
-                    (_BAND_ERROR, account.provider.casefold(), (account.account or "").casefold()),
+                    (_BAND_ERROR, 0.0, 0.0, prov, acct),
                     _priority_error_line(account, s),
                 )
             )
             continue
-        band = _BAND_MID
         entries.append(
             (
-                band,
-                (band, account.provider.casefold(), (account.account or "").casefold()),
-                _priority_account_line(account, s, band),
+                (_BAND_MID, 0.0, 0.0, prov, acct),
+                _priority_account_line(account, s, _BAND_MID),
             )
         )
 
     if not entries:
         return s.green("use   nothing urgent under current thresholds")
 
-    entries.sort(key=lambda item: item[1])
-    return "\n".join(
-        _clamp_display_width(line, width) for _band, _key, line in entries
-    )
+    entries.sort(key=lambda item: item[0])
+    return "\n".join(_clamp_display_width(line, width) for _key, line in entries)
 
 
 def _priority_tag(s: _Style, band: int) -> str:
@@ -352,9 +354,10 @@ def _priority_account_line(account: AccountUsage, s: _Style, band: int) -> str:
     name = s.bold(provider_display_name(account.provider))
     windows = [w for w in account.windows if w.remaining() is not None]
     if windows:
-        # Prefer longest window (governing), then highest remaining.
+        # Prefer Included / longest window (governing), then highest remaining.
         windows.sort(
             key=lambda w: (
+                0 if "included" in (w.label or "").casefold() else 1,
                 -(w.window_minutes or 0),
                 -(w.remaining() or 0),
             )
