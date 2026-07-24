@@ -353,3 +353,23 @@ def _duration_key(window_minutes: Any) -> str | None:
     if m <= 44640:
         return "monthly"
     return None
+
+
+def count_snapshots(
+    *, retention_days: int = _DEFAULT_RETENTION_DAYS, max_count: int = 10_000
+) -> int:
+    """How many retained snapshot files are on disk (newest-first load)."""
+    return len(load_recent_snapshots(retention_days=retention_days, max_count=max_count))
+
+
+def history_status_line(*, analysis_cfg: dict[str, Any] | None = None) -> str:
+    """One-line status for --full / docs: snapshot count and learning flag."""
+    cfg = analysis_cfg or {}
+    try:
+        retention = int(cfg.get("snapshot_retention_days") or _DEFAULT_RETENTION_DAYS)
+    except (TypeError, ValueError):
+        retention = _DEFAULT_RETENTION_DAYS
+    n = count_snapshots(retention_days=retention)
+    learning = "on" if cfg.get("learn_from_history") else "off"
+    noun = "snapshot" if n == 1 else "snapshots"
+    return f"History: {n} {noun} in {snapshot_dir()} (learning {learning})"

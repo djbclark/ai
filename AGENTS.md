@@ -25,8 +25,10 @@ then offer choices — **do not restart at Step 1**.
    merges, consume official `lastGoodUsage` in `collectors/cswap.py` (cache
    hydrate → fallback). Tracked: [djbclark/aiuse#1](https://github.com/djbclark/aiuse/issues/1).
    Design: [`docs/cswap-reliability.md`](docs/cswap-reliability.md).
-3. **Operator-driven only** — live smoke (A), cron recipe (H), history
-   insights (G), or new features. Packaging (PyPI + Homebrew + OIDC) is done.
+3. **Operator-driven only** — live smoke (A), turn on `learn_from_history`
+   after snapshots accumulate ([`docs/history-learning.md`](docs/history-learning.md)),
+   or new features. Packaging + LaunchAgent recipe ([`docs/scheduling.md`](docs/scheduling.md))
+   are done.
 4. **Parked (do not start unless asked):**
    - **Step 35** — local ccusage / stats-cache burn (not plan %). See Phase 7
      and [`docs/claude-local-usage.md`](docs/claude-local-usage.md).
@@ -98,6 +100,8 @@ full description, install steps, CLI flags, and config.
 | `docs/handoff.md`                            | Latest session wrap-up, loose ends, verify commands.                                     | First stop after this file when resuming.                        |
 | `docs/fix-implementation-plan.md`            | Review-derived task list (Steps 1–32 + Phase 7 optional 33–35). **1–32 and 34 done.**    | Historical scope / remaining optional steps only.                |
 | `docs/json-contract.md`                      | Stable `aiuse --json` fields and exit codes for scripts.                                 | Cron / automation consumers.                                     |
+| `docs/scheduling.md`                         | macOS LaunchAgent every 6h (`persist_snapshots`).                                        | Installing scheduled collection.                                 |
+| `docs/history-learning.md`                   | Snapshot persist vs `learn_from_history`; `--full` history line.                         | Enabling / debugging history insights.                           |
 | `docs/collector-concurrency.md`              | How collectors run in parallel and timeout (45s).                                        | Perf / hang questions.                                           |
 | `completions/`                               | bash/zsh completion scripts.                                                             | Shell UX.                                                        |
 | `https://github.com/djbclark/aiuse/issues/1` | Tracks consuming cswap#170 last-good JSON (Step 33).                                     | When #170 merges or when checking upstream status.               |

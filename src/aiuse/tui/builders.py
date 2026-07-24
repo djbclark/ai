@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from aiuse.analysis.history import history_status_line
 from aiuse.models import Snapshot, Urgency, UseOrLoseAlert, provider_display_name
 from aiuse.report import (
     ACTION_PLAN_MAX_LINES,
@@ -63,6 +64,12 @@ def build_report_sections(
         meta += f" · {n_actionable} alert{'s' if n_actionable != 1 else ''}"
     else:
         meta += " · no burn/conserve alerts"
+    analysis_cfg = (config or {}).get("analysis") or {}
+    if not isinstance(analysis_cfg, dict):
+        analysis_cfg = {}
+    hist_lines = [s.dim(meta)]
+    if full:
+        hist_lines.append(s.dim(history_status_line(analysis_cfg=analysis_cfg)))
     title = "AI USAGE — USE IT OR LOSE IT"
     if full:
         title += " (full)"
@@ -70,7 +77,7 @@ def build_report_sections(
         ReportSection(
             title=title,
             title_ansi=s.bold(s.cyan(title)),
-            lines=[s.dim(meta)],
+            lines=hist_lines,
             kind="header",
         )
     )

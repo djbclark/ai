@@ -7,6 +7,7 @@ import sys
 from datetime import datetime
 from typing import Any, TextIO
 
+from aiuse.analysis.history import history_status_line
 from aiuse.analysis.pace import compute_pace
 from aiuse.analysis.use_or_lose import DAYS_PER_MONTH, _classify_flexibility, _compute_value_at_risk
 from aiuse.models import (
@@ -143,9 +144,12 @@ def render_report(
     else:
         meta += " · no burn/conserve alerts"
     lines.append(s.dim(meta))
+    analysis_cfg = (config or {}).get("analysis") or {}
+    if not isinstance(analysis_cfg, dict):
+        analysis_cfg = {}
+    lines.append(s.dim(history_status_line(analysis_cfg=analysis_cfg)))
     lines.append(s.bold("=" * width))
 
-    analysis_cfg = (config or {}).get("analysis") or {}
     waking_hours = float(analysis_cfg.get("waking_hours_per_day", 16))
 
     lines.append("")

@@ -374,6 +374,72 @@ def test_without_quiet_prints_progress(monkeypatch, capsys):
     assert "Collecting usage" in err
 
 
+def test_persist_snapshots_saves_without_learning(monkeypatch, tmp_path, capsys):
+    from aiuse import cli as cli_mod
+    from aiuse.analysis import history as history_mod
+
+    snap = Snapshot(collected_at=utcnow())
+    monkeypatch.setattr(cli_mod, "run_collectors", lambda _c: snap)
+    monkeypatch.setattr(cli_mod, "analyze_use_or_lose", lambda *_a, **_k: [])
+    monkeypatch.setattr(history_mod, "snapshot_dir", lambda: tmp_path / "snapshots")
+    monkeypatch.setattr(
+        cli_mod,
+        "load_config",
+        lambda _p=None: {
+            "analysis": {"persist_snapshots": True, "learn_from_history": False},
+            "collectors": {},
+            "timeouts": {},
+        },
+    )
+    assert cli_mod.main(["--json", "-q"]) == 0
+    err = capsys.readouterr().err
+    assert "Saved snapshot" not in err  # quiet suppresses progress
+    files = list((tmp_path / "snapshots").glob("*.json"))
+    assert len(files) == 1
+
+
+def test_no_persist_when_flags_off(monkeypatch, tmp_path):
+    from aiuse import cli as cli_mod
+    from aiuse.analysis import history as history_mod
+
+    snap = Snapshot(collected_at=utcnow())
+    monkeypatch.setattr(cli_mod, "run_collectors", lambda _c: snap)
+    monkeypatch.setattr(cli_mod, "analyze_use_or_lose", lambda *_a, **_k: [])
+    monkeypatch.setattr(history_mod, "snapshot_dir", lambda: tmp_path / "snapshots")
+    monkeypatch.setattr(
+        cli_mod,
+        "load_config",
+        lambda _p=None: {
+            "analysis": {"persist_snapshots": False, "learn_from_history": False},
+            "collectors": {},
+            "timeouts": {},
+        },
+    )
+    assert cli_mod.main(["--json", "-q"]) == 0
+    assert not (tmp_path / "snapshots").exists()
+
+
+def test_learn_from_history_implies_persist(monkeypatch, tmp_path):
+    from aiuse import cli as cli_mod
+    from aiuse.analysis import history as history_mod
+
+    snap = Snapshot(collected_at=utcnow())
+    monkeypatch.setattr(cli_mod, "run_collectors", lambda _c: snap)
+    monkeypatch.setattr(cli_mod, "analyze_use_or_lose", lambda *_a, **_k: [])
+    monkeypatch.setattr(history_mod, "snapshot_dir", lambda: tmp_path / "snapshots")
+    monkeypatch.setattr(
+        cli_mod,
+        "load_config",
+        lambda _p=None: {
+            "analysis": {"persist_snapshots": False, "learn_from_history": True},
+            "collectors": {},
+            "timeouts": {},
+        },
+    )
+    assert cli_mod.main(["--json", "-q"]) == 0
+    assert len(list((tmp_path / "snapshots").glob("*.json"))) == 1
+
+
 def test_collect_exit_code_helper():
     from aiuse.models import Urgency, UseOrLoseAlert
 

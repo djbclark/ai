@@ -257,7 +257,11 @@ def main(argv: list[str] | None = None) -> int:
     alerts = analyze_use_or_lose(snapshot, config)
 
     analysis_cfg = config.get("analysis") if isinstance(config.get("analysis"), dict) else {}
-    if analysis_cfg.get("learn_from_history"):
+    # learn_from_history implies persist so scoring always has fresh samples.
+    should_persist = bool(analysis_cfg.get("persist_snapshots")) or bool(
+        analysis_cfg.get("learn_from_history")
+    )
+    if should_persist:
         try:
             snapshot_path = save_snapshot(snapshot, alerts)
             _progress(f"Saved snapshot to {snapshot_path}")

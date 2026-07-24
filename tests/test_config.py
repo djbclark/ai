@@ -45,6 +45,14 @@ def test_load_config_explicit_missing_path_exits():
         load_config("/nonexistent/ai-config-does-not-exist.yaml")
 
 
+def test_default_analysis_persist_and_learn_flags():
+    from aiuse.config import DEFAULT_CONFIG
+
+    analysis = DEFAULT_CONFIG["analysis"]
+    assert analysis["persist_snapshots"] is False
+    assert analysis["learn_from_history"] is False
+
+
 def test_default_timeouts_are_45s():
     assert DEFAULT_SUBPROCESS_TIMEOUT == 45.0
     assert timeout_for({}, "tokscale") == 45.0

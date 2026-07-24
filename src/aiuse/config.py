@@ -40,6 +40,9 @@ DEFAULT_CONFIG: dict[str, Any] = {
             "min_elapsed_fraction": 0.15,
             "conserve_min_lead_hours": 4.0,
         },
+        # Persist JSON under ~/.cache/aiuse/snapshots without changing scoring.
+        # learn_from_history implies persist (see cli.save gate).
+        "persist_snapshots": False,
         "learn_from_history": False,
         "snapshot_retention_days": 90,
         "waking_hours_per_day": 16,

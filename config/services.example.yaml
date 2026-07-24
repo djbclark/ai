@@ -18,7 +18,11 @@ analysis:
   urgent_remaining_percent: 70
   urgent_days_until_reset: 7
 
-  # Phase 4 (experimental): learn actual consumption rates from persisted snapshots.
+  # Persist each run under ~/.cache/aiuse/snapshots (for LaunchAgent / history).
+  # Does not change scoring by itself — enable learn_from_history after a few days.
+  persist_snapshots: false
+  # Experimental: blend learned burn rates + chronic-waste alerts from snapshots.
+  # Implies persist_snapshots.
   learn_from_history: false
   snapshot_retention_days: 90
 

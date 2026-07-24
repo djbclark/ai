@@ -17,6 +17,7 @@ from aiuse.analysis.history import (
     chronic_waste_summary,
     compute_learned_burn_rates,
     compute_learned_flexibility,
+    history_status_line,
     load_recent_snapshots,
     merge_learned_flexibility,
     save_snapshot,
@@ -144,6 +145,21 @@ def test_save_and_load_snapshot(tmp_path: Path):
         assert path2 != path
         assert path2.exists()
         assert len(list(tmp_path.glob("*.json"))) == 2
+
+
+def test_history_status_line(tmp_path: Path):
+    with patch("aiuse.analysis.history.snapshot_dir", return_value=tmp_path):
+        line = history_status_line(analysis_cfg={"learn_from_history": False})
+        assert "0 snapshots" in line
+        assert "learning off" in line
+        assert str(tmp_path) in line
+        (tmp_path / "a.json").write_text(
+            json.dumps({"collected_at": _now().isoformat(), "accounts": []}),
+            encoding="utf-8",
+        )
+        line2 = history_status_line(analysis_cfg={"learn_from_history": True})
+        assert "1 snapshot" in line2
+        assert "learning on" in line2
 
 
 def test_load_recent_snapshots_empty_dir(tmp_path: Path):

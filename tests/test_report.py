@@ -558,6 +558,8 @@ def test_full_report_includes_providers():
     assert "## Per-provider usage" in text
     assert "## Tips" in text
     assert "Detail: ai --full" not in text
+    assert "History:" in text
+    assert "learning off" in text
 
 
 def test_brief_report_omits_usage_and_tips():
