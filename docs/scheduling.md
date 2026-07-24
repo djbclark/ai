@@ -5,78 +5,57 @@ Regular runs accumulate snapshots under `~/.cache/aiuse/snapshots` when
 This is the foundation for history insights without changing pace scoring until
 you opt into `learn_from_history`.
 
-**Primary:** macOS **LaunchAgent** every **6 hours**.  
+**Primary for this operator:** manage the agent from
+[`~/ops/site-djbclark`](https://github.com/djbclark/site-djbclark) role
+`site_agents` (label `com.djbclark.aiuse`, every 6 hours).
+
+```bash
+cd ~/ops/site-djbclark
+just site-agents-apply
+just site-agents-status
+```
+
+Requires `~/.local/bin/aiuse` (`pipx install aiuse`). The role enables
+`persist_snapshots` in `~/.config/aiuse/services.yaml` and sets LaunchAgent
+`PATH` so `cswap` / `codexbar` / `tokscale` resolve.
+
+**Generic template** (other machines / non-Ansible): [`packaging/launchd/`](../packaging/launchd/)
+and `./packaging/launchd/install.sh`.
+
+**Cadence:** every **6 hours** (`StartInterval` 21600) + `RunAtLoad`.  
 **Footnote:** cron one-liner at the bottom.
 
 Exit codes (for log / monitor tooling): see [`json-contract.md`](json-contract.md).
 
-| Code  | Meaning for a scheduled run                                               |
-| ----- | ------------------------------------------------------------------------- |
-| **0** | OK, no burn/conserve alerts                                               |
-| **1** | Hard failure (treat as error)                                             |
+| Code | Meaning for a scheduled run |
+| --- | --- |
+| **0** | OK, no burn/conserve alerts |
+| **1** | Hard failure (treat as error) |
 | **2** | OK collection; at least one burn/conserve alert (not a scheduler failure) |
 
-## Quick install
-
-Requires `aiuse` on `PATH` (`pipx install aiuse` or Homebrew tap).
+## Verify (site-djbclark)
 
 ```bash
-cd /path/to/aiuse   # or: git clone https://github.com/djbclark/aiuse.git
-chmod +x packaging/launchd/install.sh
-./packaging/launchd/install.sh
-```
-
-The script:
-
-1. Resolves the absolute path to `aiuse`
-2. Ensures `analysis.persist_snapshots: true` in `~/.config/aiuse/services.yaml`
-   (creates a minimal file if missing; does not flip `learn_from_history`)
-3. Writes `~/Library/LaunchAgents/com.djbclark.aiuse.plist`
-4. `launchctl bootstrap` + kickstart once
-5. Logs to `~/Library/Logs/aiuse/`
-
-## Manual install
-
-1. In `~/.config/aiuse/services.yaml`:
-
-   ```yaml
-   analysis:
-     persist_snapshots: true
-     learn_from_history: false # enable later; see history-learning.md
-   ```
-
-2. Copy [`packaging/launchd/com.djbclark.aiuse.plist`](../packaging/launchd/com.djbclark.aiuse.plist),
-   replace `AIUSE_BIN` with `$(command -v aiuse)` (absolute path) and `LOG_DIR`
-   with `$HOME/Library/Logs/aiuse`, then:
-
-   ```bash
-   mkdir -p ~/Library/Logs/aiuse ~/Library/LaunchAgents
-   # after editing the plist:
-   cp com.djbclark.aiuse.plist ~/Library/LaunchAgents/
-   launchctl bootstrap gui/"$(id -u)" ~/Library/LaunchAgents/com.djbclark.aiuse.plist
-   launchctl kickstart -k gui/"$(id -u)"/com.djbclark.aiuse
-   ```
-
-## Verify
-
-```bash
-launchctl print gui/"$(id -u)"/com.djbclark.aiuse | head
+just site-agents-status
+launchctl print "gui/$(id -u)/com.djbclark.aiuse" | head
 ls -lt ~/.cache/aiuse/snapshots | head
+tail -n 5 ~/.local/state/aiuse.error.log
 aiuse --full -q --no-tui | head -20   # look for "History: N snapshots …"
-tail -n 20 ~/Library/Logs/aiuse/aiuse.stderr.log
 ```
 
-## Uninstall
+## Uninstall (site-djbclark)
 
 ```bash
-launchctl bootout gui/"$(id -u)"/com.djbclark.aiuse
-rm -f ~/Library/LaunchAgents/com.djbclark.aiuse.plist
+uid=$(id -u)
+launchctl bootout "gui/$uid/com.djbclark.aiuse"
+# Or remove the aiuse tasks from site_agents and re-apply after deleting the plist.
 ```
 
 ## Cron footnote
 
 ```cron
-0 */6 * * *  /path/to/aiuse -q --json >>"$HOME/Library/Logs/aiuse/cron.stdout.log" 2>>"$HOME/Library/Logs/aiuse/cron.stderr.log"
+0 */6 * * *  /path/to/aiuse -q --json >>"$HOME/.local/state/aiuse.cron.stdout.log" 2>>"$HOME/.local/state/aiuse.cron.stderr.log"
 ```
 
 Prefer LaunchAgent on macOS (sleep/wake and `RunAtLoad` behave better than cron).
+Ensure cron’s `PATH` includes Homebrew and `~/.local/bin`.
