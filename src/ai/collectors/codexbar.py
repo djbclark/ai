@@ -36,6 +36,12 @@ PREPAID_HINTS = {
 # unreasonable number of processes for a very long explicit --providers list.
 _MAX_CONCURRENT_PROVIDER_QUERIES = 16
 
+# CodexBar `auto` for these providers prefers a local heuristic that can diverge
+# from server-authoritative quotas. OpenCode Go's local path sums SQLite costs
+# against hardcoded $12/$30/$60 caps; the live billing page is the real limit.
+# Force `--source web` first, then fall back to auto if web is unavailable.
+_WEB_PREFERRED_PROVIDERS = frozenset({"opencodego"})
+
 _SLOT_LABELS: dict[str, tuple[str, str, str]] = {
     "copilot": (
         "GitHub Copilot completions",
@@ -173,12 +179,41 @@ def _query_provider(provider_arg: str | None, *, timeout: float = 45.0) -> Any:
     argv = ["codexbar", "usage", "--format", "json"]
     if provider_arg is not None:
         argv.extend(["--provider", provider_arg])
+
+    prefer_web = provider_arg is not None and provider_arg.lower() in _WEB_PREFERRED_PROVIDERS
+    if prefer_web:
+        web_outcome = _run_codexbar_usage([*argv, "--source", "web"], timeout=timeout)
+        if _usable_usage_payload(web_outcome):
+            return web_outcome
+        # Web failed or returned only errors — fall through to CodexBar auto
+        # (local heuristic) so the provider still appears in the report.
+
+    return _run_codexbar_usage(argv, timeout=timeout)
+
+
+def _run_codexbar_usage(argv: list[str], *, timeout: float) -> Any:
     try:
         return run_json(argv, timeout=timeout)
     except CollectorError as exc:
         return exc
     except Exception as exc:  # noqa: BLE001 — isolate this provider's failure from the rest of the batch
         return CollectorError(str(exc))
+
+
+def _usable_usage_payload(outcome: Any) -> bool:
+    """True when CodexBar returned at least one non-error usage row."""
+    if isinstance(outcome, CollectorError):
+        return False
+    rows = outcome if isinstance(outcome, list) else [outcome]
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        if row.get("error"):
+            continue
+        usage = row.get("usage")
+        if isinstance(usage, dict) and usage:
+            return True
+    return False
 
 
 def _from_row(row: dict[str, Any]) -> AccountUsage:
@@ -246,6 +281,11 @@ def _from_row(row: dict[str, Any]) -> AccountUsage:
     balance_usd = None
     credits_remaining = None
     notes: list[str] = [f"Live data fetched by CodexBar via {source_tag}."]
+    if provider == "opencodego" and source_tag == "local":
+        notes.append(
+            "OpenCode Go local estimate (SQLite costs vs fixed caps) — may diverge "
+            "from the official Go limit; prefer CodexBar web when available."
+        )
 
     credits = row.get("credits")
     if isinstance(credits, dict):
@@ -258,6 +298,17 @@ def _from_row(row: dict[str, Any]) -> AccountUsage:
         used = _f(openrouter.get("totalUsage"))
         if total is not None and used is not None:
             notes.append(f"OpenRouter prepaid credits: ${total:.2f} funded, ${used:.2f} spent.")
+
+    # CodexBar stores OpenCode Zen (overage) balance in providerCost.used with
+    # period "Zen balance" and limit 0 — not a subscription window.
+    provider_cost = usage.get("providerCost")
+    if isinstance(provider_cost, dict):
+        period = str(provider_cost.get("period") or "")
+        zen = _f(provider_cost.get("used"))
+        if zen is not None and "zen" in period.lower():
+            notes.append(f"OpenCode Zen balance: ${zen:.2f}.")
+            if balance_usd is None:
+                balance_usd = zen
 
     reset_credits = usage.get("codexResetCredits")
     if isinstance(reset_credits, dict) and reset_credits.get("availableCount") is not None:

@@ -62,6 +62,8 @@ DEFAULT_CONFIG: dict[str, Any] = {
                 "shared_allotment": True,
                 "5h": {"flexibility": 0.0, "refill_capacity_unit": "requests", "refill_capacity": 50},
             },
+            # 5h ⊂ weekly ⊂ monthly — burning a short window draws the same Go budget.
+            "opencode": {"shared_allotment": True},
             "grok": {"weekly": {"flexibility": 0.5, "refill_capacity_unit": "requests", "refill_capacity": 100}},
         },
     },

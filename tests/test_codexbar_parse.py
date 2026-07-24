@@ -388,6 +388,93 @@ def test_unnamed_same_duration_slots_keep_distinct_labels():
     assert "(2)" in labels[1]
 
 
+def test_opencodego_prefers_web_source(monkeypatch):
+    calls: list[list[str]] = []
+
+    def fake_run_json(argv, *, timeout=90.0, allow_empty=False):
+        calls.append(list(argv))
+        assert "--source" in argv and argv[argv.index("--source") + 1] == "web"
+        return [
+            {
+                "provider": "opencodego",
+                "source": "web",
+                "usage": {
+                    "primary": {"usedPercent": 0, "windowMinutes": 300, "resetsAt": "2099-01-01T00:00:00Z"},
+                    "secondary": {"usedPercent": 16, "windowMinutes": 10080, "resetsAt": "2099-01-08T00:00:00Z"},
+                    "tertiary": {"usedPercent": 100, "windowMinutes": 43200, "resetsAt": "2099-02-01T00:00:00Z"},
+                    "providerCost": {
+                        "used": 1.25,
+                        "limit": 0,
+                        "period": "Zen balance",
+                        "currencyCode": "USD",
+                    },
+                },
+            }
+        ]
+
+    monkeypatch.setattr("ai.collectors.codexbar.run_json", fake_run_json)
+
+    from ai.collectors.codexbar import _from_row, _query_provider
+
+    outcome = _query_provider("opencodego")
+    assert isinstance(outcome, list)
+    assert outcome[0]["source"] == "web"
+    assert len(calls) == 1
+    assert calls[0][-2:] == ["--source", "web"]
+
+    account = _from_row(outcome[0])
+    monthly = next(w for w in account.windows if "monthly" in w.label.lower())
+    assert monthly.remaining_percent == 0.0
+    assert any("Zen balance" in note for note in account.notes)
+    assert account.balance_usd == 1.25
+
+
+def test_opencodego_falls_back_to_auto_when_web_errors(monkeypatch):
+    calls: list[list[str]] = []
+
+    def fake_run_json(argv, *, timeout=90.0, allow_empty=False):
+        calls.append(list(argv))
+        if "--source" in argv:
+            return [
+                {
+                    "provider": "opencodego",
+                    "source": "web",
+                    "error": {"kind": "provider", "message": "missing cookie"},
+                }
+            ]
+        return [
+            {
+                "provider": "opencodego",
+                "source": "local",
+                "usage": {
+                    "tertiary": {"usedPercent": 80.6, "windowMinutes": 43200, "resetsAt": "2099-02-01T00:00:00Z"},
+                },
+            }
+        ]
+
+    monkeypatch.setattr("ai.collectors.codexbar.run_json", fake_run_json)
+
+    from ai.collectors.codexbar import _from_row, _query_provider
+
+    outcome = _query_provider("opencodego")
+    assert isinstance(outcome, list)
+    assert outcome[0]["source"] == "local"
+    assert any(call[-2:] == ["--source", "web"] for call in calls)
+    assert any("--source" not in call for call in calls)
+
+    account = _from_row(outcome[0])
+    assert any("local estimate" in note for note in account.notes)
+
+
+def test_usable_usage_payload_rejects_error_only_rows():
+    from ai.collectors.codexbar import _usable_usage_payload
+    from ai.collectors.base import CollectorError
+
+    assert _usable_usage_payload(CollectorError("boom")) is False
+    assert _usable_usage_payload([{"provider": "opencodego", "error": {"message": "x"}}]) is False
+    assert _usable_usage_payload([{"provider": "opencodego", "usage": {"primary": {"usedPercent": 1}}}]) is True
+
+
 def test_dollar_in_reset_description_does_not_flip_subscription_billing():
     from ai.collectors.codexbar import _from_row
     from ai.models import BillingKind

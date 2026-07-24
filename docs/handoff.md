@@ -1,8 +1,8 @@
 # Session handoff (current)
 
-**Date:** 2026-07-23  
-**Branch:** `main` (pushed) · tip at handoff time: `b5cc6b7`  
-**Tests:** `.venv/bin/python -m pytest -q` — **171** passing
+**Date:** 2026-07-24  
+**Branch:** `main`  
+**Tests:** `.venv/bin/python -m pytest -q` — **177** passing
 
 Fresh agents: start at [`AGENTS.md`](../AGENTS.md). This file is the short
 “where we left off” note so the next session does not re-discover status.
@@ -19,6 +19,7 @@ Fresh agents: start at [`AGENTS.md`](../AGENTS.md). This file is the short
 | Product polish batch | Exit codes 0/1/2, `-q`, soft cross-checks, daily workflow README |
 | Second polish batch | Doctor version probe + config validation, `--brief`, completions, JSON contract, concurrency audit |
 | Action plan last | Report ends on action plan (≤~23×80); if detailed is taller, detailed + **at a glance** brief trailer |
+| **OpenCode Go quota** | Prefer CodexBar `--source web` for `opencodego` (local SQLite/$caps heuristic lied vs TUI “limit reached”); `opencode` shared_allotment on; docs — [`opencode-go-quota.md`](opencode-go-quota.md) |
 
 Recent commits (newest first): see `git log -5 --oneline`
 
@@ -62,9 +63,11 @@ Medium: history-backed pace note, consume #170 when merged.
 | [`docs/json-contract.md`](json-contract.md) | Stable JSON for scripts |
 | [`docs/collector-concurrency.md`](collector-concurrency.md) | Parallel collect + 45s timeouts |
 | [`docs/cswap-reliability.md`](cswap-reliability.md) | Claude multi-account / stale JSON |
+| [`docs/opencode-go-quota.md`](opencode-go-quota.md) | OpenCode Go web vs local CodexBar source |
 | [`docs/fix-implementation-plan.md`](fix-implementation-plan.md) | Historical steps + Phase 7 optional |
 | [`src/ai/cli.py`](../src/ai/cli.py) | doctor, exit codes, quiet, brief, completions |
 | [`src/ai/collectors/cswap.py`](../src/ai/collectors/cswap.py) | Claude collect + hydrate |
+| [`src/ai/collectors/codexbar.py`](../src/ai/collectors/codexbar.py) | CodexBar fan-out; OpenCode Go prefers `--source web` |
 | [`completions/`](../completions/) | bash/zsh |
 
 ## Quick verification for next agent
@@ -73,6 +76,8 @@ Medium: history-backed pace note, consume #170 when merged.
 .venv/bin/python -m pytest -q
 ai doctor
 ai --brief -q
+# OpenCode Go should match TUI when cookies work:
+codexbar usage --provider opencodego --source web --no-color
 ```
 
 ## Handoff rule

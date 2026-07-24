@@ -253,6 +253,7 @@ Shared allotment: `analysis.provider_overrides.<provider>.shared_allotment: true
 - [`docs/fix-implementation-plan.md`](docs/fix-implementation-plan.md) — review-derived fix plan (Steps **1–32** and **34** done; Phase 7 optional 33/35 remain). Start at [`AGENTS.md`](AGENTS.md) for current priorities, not Step 1.
 - [Issue #1](https://github.com/djbclark/ai/issues/1) — track consuming upstream cswap display-grade last-good JSON ([claude-swap#170](https://github.com/realiti4/claude-swap/issues/170)).
 - [`docs/cswap-reliability.md`](docs/cswap-reliability.md) — Claude multi-account reliability: why `cswap list --json` can drop usable quota, and how cache hydration + fallbacks work.
+- [`docs/opencode-go-quota.md`](docs/opencode-go-quota.md) — OpenCode Go: why CodexBar `auto`/local can show remaining % when the TUI says limit reached, and how `ai` prefers web.
 - [`docs/claude-local-usage.md`](docs/claude-local-usage.md) — Local Claude Code files / ccusage (token burn) vs subscription 5h/7d % from the OAuth usage API.
 - [`docs/tokscale-per-provider-investigation.md`](docs/tokscale-per-provider-investigation.md) — why tokscale cannot yet fan out per provider like CodexBar.
 - [`docs/json-contract.md`](docs/json-contract.md) — stable JSON fields and exit codes for scripts.

@@ -60,6 +60,8 @@ analysis:
         flexibility: 0.0
         refill_capacity_unit: "requests"
         refill_capacity: 50
+    opencode:
+      shared_allotment: true   # 5h ⊂ weekly ⊂ monthly Go budget
     grok:
       weekly:
         flexibility: 0.5
