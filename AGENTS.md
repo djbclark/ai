@@ -25,9 +25,9 @@ then offer choices — **do not restart at Step 1**.
    merges, consume official `lastGoodUsage` in `collectors/cswap.py` (cache
    hydrate → fallback). Tracked: [djbclark/aiuse#1](https://github.com/djbclark/aiuse/issues/1).
    Design: [`docs/cswap-reliability.md`](docs/cswap-reliability.md).
-3. **Operator-driven only** — live smoke (A), finish PyPI Trusted Publisher
-   (one click — [`docs/packaging.md`](docs/packaging.md)), cron recipe,
-   history insights, or new features. Homebrew tap is already live.
+3. **Operator-driven only** — live smoke (A), optional PyPI Trusted Publishing
+   for CI (token publish already shipped 2.1.0 — [`docs/packaging.md`](docs/packaging.md)),
+   cron recipe, history insights, or new features. Homebrew + PyPI are live.
 4. **Parked (do not start unless asked):**
    - **Step 35** — local ccusage / stats-cache burn (not plan %). See Phase 7
      and [`docs/claude-local-usage.md`](docs/claude-local-usage.md).

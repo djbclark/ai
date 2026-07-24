@@ -9,7 +9,7 @@ calls the same entrypoint (`aiuse.ai_stub:main`).
 | ------------------------------------ | ---------------------------------------------------------------------------------- |
 | Editable / venv (`pip install -e .`) | Supported (dev)                                                                    |
 | **pipx** from GitHub                 | Ready                                                                              |
-| **pipx** from PyPI                   | Blocked on one-time Trusted Publisher setup (release `v2.1.0` + workflow ready)    |
+| **pipx** from PyPI                   | Live: `pipx install aiuse` (**2.1.0**)                                             |
 | **Homebrew** personal tap            | Live: `brew tap djbclark/aiuse && brew trust djbclark/aiuse && brew install aiuse` |
 | homebrew-core                        | Not submitted                                                                      |
 
@@ -59,28 +59,36 @@ uv run --with twine twine check dist/*
 [`.github/workflows/publish.yml`](../.github/workflows/publish.yml) with
 Trusted Publishing (OIDC). Environment **`pypi`** already exists on the repo.
 
-### One-time operator setup (remaining)
+### One-time operator setup (optional Trusted Publishing)
 
-1. Sign in at https://pypi.org (create account if needed).
-2. Account settings → Publishing → **Add a new pending publisher**:
+OIDC publish from Actions still needs a pending publisher on PyPI (token upload
+already shipped **2.1.0**). If you want CI releases without a long-lived token:
+
+1. Account settings → Publishing → **Add a new pending publisher**:
    - PyPI Project Name: `aiuse`
    - Owner: `djbclark`
    - Repository name: `aiuse`
    - Workflow name: `publish.yml`
    - Environment name: `pypi`
-3. Re-run the failed publish workflow (or `workflow_dispatch` / republish):
-
-```bash
-gh run rerun 30098017371 -R djbclark/aiuse --failed
-```
+2. Re-run publish on the next GitHub Release (or `gh workflow run publish.yml`).
 
 Keep the PyPI project name **`aiuse`** (not `ai` — taken by Vercel’s AI SDK).
 
-Manual upload (API token) if needed:
+### Manual upload via secretspec (token)
+
+Declarations: [`secretspec.toml`](../secretspec.toml). Value in gitignored `.env`
+(dotenv provider).
 
 ```bash
-twine upload dist/*
+secretspec set PYPI_TOKEN          # one-time; prompts if omitted
+secretspec check -n --explain
+uv run --with build python -m build
+secretspec run --reason "publish aiuse to PyPI" -- \
+  bash -lc 'uv publish --token "$PYPI_TOKEN" dist/*'
 ```
+
+Trusted Publishing (OIDC) remains preferred for CI once a pending publisher
+is configured on PyPI; the token path is for local/operator publishes.
 
 ## Homebrew
 
