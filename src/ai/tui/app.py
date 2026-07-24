@@ -67,4 +67,4 @@ def run_usage_app(
         brief=brief,
         traditional_summary=traditional_summary,
     )
-    app.run(inline=True)
+    app.run(inline=True, inline_no_clear=True)
