@@ -27,7 +27,7 @@ This project shells out to tools already on your `PATH`; it does not scrape bill
 
 ```bash
 pipx install aiuse
-# until PyPI is live, or always from git tip:
+# or from git tip:
 # pipx install 'git+https://github.com/djbclark/aiuse.git'
 aiuse doctor
 ```
