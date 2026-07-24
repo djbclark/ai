@@ -41,6 +41,8 @@ def run_inline_report(
     full: bool = False,
     brief: bool = False,
     traditional_summary: bool = False,
+    quiet: bool = False,
+    color: bool | None = None,
 ) -> None:
     from ai.tui.app import run_usage_app
 
@@ -51,4 +53,6 @@ def run_inline_report(
         full=full,
         brief=brief,
         traditional_summary=traditional_summary,
+        quiet=quiet,
+        color=color,
     )

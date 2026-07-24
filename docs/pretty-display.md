@@ -4,19 +4,34 @@
 renderables printed sequentially). Do **not** use Textual or Rich `Layout`
 for the default report.
 
-**Default report is glance-first:** header, optional capacity one-liner,
-collector errors, **Action plan — at a glance** (≤3 alert lines/provider),
-and a dim `Detail: ai --full` footer. Use `--full` for per-provider detail,
-cross-checks, tips, and the detailed action plan. `--brief` is a compat alias
-of the default.
+## Default stdout: priority ladder
+
+Default `ai` prints **only** a ranked list on **stdout** (top → bottom):
+
+1. **empty** (red) — totally depleted  
+2. **slow** (yellow) — conserve / pace yourself  
+3. **mid** (cyan) — advisory / low urgency / later  
+4. **use** (green) — important to burn soon (**bottom**)
+
+Read **bottom → top** to pick what is most efficient to use next. Tags are
+fixed-width text so meaning does not rely on color alone (NO_COLOR /
+colorblind-safe). Collection time, capacity blurb, collector errors, and
+`Detail: ai --full` go to **stderr** (suppressed with `-q`).
+
+`--full` keeps the long report on stdout. `--brief` aliases the default.
+
+### Color for readability
+
+- Semantic ANSI roles (red / yellow / cyan / green), not decorative rainbows.
+- Always pair color with a text tag (`empty` / `slow` / `mid` / `use`).
+- Bold the tag + provider; keep secondary fields in the default face.
+- Respect `NO_COLOR` / `--no-color`.
 
 ## Why Textual was the wrong fit
 
-`ai` prints a **long static report** that must remain in the terminal
-scrollback (detail first, compact **at a glance** trailer last). Textual and
-Rich `Layout` are **viewport-oriented**: they claim a rectangular region and
-redraw inside it. That design is fundamentally at odds with “dump every line
-into the scrollback.”
+`ai` prints a **static report** that must remain in the terminal scrollback.
+Textual and Rich `Layout` are **viewport-oriented**: they claim a rectangular
+region and redraw inside it — at odds with “dump every line into scrollback.”
 
 | Approach | Layout help | Scrollback? |
 | --- | --- | --- |
@@ -25,16 +40,9 @@ into the scrollback.”
 | Textual (inline or full-screen) | Strongest | No — viewport + redraw |
 | Plain `print` | None | Yes |
 
-There is no mature library that gives Textual-style declarative layout *and*
-then expands the finished result as ordinary lines into scrollback. For this
-CLI, Rich’s lower-level renderables (or sequential `console.print`) are the
-practical choice.
-
 ## Implementation
 
 - Gate: `ai.tui.should_use_tui` (TTY, not `--json` / `--alerts-only` / `--no-tui`)
-- Build: `ai.tui.builders.build_report_sections` (shared wording with classic path)
-- Print: `ai.tui.app.run_usage_app` → `rich.console.Console` + Rule / Group / Panel
-- Fallback: classic `render_report` string path when not a TTY or `--no-tui`
-
-`--no-tui` keeps the classic plain-text report (name is historical).
+- Default: `render_priority_ladder` → stdout; `render_stderr_meta` → stderr
+- Full: `ai.tui.builders.build_report_sections` + Rich Rule/Panel
+- Fallback: classic string path when not a TTY or `--no-tui`

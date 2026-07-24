@@ -126,15 +126,15 @@ def test_should_use_tui_true_on_tty_when_rich_present():
     assert should_use_tui(stream=TTY()) is True
 
 
-def test_run_usage_app_default_omits_providers(capsys):
+def test_run_usage_app_default_prints_priority_ladder(capsys):
     from ai.tui.app import run_usage_app
 
-    run_usage_app(_snap_with_account(), [_burn_alert()], full=False)
+    run_usage_app(_snap_with_account(), [_burn_alert()], full=False, quiet=True)
     out = capsys.readouterr().out
-    assert "AI USAGE" in out
+    assert "use" in out
+    assert "Codex" in out
     assert "Per-provider usage" not in out
-    assert "Action plan — at a glance" in out
-    assert "Detail: ai --full" in out
+    assert "Detail: ai --full" not in out
 
 
 def test_run_usage_app_full_includes_providers(capsys):

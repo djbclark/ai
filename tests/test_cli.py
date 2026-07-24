@@ -147,13 +147,13 @@ def test_brief_mode_skips_usage_section(monkeypatch, capsys):
     monkeypatch.setattr(cli, "analyze_use_or_lose", lambda *_a, **_k: [alert])
     assert cli.main(["--brief", "--no-color", "-q", "--no-tui"]) == 2
     out = capsys.readouterr().out
-    assert "Action plan" in out
-    assert "Detail: ai --full" in out
+    assert "use" in out
+    assert "Codex" in out
     assert "## Per-provider usage" not in out
     assert "## Tips" not in out
 
 
-def test_default_pretty_is_glance_first(monkeypatch, capsys):
+def test_default_pretty_is_priority_ladder(monkeypatch, capsys):
     from ai.models import AccountUsage, Urgency, UseOrLoseAlert
 
     snap = Snapshot(
@@ -176,9 +176,11 @@ def test_default_pretty_is_glance_first(monkeypatch, capsys):
     monkeypatch.setattr(cli, "run_collectors", lambda _c: snap)
     monkeypatch.setattr(cli, "analyze_use_or_lose", lambda *_a, **_k: [alert])
     assert cli.main(["--no-color", "-q", "--no-tui"]) == 2
-    out = capsys.readouterr().out
-    assert "at a glance" in out
-    assert "## Per-provider usage" not in out
+    captured = capsys.readouterr()
+    assert "use" in captured.out
+    assert "Weekly" in captured.out
+    assert "## Per-provider usage" not in captured.out
+    assert "Detail: ai --full" not in captured.out  # quiet suppresses stderr meta
 
 
 def test_full_mode_includes_providers(monkeypatch, capsys):

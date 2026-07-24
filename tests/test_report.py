@@ -405,32 +405,59 @@ def test_brief_action_plan_caps_lines_per_provider():
     assert any("Codex" in line for line in plain)
 
 
-def test_default_report_is_glance_first():
+def test_default_report_is_priority_ladder():
+    from ai.report import render_stderr_meta
+
     now = utcnow()
     acc = AccountUsage(provider="codex", source="codexbar", account="a@x.com")
+    burn = UseOrLoseAlert(
+        urgency=Urgency.HIGH,
+        provider="codex",
+        account="a@x.com",
+        window_label="Weekly",
+        remaining_percent=90.0,
+        days_until_reset=2.0,
+        plan=None,
+        message="burn",
+        source="codexbar",
+        score=80.0,
+        kind="burn",
+    )
+    empty = UseOrLoseAlert(
+        urgency=Urgency.HIGH,
+        provider="copilot",
+        account="default",
+        window_label="premium",
+        remaining_percent=0.0,
+        days_until_reset=7.0,
+        plan=None,
+        message="gone",
+        source="tokscale",
+        score=90.0,
+        kind="conserve",
+    )
     snap = Snapshot(collected_at=now, accounts=[acc], collector_errors=["tokscale: boom"])
-    text = render_report(snap, [], config={}, color=False)
+    text = render_report(snap, [empty, burn], config={}, color=False)
     assert "(full)" not in text
-    assert "Action plan — at a glance" in text
-    assert "Detail: ai --full" in text
-    assert "Collector errors" in text
-    assert "tokscale: boom" in text
     assert "## Per-provider usage" not in text
-    assert "## Cross-checks" not in text
-    assert "## Tips" not in text
-    assert text.index("Collector errors") < text.index("Action plan")
+    assert "Detail: ai --full" not in text
+    assert "Collector errors" not in text
+    assert text.index("empty") < text.index("use")
+    assert text.strip().splitlines()[-1].startswith("use")
+    meta = render_stderr_meta(snap, [empty, burn], color=False)
+    assert "Collected at" in meta
+    assert "tokscale: boom" in meta
+    assert "Detail: ai --full" in meta
 
 
-def test_brief_aliases_default_glance_first():
+def test_brief_aliases_default_priority_ladder():
     now = utcnow()
     acc = AccountUsage(provider="codex", source="codexbar", account="a@x.com")
     snap = Snapshot(collected_at=now, accounts=[acc])
     default = render_report(snap, [], config={}, color=False)
     brief = render_report(snap, [], config={}, color=False, brief=True)
+    assert default == brief
     assert "## Per-provider usage" not in brief
-    assert "at a glance" in brief
-    assert "Detail: ai --full" in brief
-    assert default.splitlines()[1] == brief.splitlines()[1]  # same title line
 
 
 def test_full_report_includes_providers():
@@ -454,14 +481,10 @@ def test_brief_report_omits_usage_and_tips():
     acc = AccountUsage(provider="codex", source="codexbar", account="a@x.com")
     snap = Snapshot(collected_at=now, accounts=[acc], collector_errors=["tokscale: boom"])
     text = render_report(snap, [], config={}, color=False, brief=True)
-    assert "Action plan" in text
-    assert "Collector errors" in text
-    assert "tokscale: boom" in text
     assert "## Per-provider usage" not in text
     assert "## Cross-checks" not in text
     assert "## Tips" not in text
-    # Errors before action plan; plan last
-    assert text.index("Collector errors") < text.index("Action plan")
+    assert "nothing urgent" in text
 
 
 def test_glance_respects_custom_width():

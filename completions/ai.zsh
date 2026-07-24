@@ -20,7 +20,7 @@ _ai() {
     '--no-tui[force classic plain-text report]'
     '(-q --quiet)'{-q,--quiet}'[suppress stderr progress]'
     '--alerts-only[recommendations only]'
-    '--brief[alias of default glance-first report]'
+    '--brief[alias of default priority-ladder report]'
     '--full[long report with per-provider detail]'
     '--no-tokscale[skip tokscale]'
     '--no-cswap[skip cswap]'

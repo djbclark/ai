@@ -108,27 +108,22 @@ def render_report(
     glance_width: int | None = None,
 ) -> str:
     """
-    Pretty report. Default is glance-first; ``full=True`` is the long report.
+    Pretty report.
 
-    **Default** (and ``brief=True``, an alias):
-      1. Header
-      2. Short capacity summary (one line, when burn windows have value)
-      3. Collector errors (if any)
-      4. Action plan — at a glance (always last)
-      5. Dim ``Detail: ai --full`` footer
+    **Default** (and ``brief=True``): ranked priority ladder only (stdout).
+    Meta / errors / ``ai --full`` hint belong on stderr via
+    ``render_stderr_meta``.
 
-    **Full** (``full=True``):
-      1. Header
-      2. Per-provider usage
-      3. Cross-checks
-      4. Collector errors (if any)
-      5. Tips
-      6. Action plan (detailed; + glance trailer when detailed is tall)
+    **Full** (``full=True``): long report with per-provider detail.
 
     ``brief`` is kept for CLI compatibility and is ignored when ``full=True``.
     """
     del brief  # Alias of default; retained so callers need not change overnight.
     s = _Style(use_color(force=color))
+    if not full:
+        width = glance_width if glance_width is not None else ACTION_PLAN_WIDTH
+        return render_priority_ladder(alerts, s=s, width=width)
+
     lines: list[str] = []
     width = ACTION_PLAN_WIDTH
     plan_width = glance_width if glance_width is not None else width
@@ -139,9 +134,7 @@ def render_report(
     )
 
     lines.append(s.bold("=" * width))
-    title = "AI USAGE — USE IT OR LOSE IT"
-    if full:
-        title += " (full)"
+    title = "AI USAGE — USE IT OR LOSE IT (full)"
     lines.append(s.bold(s.cyan(title)))
     meta = f"Collected at {snapshot.collected_at.isoformat()}"
     meta += f" · {n_accounts} account{'s' if n_accounts != 1 else ''}"
@@ -155,30 +148,29 @@ def render_report(
     analysis_cfg = (config or {}).get("analysis") or {}
     waking_hours = float(analysis_cfg.get("waking_hours_per_day", 16))
 
-    if full:
-        lines.append("")
-        lines.append(s.bold("## Per-provider usage"))
-        lines.append(s.dim("-" * width))
-        if accounts:
-            for acc in accounts:
-                lines.extend(_render_account(acc, s, config=config))
-        else:
-            lines.append(s.dim("  (no provider data collected)"))
+    lines.append("")
+    lines.append(s.bold("## Per-provider usage"))
+    lines.append(s.dim("-" * width))
+    if accounts:
+        for acc in accounts:
+            lines.extend(_render_account(acc, s, config=config))
+    else:
+        lines.append(s.dim("  (no provider data collected)"))
 
-        lines.append("")
-        lines.append(s.bold("## Cross-checks (informational)"))
-        lines.append(s.dim("-" * width))
-        lines.append(
-            s.dim(
-                "  Tools poll at different times; multi-account Claude is cswap-only. "
-                "Gaps rarely mean both tools are wrong."
-            )
+    lines.append("")
+    lines.append(s.bold("## Cross-checks (informational)"))
+    lines.append(s.dim("-" * width))
+    lines.append(
+        s.dim(
+            "  Tools poll at different times; multi-account Claude is cswap-only. "
+            "Gaps rarely mean both tools are wrong."
         )
-        if snapshot.cross_checks:
-            lines.extend(_render_cross_checks(snapshot.cross_checks, s))
-        else:
-            lines.append(s.dim("  (no overlapping live measurements were available)"))
-        lines.append("")
+    )
+    if snapshot.cross_checks:
+        lines.extend(_render_cross_checks(snapshot.cross_checks, s))
+    else:
+        lines.append(s.dim("  (no overlapping live measurements were available)"))
+    lines.append("")
 
     if snapshot.collector_errors:
         lines.append(s.bold(s.red("## Collector errors")))
@@ -187,38 +179,146 @@ def render_report(
             lines.append(s.red(f"  - {err}"))
         lines.append("")
 
-    if full:
-        lines.append(s.bold("## Tips"))
-        lines.append(s.dim("-" * width))
-        lines.extend(_tips_lines(s))
-        lines.append("")
-        lines.extend(
-            _render_action_plan_section(
-                alerts,
-                s,
-                width=plan_width,
-                traditional_summary=traditional_summary,
-                waking_hours_per_day=waking_hours,
-            )
+    lines.append(s.bold("## Tips"))
+    lines.append(s.dim("-" * width))
+    lines.extend(_tips_lines(s))
+    lines.append("")
+    lines.extend(
+        _render_action_plan_section(
+            alerts,
+            s,
+            width=plan_width,
+            traditional_summary=traditional_summary,
+            waking_hours_per_day=waking_hours,
         )
-    else:
-        capacity = _capacity_summary_line(alerts, s)
-        if capacity:
-            lines.append(capacity)
-            lines.append("")
-        lines.append(s.bold("## Action plan — at a glance"))
-        lines.append(s.dim("-" * width))
-        lines.extend(
-            _render_brief_action_plan(
-                alerts,
-                s,
-                width=plan_width,
-                max_lines=ACTION_PLAN_MAX_LINES - 2,
-            )
-        )
-        lines.append("")
-        lines.append(s.dim("  Detail: ai --full"))
+    )
+    return "\n".join(lines)
 
+
+# Priority ladder bands (top → bottom). Read bottom→top for what to use next.
+_BAND_EMPTY = 0  # totally depleted — nothing left to burn
+_BAND_CONSERVE = 1  # pace yourself
+_BAND_MID = 2  # advisory / low urgency / later
+_BAND_USE = 3  # important to use soon — printed last
+
+_BAND_TAG = {
+    _BAND_EMPTY: ("empty", "red"),
+    _BAND_CONSERVE: ("slow ", "yellow"),
+    _BAND_MID: ("mid  ", "cyan"),
+    _BAND_USE: ("use  ", "green"),
+}
+
+
+def alert_priority_band(alert: UseOrLoseAlert) -> int:
+    """Map an alert onto the default stdout priority ladder (0=empty … 3=use)."""
+    rem = alert.remaining_percent
+    if alert.urgency == Urgency.NONE:
+        return _BAND_MID
+    if alert.kind == "conserve" and rem <= 1.0:
+        return _BAND_EMPTY
+    if rem <= 0.0 and alert.kind != "burn":
+        return _BAND_EMPTY
+    if alert.kind == "conserve":
+        return _BAND_CONSERVE
+    if alert.urgency == Urgency.INFO:
+        return _BAND_MID
+    if alert.kind == "burn":
+        if alert.urgency == Urgency.LOW:
+            return _BAND_MID
+        days = alert.days_until_reset
+        if days is not None and days > 7.0:
+            return _BAND_MID
+        return _BAND_USE
+    return _BAND_MID
+
+
+def _priority_sort_key(alert: UseOrLoseAlert) -> tuple:
+    band = alert_priority_band(alert)
+    days = alert.days_until_reset if alert.days_until_reset is not None else 999.0
+    # Within USE: lower score / farther reset first so hottest burns land at bottom.
+    if band == _BAND_USE:
+        return (band, -days, alert.score)
+    if band == _BAND_EMPTY:
+        return (band, alert.remaining_percent, -alert.score)
+    if band == _BAND_CONSERVE:
+        return (band, -alert.score, days)
+    return (band, days, -alert.score)
+
+
+def render_priority_ladder(
+    alerts: list[UseOrLoseAlert],
+    *,
+    s: _Style | None = None,
+    color: bool | None = None,
+    width: int = ACTION_PLAN_WIDTH,
+) -> str:
+    """Stdout body for default mode: depleted → conserve → mid → use-soon (bottom).
+
+    Color is semantic and always paired with a fixed-width text tag (``empty`` /
+    ``slow`` / ``mid`` / ``use``) so meaning survives ``NO_COLOR`` and colorblind
+    viewing. Read the list bottom→top to pick what to burn next.
+    """
+    if s is None:
+        s = _Style(use_color(force=color))
+    rows = [a for a in alerts if a.urgency != Urgency.NONE]
+    if not rows:
+        return s.green("use   nothing urgent under current thresholds")
+
+    lines: list[str] = []
+    sorted_rows = sorted(rows, key=_priority_sort_key)
+    last_band: int | None = None
+    for alert in sorted_rows:
+        band = alert_priority_band(alert)
+        if band != last_band:
+            if last_band is not None:
+                lines.append("")
+            last_band = band
+        lines.append(_clamp_display_width(_priority_alert_line(alert, s, band), width))
+    return "\n".join(lines)
+
+
+def _priority_alert_line(alert: UseOrLoseAlert, s: _Style, band: int) -> str:
+    tag, color_name = _BAND_TAG[band]
+    colorize = getattr(s, color_name)
+    who = alert.account or "default"
+    when = _human_deadline(alert.days_until_reset)
+    verb = "pace" if alert.kind == "conserve" else "use"
+    body = (
+        f"{s.bold(provider_display_name(alert.provider))} · {who} · "
+        f"{alert.window_label}: {alert.remaining_percent:.0f}% left · {verb} {when}"
+    )
+    return f"{colorize(s.bold(tag))} {body}"
+
+
+def render_stderr_meta(
+    snapshot: Snapshot,
+    alerts: list[UseOrLoseAlert],
+    *,
+    color: bool | None = None,
+) -> str:
+    """Collection meta, errors, and ``ai --full`` hint for stderr (default mode)."""
+    s = _Style(use_color(force=color))
+    accounts = _sorted_accounts(snapshot.accounts)
+    n_accounts = len(accounts)
+    n_actionable = sum(
+        1 for a in alerts if a.urgency not in (Urgency.INFO, Urgency.NONE)
+    )
+    lines: list[str] = []
+    meta = f"Collected at {snapshot.collected_at.isoformat()}"
+    meta += f" · {n_accounts} account{'s' if n_accounts != 1 else ''}"
+    if n_actionable:
+        meta += f" · {n_actionable} alert{'s' if n_actionable != 1 else ''}"
+    else:
+        meta += " · no burn/conserve alerts"
+    lines.append(s.dim(meta))
+    if snapshot.collector_errors:
+        lines.append(s.red("Collector errors:"))
+        for err in snapshot.collector_errors:
+            lines.append(s.red(f"  - {err}"))
+    capacity = _capacity_summary_line(alerts, s)
+    if capacity:
+        lines.append(capacity.strip())
+    lines.append(s.dim("Detail: ai --full"))
     return "\n".join(lines)
 
 

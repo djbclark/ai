@@ -21,7 +21,7 @@ Fresh agents: start at [`AGENTS.md`](../AGENTS.md). This file is the short
 | Action plan last | Report ends on action plan (≤~23×80); if detailed is taller, detailed + **at a glance** brief trailer |
 | **OpenCode Go quota** | Prefer CodexBar `--source web` for `opencodego` (local SQLite/$caps heuristic lied vs TUI “limit reached”); `opencode` shared_allotment on; docs — [`opencode-go-quota.md`](opencode-go-quota.md) |
 | **Cursor quota** | Label Included/Auto/API; shared_allotment on Included; on-demand via `providerCost` — [`cursor-quota.md`](cursor-quota.md) |
-| **Styled pretty output** | Glance-first default (Rich); `--full` for long report; `--brief` aliases default — [`pretty-display.md`](pretty-display.md) |
+| **Styled pretty output** | Priority ladder on stdout (empty→slow→mid→use); meta on stderr; `--full` long report — [`pretty-display.md`](pretty-display.md) |
 
 Recent commits (newest first): see `git log -5 --oneline`
 

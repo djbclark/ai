@@ -60,11 +60,11 @@ ai --generate-config
 ai doctor                 # PATH tools + config presence + timeouts
 
 # Morning / before a long coding block
-ai                        # glance-first report on a TTY (at-a-glance plan last)
+ai                        # priority ladder on stdout (use-soon at bottom); meta on stderr
 ai --full                 # long report: per-provider, tips, detailed plan
 ai --brief                # same as default (compat alias)
 ai --no-tui               # classic plain-text report (also used when piping)
-ai -q                     # same report, no “Collecting…” on stderr
+ai -q                     # ladder only (no stderr meta / Collecting…)
 
 # Scripting / cron (JSON on stdout; use exit codes)
 ai -q --json
@@ -115,10 +115,10 @@ ai --doctor
 
 | Flag                                             | Effect                                                             |
 | ------------------------------------------------ | ------------------------------------------------------------------ |
-| _(none)_ / `--format pretty`                     | Glance-first report on a TTY (capacity blurb + at-a-glance plan); plain when piped |
+| _(none)_ / `--format pretty`                     | Priority ladder on stdout (empty→slow→mid→use); meta on stderr; plain when piped |
 | `--full`                                         | Long pretty report: per-provider, cross-checks, tips, detailed plan |
 | `--json` / `--format json`                       | Full snapshot + alerts as JSON                                     |
-| `--brief`                                        | Alias of default glance-first pretty report                        |
+| `--brief`                                        | Alias of default priority-ladder pretty report                     |
 | `--no-tui`                                       | Force classic plain-text pretty report                             |
 | `--no-color`                                     | Disable ANSI colors in plain-text pretty mode                      |
 | `-q` / `--quiet`                                 | Suppress progress messages on stderr                               |
@@ -157,7 +157,7 @@ This tool:
 2. Scores windows with **pace-based** logic (default): compare how far through the cycle you are vs how much you've used, then project waste or early lockout.
 3. Classifies each window as **Burn** (will leave capacity unused), **Conserve** (on track to exhaust before reset — slow down), or **On pace** (no alert).
 4. For **shared-allotment** providers (Claude, Gemini by default), scores the longest governing window only so a fresh 5-hour bar does not outrank the weekly budget it draws from.
-5. Default pretty output is **glance-first** (capacity blurb + compact action plan). Use `ai --full` for per-provider detail, cross-checks, tips, and the detailed plan.
+5. Default pretty output is a **priority ladder** on stdout (depleted → conserve → mid → use-soon at bottom; read bottom→top). Meta goes to stderr. Use `ai --full` for per-provider detail.
 6. On `--full`, keeps the trailing plan within ~**23 lines × console width** when possible; if the detailed plan is taller, both detailed and **at a glance** are printed (glance last).
 7. Cross-checks overlapping sources; Claude multi-account stays canonical in cswap (with cache hydrate + fallbacks).
 

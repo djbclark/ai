@@ -29,7 +29,7 @@ from ai.config import (
     validate_config,
 )
 from ai.models import Snapshot, Urgency, UseOrLoseAlert, provider_display_name
-from ai.report import render_report
+from ai.report import render_report, render_stderr_meta
 
 # External CLIs this project shells out to (must already be installed/auth'd).
 # Version argv is a light probe only (no usage/auth API).
@@ -55,7 +55,7 @@ config & setup:
   ai -t / --timeout SEC    force subprocess timeout for all tools this run
                            (default {DEFAULT_SUBPROCESS_TIMEOUT:g}s; also [timeouts] in config.toml)
   ai -q / --quiet          no progress on stderr (JSON stdout stays clean either way)
-  ai --brief               alias of default glance-first pretty report
+  ai --brief               alias of default priority-ladder report
   ai --full                long pretty report (per-provider, tips, detailed plan)
   ai --no-tui              classic plain-text report (skip Rich styling)
   ai --print-completion bash|zsh   shell completion script to stdout
@@ -169,7 +169,7 @@ def build_parser() -> argparse.ArgumentParser:
     detail.add_argument(
         "--brief",
         action="store_true",
-        help="Alias of the default glance-first pretty report (kept for compatibility)",
+        help="Alias of the default priority-ladder pretty report (kept for compatibility)",
     )
     p.add_argument(
         "--no-tokscale",
@@ -330,12 +330,19 @@ def main(argv: list[str] | None = None) -> int:
                 full=bool(args.full),
                 brief=bool(args.brief),
                 traditional_summary=args.traditional_summary,
+                quiet=bool(args.quiet),
+                color=color,
             )
             return exit_code
         except Exception as exc:  # noqa: BLE001 — fall back to classic text
             if not args.quiet:
                 print(f"Warning: styled display failed ({exc}); using plain text.", file=sys.stderr)
 
+    if not args.full and not args.quiet:
+        print(
+            render_stderr_meta(snapshot, alerts, color=color),
+            file=sys.stderr,
+        )
     print(
         render_report(
             snapshot,
