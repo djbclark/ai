@@ -101,6 +101,7 @@ full description, install steps, CLI flags, and config.
 | `https://github.com/djbclark/ai/issues/1` | Tracks consuming cswap#170 last-good JSON (Step 33). | When #170 merges or when checking upstream status. |
 | `docs/cswap-reliability.md` | Claude/cswap reliability: decision-stale JSON, cache hydration, fallbacks. | When Claude rows go missing or multi-account looks wrong. |
 | `docs/opencode-go-quota.md` | OpenCode Go: CodexBar local estimate vs web billing; shared allotment. | When Go % disagrees with the OpenCode TUI. |
+| `docs/pretty-display.md` | Rich vs Textual for long scrollback-safe reports. | When changing pretty/TTY display. |
 | `docs/claude-local-usage.md` | Local `stats-cache` / JSONL / ccusage vs subscription 5h/7d %. | When someone proposes parsing `~/.claude` instead of cswap. |
 | `docs/code-review-2026-07-23.html` | Adversarial code review (45 findings) that the plan was derived from. Open in a browser. | For the *why* behind a plan step. |
 | `docs/consumption-flexibility-plan.md` | Original scoring design. **Superseded** by pace-based scoring in the fix plan Phase 2. | Historical context only. |

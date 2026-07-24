@@ -20,7 +20,7 @@ Fresh agents: start at [`AGENTS.md`](../AGENTS.md). This file is the short
 | Second polish batch | Doctor version probe + config validation, `--brief`, completions, JSON contract, concurrency audit |
 | Action plan last | Report ends on action plan (≤~23×80); if detailed is taller, detailed + **at a glance** brief trailer |
 | **OpenCode Go quota** | Prefer CodexBar `--source web` for `opencodego` (local SQLite/$caps heuristic lied vs TUI “limit reached”); `opencode` shared_allotment on; docs — [`opencode-go-quota.md`](opencode-go-quota.md) |
-| **Styled pretty output** | TTY pretty path uses Rich (full scrollback); at-a-glance plan last, ≤3 alert lines/provider; `--no-tui` / pipes keep classic text |
+| **Styled pretty output** | Rich renderables (not Textual / not Rich `Layout`) — full scrollback; glance last ≤3 lines/provider — [`pretty-display.md`](pretty-display.md) |
 
 Recent commits (newest first): see `git log -5 --oneline`
 
@@ -69,7 +69,8 @@ Medium: history-backed pace note, consume #170 when merged.
 | [`src/ai/cli.py`](../src/ai/cli.py) | doctor, exit codes, quiet, brief, completions |
 | [`src/ai/collectors/cswap.py`](../src/ai/collectors/cswap.py) | Claude collect + hydrate |
 | [`src/ai/collectors/codexbar.py`](../src/ai/collectors/codexbar.py) | CodexBar fan-out; OpenCode Go prefers `--source web` |
-| [`src/ai/tui/`](../src/ai/tui/) | Styled Rich pretty report (full scrollback) |
+| [`src/ai/tui/`](../src/ai/tui/) | Rich pretty report (scrollback-safe; see [`pretty-display.md`](pretty-display.md)) |
+| [`docs/pretty-display.md`](pretty-display.md) | Why Rich not Textual for long reports |
 | [`completions/`](../completions/) | bash/zsh |
 
 ## Quick verification for next agent

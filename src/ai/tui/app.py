@@ -1,26 +1,58 @@
-"""Styled static pretty report (Rich print — full scrollback, no TUI viewport)."""
+"""Styled static pretty report via Rich (full scrollback; no Textual/Layout)."""
 
 from __future__ import annotations
 
 from typing import Any
 
-from rich.console import Console
+from rich.console import Console, Group
+from rich.panel import Panel
+from rich.rule import Rule
 from rich.text import Text
 
 from ai.models import Snapshot, UseOrLoseAlert
 from ai.tui.builders import ReportSection, build_report_sections
 
 
-def _print_section(console: Console, section: ReportSection) -> None:
-    title = section.title_ansi or section.title
-    console.print(Text.from_ansi(title) if "\033" in title else title)
-    if section.kind != "header":
-        console.print("─" * 48, style="dim")
-    for line in section.lines:
+def _as_text(value: str) -> str | Text:
+    if "\033" in value:
+        return Text.from_ansi(value)
+    return value
+
+
+def _body_group(lines: list[str]) -> Group:
+    parts: list[Any] = []
+    for line in lines:
         if not line:
-            console.print()
+            parts.append(Text(""))
             continue
-        console.print(Text.from_ansi(line) if "\033" in line else line)
+        parts.append(_as_text(line))
+    return Group(*parts) if parts else Group(Text(""))
+
+
+def _print_section(console: Console, section: ReportSection) -> None:
+    title = _as_text(section.title_ansi or section.title)
+    body = _body_group(section.lines)
+
+    if section.kind == "header":
+        console.print(Panel(body, title=title, border_style="cyan", padding=(0, 1)))
+        console.print()
+        return
+
+    if section.kind == "plan-glance":
+        # Trailer: visible block that still expands into scrollback (not Layout).
+        console.print(
+            Panel(
+                body,
+                title=title,
+                border_style="yellow",
+                padding=(0, 1),
+            )
+        )
+        console.print()
+        return
+
+    console.print(Rule(title, style="dim"))
+    console.print(body)
     console.print()
 
 
