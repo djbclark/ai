@@ -5,7 +5,7 @@
 **Local tree:** `~/src/aiuse`  
 **Remote:** https://github.com/djbclark/aiuse  
 **Tests:** `.venv/bin/python -m pytest -q` — expect **200+** passing  
-**Version:** **2.1.0** — [release](https://github.com/djbclark/aiuse/releases/tag/v2.1.0)
+**Version:** **2.1.1** — packaging / OIDC verify release
 
 Fresh agents: start at [`AGENTS.md`](../AGENTS.md).
 
@@ -18,23 +18,23 @@ Fresh agents: start at [`AGENTS.md`](../AGENTS.md).
 
 ## Done this stretch
 
-| Area                             | Notes                                                                       |
-| -------------------------------- | --------------------------------------------------------------------------- |
-| Fix plan Steps **1–32** + **34** | Complete                                                                    |
-| Package rename                   | **`aiuse`** + stub **`ai`**                                                 |
-| Config / cache                   | `~/.config/aiuse/`, `~/.cache/aiuse/`                                       |
-| Packaging **2.1.0**              | LICENSE, GitHub Release, Homebrew tap, **PyPI live** (`pipx install aiuse`) |
+| Area                             | Notes                                                                  |
+| -------------------------------- | ---------------------------------------------------------------------- |
+| Fix plan Steps **1–32** + **34** | Complete                                                               |
+| Package rename                   | **`aiuse`** + stub **`ai`**                                            |
+| Config / cache                   | `~/.config/aiuse/`, `~/.cache/aiuse/`                                  |
+| Packaging                        | PyPI + Homebrew + **Trusted Publishing (OIDC)** verified via **2.1.1** |
 
 ## Packaging status (E)
 
-| Channel                   | State                                             |
-| ------------------------- | ------------------------------------------------- |
-| GitHub Release `v2.1.0`   | Done                                              |
-| Homebrew `djbclark/aiuse` | Done                                              |
-| PyPI `aiuse` 2.1.0        | Done (token via `secretspec` / gitignored `.env`) |
-| Trusted Publishing (OIDC) | Optional follow-up for CI                         |
+| Channel                   | State                                                    |
+| ------------------------- | -------------------------------------------------------- |
+| GitHub Release            | `v2.1.1`                                                 |
+| Homebrew `djbclark/aiuse` | Live (refresh formula on each tag)                       |
+| PyPI                      | Live (`pipx install aiuse`)                              |
+| Trusted Publishing (OIDC) | Done — publisher on pypi.org; `publish.yml` + env `pypi` |
 
-Details: [`packaging.md`](packaging.md).
+Details: [`packaging.md`](packaging.md). Token path (`secretspec` / `.env`) remains for optional local `uv publish`.
 
 **Note:** HTTPS `git push` from this environment lacks `workflow` scope — push
 workflow file changes via SSH (`git@github.com:djbclark/aiuse.git`).
@@ -54,13 +54,13 @@ workflow file changes via SSH (`git@github.com:djbclark/aiuse.git`).
 
 ### Deferred
 
-| Item                     | Status                                                |
-| ------------------------ | ----------------------------------------------------- |
-| **A — Live smoke**       | Operator-owned                                        |
-| **Step 35**              | Parked                                                |
-| **E — Packaging**        | PyPI + Homebrew done; OIDC trusted publisher optional |
-| **G — History insights** | Not started                                           |
-| **H — Cron recipe**      | Not started                                           |
+| Item                     | Status         |
+| ------------------------ | -------------- |
+| **A — Live smoke**       | Operator-owned |
+| **Step 35**              | Parked         |
+| **E — Packaging**        | Done           |
+| **G — History insights** | Not started    |
+| **H — Cron recipe**      | Not started    |
 
 ## Quick verification
 
@@ -68,7 +68,7 @@ workflow file changes via SSH (`git@github.com:djbclark/aiuse.git`).
 cd ~/src/aiuse
 .venv/bin/python -m pytest -q
 aiuse doctor
-/opt/homebrew/bin/aiuse --version   # 2.1.0 if brew-installed
+aiuse --version
 ```
 
 ## Handoff rule

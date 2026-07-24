@@ -9,7 +9,8 @@ calls the same entrypoint (`aiuse.ai_stub:main`).
 | ------------------------------------ | ---------------------------------------------------------------------------------- |
 | Editable / venv (`pip install -e .`) | Supported (dev)                                                                    |
 | **pipx** from GitHub                 | Ready                                                                              |
-| **pipx** from PyPI                   | Live: `pipx install aiuse` (**2.1.0**)                                             |
+| **pipx** from PyPI                   | Live: `pipx install aiuse`                                                         |
+| Trusted Publishing (OIDC)            | Configured — Release / `workflow_dispatch` via `publish.yml`                       |
 | **Homebrew** personal tap            | Live: `brew tap djbclark/aiuse && brew trust djbclark/aiuse && brew install aiuse` |
 | homebrew-core                        | Not submitted                                                                      |
 
@@ -18,9 +19,8 @@ this package only ships the aggregator CLI.
 
 ## Version note
 
-Git tag **`v2.0.0`** is historical (pre-rename `src/ai/`). First release of the
-renamed package is **`2.1.0`** / tag **`v2.1.0`**
-([GitHub Release](https://github.com/djbclark/aiuse/releases/tag/v2.1.0)).
+Git tag **`v2.0.0`** is historical (pre-rename `src/ai/`). First renamed
+release was **`2.1.0`**; current is **`2.1.1`** (OIDC publish verify).
 
 ## pipx
 
@@ -59,18 +59,11 @@ uv run --with twine twine check dist/*
 [`.github/workflows/publish.yml`](../.github/workflows/publish.yml) with
 Trusted Publishing (OIDC). Environment **`pypi`** already exists on the repo.
 
-### One-time operator setup (optional Trusted Publishing)
+### Trusted Publishing (OIDC) — configured
 
-OIDC publish from Actions still needs a pending publisher on PyPI (token upload
-already shipped **2.1.0**). If you want CI releases without a long-lived token:
-
-1. Account settings → Publishing → **Add a new pending publisher**:
-   - PyPI Project Name: `aiuse`
-   - Owner: `djbclark`
-   - Repository name: `aiuse`
-   - Workflow name: `publish.yml`
-   - Environment name: `pypi`
-2. Re-run publish on the next GitHub Release (or `gh workflow run publish.yml`).
+PyPI trusted publisher is set for owner `djbclark`, repo `aiuse`, workflow
+`publish.yml`, environment `pypi`. Publishing a GitHub Release (or running
+`gh workflow run publish.yml`) uploads with OIDC — no token in Actions.
 
 Keep the PyPI project name **`aiuse`** (not `ai` — taken by Vercel’s AI SDK).
 
@@ -87,8 +80,7 @@ secretspec run --reason "publish aiuse to PyPI" -- \
   bash -lc 'uv publish --token "$PYPI_TOKEN" dist/*'
 ```
 
-Trusted Publishing (OIDC) remains preferred for CI once a pending publisher
-is configured on PyPI; the token path is for local/operator publishes.
+OIDC is preferred for CI; the token path is for optional local `uv publish`.
 
 ## Homebrew
 
@@ -103,7 +95,7 @@ brew trust djbclark/aiuse   # Homebrew requires trusting third-party taps
 brew install aiuse
 ```
 
-Verified locally: Cellar installs `aiuse` / `ai` at **2.1.0**.
+Verified: Cellar installs `aiuse` / `ai` (refresh formula after each tag).
 
 After cutting a new release, refresh formula `url` / `version` / `sha256` here
 and sync `Formula/aiuse.rb` in the tap:
