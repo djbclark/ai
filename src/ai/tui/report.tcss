@@ -4,12 +4,14 @@ Screen {
     layout: vertical;
     height: auto;
     overflow: hidden;
+    background: transparent;
 }
 
 Screen:inline {
     border: none;
     height: auto;
     overflow: hidden;
+    background: transparent;
 }
 
 #report {

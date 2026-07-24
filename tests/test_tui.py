@@ -61,9 +61,10 @@ def test_build_report_sections_includes_plan_and_providers():
     kinds = [s.kind for s in sections]
     assert "header" in kinds
     assert "plan" in kinds
+    assert "plan-glance" in kinds
     assert "providers" in kinds
     assert "tips" in kinds
-    assert kinds[-1] == "plan"
+    assert kinds[-1] == "plan-glance"
     plan = next(s for s in sections if s.kind == "plan")
     assert any("Codex" in line for line in plan.lines)
 
@@ -72,9 +73,10 @@ def test_build_report_sections_brief_omits_providers():
     sections = build_report_sections(_snap_with_account(), [_burn_alert()], brief=True)
     kinds = [s.kind for s in sections]
     assert "providers" not in kinds
-    assert "plan" in kinds
+    assert "plan" not in kinds
+    assert "plan-glance" in kinds
     assert "header" in kinds
-    assert kinds[-1] == "plan"
+    assert kinds[-1] == "plan-glance"
 
 
 def test_build_report_sections_includes_collector_errors():
@@ -136,8 +138,9 @@ def test_usage_app_builds_sections_and_css_exists():
 
     assert Path(_CSS_PATH).is_file()
     app = UsageApp(_snap_with_account(), [_burn_alert()], brief=True)
-    assert any(section.kind == "plan" for section in app._sections)
+    assert any(section.kind == "plan-glance" for section in app._sections)
     assert "providers" not in {section.kind for section in app._sections}
+    assert app._sections[-1].kind == "plan-glance"
 
 
 def test_usage_app_auto_exits_after_paint():

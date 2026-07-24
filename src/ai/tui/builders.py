@@ -1,4 +1,4 @@
-"""Plain-text report sections shared by the string renderer path and Textual TUI."""
+"""Report sections for the Textual display (ANSI-colored, plan-glance last)."""
 
 from __future__ import annotations
 
@@ -7,10 +7,13 @@ from typing import Any
 
 from ai.models import Snapshot, Urgency, UseOrLoseAlert, provider_display_name
 from ai.report import (
+    ACTION_PLAN_MAX_LINES,
+    ACTION_PLAN_WIDTH,
     URGENCY_ICON,
     _human_deadline,
     _render_account,
     _render_action_plan,
+    _render_brief_action_plan,
     _render_cross_checks,
     _sorted_accounts,
     _Style,
@@ -20,11 +23,13 @@ from ai.report import (
 
 @dataclass(frozen=True)
 class ReportSection:
-    """One titled block of plain (unstyled) lines for display."""
+    """One titled block of lines (may include ANSI) for display."""
 
     title: str
     lines: list[str] = field(default_factory=list)
-    kind: str = "body"  # header | providers | plan | errors | meta | tips
+    kind: str = "body"  # header | providers | plan | plan-glance | errors | meta | tips
+    # Title may also carry ANSI when set via Style.
+    title_ansi: str | None = None
 
 
 def build_report_sections(
@@ -35,13 +40,13 @@ def build_report_sections(
     brief: bool = False,
     traditional_summary: bool = False,
 ) -> list[ReportSection]:
-    """Build structured plain-text sections matching ``render_report`` content.
+    """Build sections for the Textual report.
 
-    Order matches the classic report: detail first, action plan last so the
-    terminal scrollback lands on what to do.
+    Detail first; **Action plan — at a glance** is always last so scrollback
+    lands on the compact plan (same idea as the classic string report).
     """
-    del traditional_summary  # TUI always uses the unified action plan
-    s = _Style(False)
+    del traditional_summary
+    s = _Style(True)
     sections: list[ReportSection] = []
     accounts = _sorted_accounts(snapshot.accounts)
     n_accounts = len(accounts)
@@ -56,13 +61,21 @@ def build_report_sections(
     title = "AI USAGE — USE IT OR LOSE IT"
     if brief:
         title += " (brief)"
-    sections.append(ReportSection(title=title, lines=[meta], kind="header"))
+    sections.append(
+        ReportSection(
+            title=title,
+            title_ansi=s.bold(s.cyan(title)),
+            lines=[s.dim(meta)],
+            kind="header",
+        )
+    )
 
     if snapshot.collector_errors:
         sections.append(
             ReportSection(
                 title="Collector errors",
-                lines=[f"- {err}" for err in snapshot.collector_errors],
+                title_ansi=s.bold(s.red("Collector errors")),
+                lines=[s.red(f"- {err}") for err in snapshot.collector_errors],
                 kind="errors",
             )
         )
@@ -71,7 +84,8 @@ def build_report_sections(
         sections.append(
             ReportSection(
                 title="Brief mode",
-                lines=["Omit per-provider, cross-checks, tips; full: ai"],
+                title_ansi=s.dim("Brief mode"),
+                lines=[s.dim("Omit per-provider, cross-checks, tips; full: ai")],
                 kind="meta",
             )
         )
@@ -81,34 +95,70 @@ def build_report_sections(
             for acc in accounts:
                 provider_lines.extend(_render_account(acc, s, config=config))
         else:
-            provider_lines.append("(no provider data collected)")
+            provider_lines.append(s.dim("(no provider data collected)"))
         sections.append(
-            ReportSection(title="Per-provider usage", lines=provider_lines, kind="providers")
+            ReportSection(
+                title="Per-provider usage",
+                title_ansi=s.bold(s.cyan("Per-provider usage")),
+                lines=provider_lines,
+                kind="providers",
+            )
         )
 
         cross_lines = [
-            "Tools poll at different times; multi-account Claude is cswap-only. "
-            "Gaps rarely mean both tools are wrong."
+            s.dim(
+                "Tools poll at different times; multi-account Claude is cswap-only. "
+                "Gaps rarely mean both tools are wrong."
+            )
         ]
         if snapshot.cross_checks:
             cross_lines.extend(_render_cross_checks(snapshot.cross_checks, s))
         else:
-            cross_lines.append("(no overlapping live measurements were available)")
+            cross_lines.append(s.dim("(no overlapping live measurements were available)"))
         sections.append(
-            ReportSection(title="Cross-checks (informational)", lines=cross_lines, kind="meta")
+            ReportSection(
+                title="Cross-checks (informational)",
+                title_ansi=s.bold(s.magenta("Cross-checks (informational)")),
+                lines=cross_lines,
+                kind="meta",
+            )
         )
-        sections.append(ReportSection(title="Tips", lines=list(_tips_lines(s)), kind="tips"))
+        sections.append(
+            ReportSection(
+                title="Tips",
+                title_ansi=s.bold(s.cyan("Tips")),
+                lines=list(_tips_lines(s)),
+                kind="tips",
+            )
+        )
 
     analysis_cfg = (config or {}).get("analysis") or {}
     waking_hours = float(analysis_cfg.get("waking_hours_per_day", 16))
-    plan_lines = _render_action_plan(
-        alerts, s, width=80, waking_hours_per_day=waking_hours
+    width = ACTION_PLAN_WIDTH
+
+    if not brief:
+        detailed = _render_action_plan(
+            alerts, s, width=width, waking_hours_per_day=waking_hours
+        )
+        sections.append(
+            ReportSection(
+                title="Action plan (detailed)",
+                title_ansi=s.bold(s.yellow("Action plan (detailed)")),
+                lines=[line for line in detailed if line is not None],
+                kind="plan",
+            )
+        )
+
+    # Compact plan always last — what the terminal lands on.
+    glance = _render_brief_action_plan(
+        alerts, s, width=width, max_lines=ACTION_PLAN_MAX_LINES - 2
     )
     sections.append(
         ReportSection(
-            title="Action plan — use these before they reset",
-            lines=[line.rstrip() for line in plan_lines if line is not None],
-            kind="plan",
+            title="Action plan — at a glance",
+            title_ansi=s.bold(s.yellow("Action plan — at a glance")),
+            lines=[line for line in glance if line is not None],
+            kind="plan-glance",
         )
     )
     return sections
