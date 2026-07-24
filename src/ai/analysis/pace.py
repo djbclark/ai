@@ -92,12 +92,17 @@ def classify_pace(
     return "on_pace"
 
 def governing_partition(windows: list[QuotaWindow]) -> tuple[QuotaWindow | None, list[QuotaWindow]]:
-    """Longest-duration window with usable remaining() governs; the rest are children."""
+    """Longest-duration window with usable remaining() governs; the rest are children.
+
+    When durations tie (e.g. Cursor Included/Auto/API all monthly), prefer a
+    window whose label looks like the overall included bar, then list order.
+    """
     scored = [
         (
             w.window_minutes
             or nominal_window_minutes(classify_window_minutes(w.window_minutes))
             or 0,
+            0 if "included" in (w.label or "").casefold() else 1,
             w,
         )
         for w in windows
@@ -105,7 +110,8 @@ def governing_partition(windows: list[QuotaWindow]) -> tuple[QuotaWindow | None,
     ]
     if not scored:
         return None, list(windows)
-    scored.sort(key=lambda pair: pair[0], reverse=True)
-    governing = scored[0][1]
+    # Longest minutes first; among ties, included (rank 0) before others.
+    scored.sort(key=lambda pair: (-pair[0], pair[1]))
+    governing = scored[0][2]
     children = [w for w in windows if w is not governing]
     return governing, children

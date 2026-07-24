@@ -466,8 +466,8 @@ def test_opencodego_falls_back_to_auto_when_web_errors(monkeypatch):
 
 
 def test_usable_usage_payload_rejects_error_only_rows():
-    from ai.collectors.codexbar import _usable_usage_payload
     from ai.collectors.base import CollectorError
+    from ai.collectors.codexbar import _usable_usage_payload
 
     assert _usable_usage_payload(CollectorError("boom")) is False
     assert _usable_usage_payload([{"provider": "opencodego", "error": {"message": "x"}}]) is False
@@ -493,3 +493,51 @@ def test_dollar_in_reset_description_does_not_flip_subscription_billing():
     account = _from_row(row)
     assert account.billing_kind == BillingKind.SUBSCRIPTION_WINDOW
     assert len(account.windows) == 1
+
+
+def test_parse_cursor_included_auto_api_and_ondemand():
+    row = {
+        "provider": "cursor",
+        "source": "web",
+        "usage": {
+            "primary": {
+                "usedPercent": 61.35942028985507,
+                "resetsAt": "2026-08-02T23:22:27Z",
+                "windowMinutes": 44640,
+                "resetDescription": "Resets Aug 2 at 7:22PM",
+            },
+            "secondary": {
+                "usedPercent": 54.89333333333334,
+                "resetsAt": "2026-08-02T23:22:27Z",
+                "windowMinutes": 44640,
+            },
+            "tertiary": {
+                "usedPercent": 100,
+                "resetsAt": "2026-08-02T23:22:27Z",
+                "windowMinutes": 44640,
+            },
+            "providerCost": {
+                "period": "Monthly",
+                "resetsAt": "2026-08-02T23:22:27Z",
+                "limit": 2,
+                "currencyCode": "USD",
+                "used": 1.47,
+            },
+            "loginMethod": "Cursor Pro",
+            "accountEmail": "djbclark@gmail.com",
+        },
+    }
+    acc = _from_row(row)
+    assert acc.provider == "cursor"
+    assert [w.label for w in acc.windows] == [
+        "Cursor included",
+        "Cursor Auto",
+        "Cursor API",
+    ]
+    assert abs((acc.windows[0].remaining_percent or 0) - (100 - 61.35942028985507)) < 0.01
+    assert acc.windows[2].remaining_percent == 0
+    assert acc.usage_credits is not None
+    assert acc.usage_credits.used == 1.47
+    assert acc.usage_credits.limit == 2
+    assert abs((acc.usage_credits.remaining or 0) - 0.53) < 0.001
+    assert any("On-demand" in n for n in acc.notes)

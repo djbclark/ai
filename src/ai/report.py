@@ -883,7 +883,7 @@ def _fmt_dt(dt: datetime | None) -> str:
 def _usage_credits_lines(credits: Any, s: _Style) -> list[str]:
     """Pretty-print Claude (or similar) extra-usage wallet beside plan windows."""
     cur = getattr(credits, "currency", None) or "USD"
-    lines = [s.bold("  usage credits (extra / pay-as-you-go)")]
+    lines = [s.bold("  usage credits (extra / pay-as-you-go / on-demand)")]
     used = getattr(credits, "used", None)
     limit = getattr(credits, "limit", None)
     remaining = getattr(credits, "remaining", None)

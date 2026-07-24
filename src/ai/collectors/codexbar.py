@@ -10,6 +10,7 @@ from ai.models import (
     AccountUsage,
     BillingKind,
     QuotaWindow,
+    UsageCredits,
     classify_window_minutes,
     keep_copilot_report_window,
     parse_dt,
@@ -51,6 +52,13 @@ _SLOT_LABELS: dict[str, tuple[str, str, str]] = {
         "GitHub Copilot premium requests",
         "GitHub Copilot chat messages",
         "GitHub Copilot quota 3",
+    ),
+    # Cursor dashboard: Included (overall) ⊃ Auto + API breakdowns; On-Demand
+    # is separate (providerCost). Primary is the governing included bar.
+    "cursor": (
+        "Cursor included",
+        "Cursor Auto",
+        "Cursor API",
     ),
     "grok": ("Grok usage limit", "Grok quota 2", "Grok quota 3"),
     "warp": ("Warp credits", "Warp quota 2", "Warp quota 3"),
@@ -308,6 +316,9 @@ def _from_row(row: dict[str, Any]) -> AccountUsage:
 
     # CodexBar stores OpenCode Zen (overage) balance in providerCost.used with
     # period "Zen balance" and limit 0 — not a subscription window.
+    # Cursor (and similar) put on-demand $used/$limit in providerCost with a
+    # real limit (period e.g. "Monthly").
+    usage_credits: UsageCredits | None = None
     provider_cost = usage.get("providerCost")
     if isinstance(provider_cost, dict):
         period = str(provider_cost.get("period") or "")
@@ -316,7 +327,23 @@ def _from_row(row: dict[str, Any]) -> AccountUsage:
             notes.append(f"OpenCode Zen balance: ${zen:.2f}.")
             if balance_usd is None:
                 balance_usd = zen
-
+        else:
+            cost_used = _f(provider_cost.get("used"))
+            cost_limit = _f(provider_cost.get("limit"))
+            if cost_used is not None and cost_limit is not None and cost_limit > 0:
+                remaining = max(0.0, cost_limit - cost_used)
+                usage_credits = UsageCredits(
+                    used=cost_used,
+                    limit=cost_limit,
+                    remaining=remaining,
+                    currency=str(provider_cost.get("currencyCode") or "USD"),
+                    used_percent=(cost_used / cost_limit) * 100.0,
+                    resets_at=parse_dt(provider_cost.get("resetsAt")),
+                )
+                notes.append(
+                    f"On-demand: ${cost_used:.2f} of ${cost_limit:.2f} "
+                    f"({remaining:.2f} remaining)."
+                )
     reset_credits = usage.get("codexResetCredits")
     if isinstance(reset_credits, dict) and reset_credits.get("availableCount") is not None:
         notes.append(f"Codex limit-reset credits available: {reset_credits['availableCount']}.")
@@ -354,6 +381,7 @@ def _from_row(row: dict[str, Any]) -> AccountUsage:
         windows=windows,
         balance_usd=balance_usd,
         credits_remaining=credits_remaining,
+        usage_credits=usage_credits,
         notes=notes,
         raw=row,
     )

@@ -727,6 +727,52 @@ def test_pace_mode_burn_weekly():
     assert alerts[0].kind == "burn"
 
 
+
+def test_cursor_shared_allotment_scores_included_not_exhausted_api():
+    """Cursor API at 100% must not CONSERVE when Included still has headroom."""
+    now = _now()
+    snap = Snapshot(
+        collected_at=now,
+        accounts=[
+            AccountUsage(
+                source="codexbar",
+                provider="cursor",
+                account="user@example.com",
+                billing_kind=BillingKind.SUBSCRIPTION_WINDOW,
+                windows=[
+                    QuotaWindow(
+                        label="Cursor included",
+                        used_percent=61.0,
+                        remaining_percent=39.0,
+                        resets_at=now + timedelta(days=9.5),
+                        window_minutes=44640,
+                    ),
+                    QuotaWindow(
+                        label="Cursor Auto",
+                        used_percent=55.0,
+                        remaining_percent=45.0,
+                        resets_at=now + timedelta(days=9.5),
+                        window_minutes=44640,
+                    ),
+                    QuotaWindow(
+                        label="Cursor API",
+                        used_percent=100.0,
+                        remaining_percent=0.0,
+                        resets_at=now + timedelta(days=9.5),
+                        window_minutes=44640,
+                    ),
+                ],
+            )
+        ],
+    )
+    cfg = _pace_cfg()
+    cfg["analysis"]["provider_overrides"] = {"cursor": {"shared_allotment": True}}
+    alerts = analyze_use_or_lose(snap, cfg)
+    assert not any("API" in (a.window_label or "") for a in alerts)
+    # Included at ~pace for mid-cycle may be on_pace (no alert) or mild burn — never API conserve
+    assert not any(a.kind == "conserve" and "API" in (a.window_label or "") for a in alerts)
+
+
 def test_shared_allotment_suppresses_fresh_5h_when_weekly_on_pace():
     """Core regression: Claude 5h must not top the list when weekly is on-pace."""
     now = _now()

@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-24  
 **Branch:** `main`  
-**Tests:** `.venv/bin/python -m pytest -q` — **197** passing
+**Tests:** `.venv/bin/python -m pytest -q` — **199** passing
 
 Fresh agents: start at [`AGENTS.md`](../AGENTS.md). This file is the short
 “where we left off” note so the next session does not re-discover status.
@@ -20,6 +20,7 @@ Fresh agents: start at [`AGENTS.md`](../AGENTS.md). This file is the short
 | Second polish batch | Doctor version probe + config validation, `--brief`, completions, JSON contract, concurrency audit |
 | Action plan last | Report ends on action plan (≤~23×80); if detailed is taller, detailed + **at a glance** brief trailer |
 | **OpenCode Go quota** | Prefer CodexBar `--source web` for `opencodego` (local SQLite/$caps heuristic lied vs TUI “limit reached”); `opencode` shared_allotment on; docs — [`opencode-go-quota.md`](opencode-go-quota.md) |
+| **Cursor quota** | Label Included/Auto/API; shared_allotment on Included; on-demand via `providerCost` — [`cursor-quota.md`](cursor-quota.md) |
 | **Styled pretty output** | Glance-first default (Rich); `--full` for long report; `--brief` aliases default — [`pretty-display.md`](pretty-display.md) |
 
 Recent commits (newest first): see `git log -5 --oneline`
@@ -65,6 +66,7 @@ Medium: history-backed pace note, consume #170 when merged.
 | [`docs/collector-concurrency.md`](collector-concurrency.md) | Parallel collect + 45s timeouts |
 | [`docs/cswap-reliability.md`](cswap-reliability.md) | Claude multi-account / stale JSON |
 | [`docs/opencode-go-quota.md`](opencode-go-quota.md) | OpenCode Go web vs local CodexBar source |
+| [`docs/cursor-quota.md`](cursor-quota.md) | Cursor Included/Auto/API + on-demand |
 | [`docs/fix-implementation-plan.md`](fix-implementation-plan.md) | Historical steps + Phase 7 optional |
 | [`src/ai/cli.py`](../src/ai/cli.py) | doctor, exit codes, quiet, brief, completions |
 | [`src/ai/collectors/cswap.py`](../src/ai/collectors/cswap.py) | Claude collect + hydrate |

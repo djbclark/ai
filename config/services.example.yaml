@@ -62,6 +62,8 @@ analysis:
         refill_capacity: 50
     opencode:
       shared_allotment: true   # 5h ⊂ weekly ⊂ monthly Go budget
+    cursor:
+      shared_allotment: true   # Included ⊃ Auto/API; pace-score Included only
     grok:
       weekly:
         flexibility: 0.5
@@ -83,7 +85,7 @@ plans:
       5h: 1.4
   cursor:
     name: "Cursor"
-    notes: "Monthly included usage resets with billing cycle."
+    notes: "Monthly included usage (Auto/API are breakdowns); on-demand is a separate dollar cap."
     monthly_price: 20
   copilot:
     name: "GitHub Copilot"

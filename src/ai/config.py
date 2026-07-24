@@ -64,6 +64,8 @@ DEFAULT_CONFIG: dict[str, Any] = {
             },
             # 5h ⊂ weekly ⊂ monthly — burning a short window draws the same Go budget.
             "opencode": {"shared_allotment": True},
+            # Included ⊃ Auto/API category breakdowns — score Included only.
+            "cursor": {"shared_allotment": True},
             "grok": {"weekly": {"flexibility": 0.5, "refill_capacity_unit": "requests", "refill_capacity": 100}},
         },
     },
@@ -81,7 +83,10 @@ DEFAULT_CONFIG: dict[str, Any] = {
         },
         "cursor": {
             "name": "Cursor",
-            "notes": "Monthly included usage resets with billing cycle.",
+            "notes": (
+                "Monthly included usage (Auto/API are category breakdowns of the same pool); "
+                "on-demand is a separate dollar cap."
+            ),
             "monthly_price": 20,
         },
         "copilot": {
