@@ -60,7 +60,7 @@ ai --generate-config
 ai doctor                 # PATH tools + config presence + timeouts
 
 # Morning / before a long coding block
-ai                        # styled inline Textual report on a TTY (static; action plan last)
+ai                        # colored static report on a TTY (action plan at a glance last)
 ai --no-tui               # classic plain-text report (also used when piping)
 ai --brief                # errors + action plan only
 ai -q                     # same report, no “Collecting…” on stderr
@@ -114,7 +114,7 @@ ai --doctor
 
 | Flag                                             | Effect                                                             |
 | ------------------------------------------------ | ------------------------------------------------------------------ |
-| _(none)_ / `--format pretty`                     | Styled inline Textual report on a TTY (static); plain text when piped |
+| _(none)_ / `--format pretty`                     | Colored static report on a TTY (at-a-glance plan last); plain when piped |
 | `--json` / `--format json`                       | Full snapshot + alerts as JSON                                     |
 | `--no-tui`                                       | Force classic plain-text pretty report                             |
 | `--no-color`                                     | Disable ANSI colors in plain-text pretty mode                      |

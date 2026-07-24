@@ -1,4 +1,4 @@
-"""Inline Textual display for pretty `ai` output."""
+"""Styled static pretty display for `ai` (Rich; Textual stack)."""
 
 from __future__ import annotations
 
@@ -9,8 +9,9 @@ from ai.models import Snapshot, UseOrLoseAlert
 
 
 def textual_available() -> bool:
+    """True when Rich (via Textual stack) can style the pretty report."""
     try:
-        import textual  # noqa: F401
+        import rich  # noqa: F401
     except ImportError:
         return False
     return True
@@ -23,10 +24,8 @@ def should_use_tui(
     no_tui: bool = False,
     stream: Any = None,
 ) -> bool:
-    """Whether the pretty path should open the inline Textual app."""
+    """Whether the pretty path should use the styled Rich report."""
     if as_json or alerts_only or no_tui:
-        return False
-    if sys.platform == "win32":
         return False
     out = stream if stream is not None else sys.stdout
     if not getattr(out, "isatty", lambda: False)():

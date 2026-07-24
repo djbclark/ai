@@ -56,7 +56,7 @@ config & setup:
                            (default {DEFAULT_SUBPROCESS_TIMEOUT:g}s; also [timeouts] in config.toml)
   ai -q / --quiet          no progress on stderr (JSON stdout stays clean either way)
   ai --brief               errors + action plan only (pretty)
-  ai --no-tui              classic plain-text report (skip Textual styling)
+  ai --no-tui              classic plain-text report (skip Rich styling)
   ai --print-completion bash|zsh   shell completion script to stdout
 
 exit codes (collect runs):
@@ -138,12 +138,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--no-color",
         action="store_true",
-        help="Disable ANSI colors in pretty output (string fallback; ignored by Textual theme)",
+        help="Disable ANSI colors in pretty output (classic string path)",
     )
     p.add_argument(
         "--no-tui",
         action="store_true",
-        help="Force classic plain-text pretty report instead of inline Textual",
+        help="Force classic plain-text pretty report instead of Rich styling",
     )
     p.add_argument(
         "-q",
@@ -326,7 +326,7 @@ def main(argv: list[str] | None = None) -> int:
             return exit_code
         except Exception as exc:  # noqa: BLE001 — fall back to classic text
             if not args.quiet:
-                print(f"Warning: Textual display failed ({exc}); using plain text.", file=sys.stderr)
+                print(f"Warning: styled display failed ({exc}); using plain text.", file=sys.stderr)
 
     print(
         render_report(

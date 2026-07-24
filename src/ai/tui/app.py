@@ -1,54 +1,27 @@
-"""Inline Textual app for the pretty usage report (static, auto-exits)."""
+"""Styled static pretty report (Rich print — full scrollback, no TUI viewport)."""
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
-from textual.app import App, ComposeResult
-from textual.containers import Vertical
+from rich.console import Console
+from rich.text import Text
 
 from ai.models import Snapshot, UseOrLoseAlert
-from ai.tui.builders import build_report_sections
-from ai.tui.widgets import SectionBlock
-
-_CSS_PATH = Path(__file__).with_name("report.tcss")
+from ai.tui.builders import ReportSection, build_report_sections
 
 
-class UsageApp(App[None]):
-    """Inline static report under the prompt; paints once then exits."""
-
-    CSS_PATH = str(_CSS_PATH)
-    INLINE_PADDING = 0
-    TITLE = "ai"
-
-    def __init__(
-        self,
-        snapshot: Snapshot,
-        alerts: list[UseOrLoseAlert],
-        *,
-        config: dict[str, Any] | None = None,
-        brief: bool = False,
-        traditional_summary: bool = False,
-    ) -> None:
-        super().__init__()
-        self._sections = build_report_sections(
-            snapshot,
-            alerts,
-            config=config,
-            brief=brief,
-            traditional_summary=traditional_summary,
-        )
-
-    def compose(self) -> ComposeResult:
-        yield Vertical(
-            *[SectionBlock(section) for section in self._sections],
-            id="report",
-        )
-
-    def on_mount(self) -> None:
-        # Paint one static frame into scrollback, then return to the shell.
-        self.call_after_refresh(self.exit)
+def _print_section(console: Console, section: ReportSection) -> None:
+    title = section.title_ansi or section.title
+    console.print(Text.from_ansi(title) if "\033" in title else title)
+    if section.kind != "header":
+        console.print("─" * 48, style="dim")
+    for line in section.lines:
+        if not line:
+            console.print()
+            continue
+        console.print(Text.from_ansi(line) if "\033" in line else line)
+    console.print()
 
 
 def run_usage_app(
@@ -59,12 +32,14 @@ def run_usage_app(
     brief: bool = False,
     traditional_summary: bool = False,
 ) -> None:
-    """Render the inline Textual report once (does not wait for input)."""
-    app = UsageApp(
+    """Print the styled report to stdout (static; action plan at a glance last)."""
+    sections = build_report_sections(
         snapshot,
         alerts,
         config=config,
         brief=brief,
         traditional_summary=traditional_summary,
     )
-    app.run(inline=True, inline_no_clear=True)
+    console = Console(highlight=False, soft_wrap=False, emoji=False)
+    for section in sections:
+        _print_section(console, section)

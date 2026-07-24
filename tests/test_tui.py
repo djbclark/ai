@@ -1,9 +1,8 @@
-"""Tests for Textual report builders and CLI TUI gate."""
+"""Tests for styled report builders and CLI display gate."""
 
 from __future__ import annotations
 
 from datetime import timedelta
-from pathlib import Path
 
 from ai.models import (
     AccountUsage,
@@ -98,62 +97,44 @@ def test_should_use_tui_false_for_json_and_no_tui(monkeypatch):
         def isatty(self) -> bool:
             return True
 
-    monkeypatch.setattr("ai.tui.sys.platform", "darwin")
     assert should_use_tui(as_json=True, stream=TTY()) is False
     assert should_use_tui(alerts_only=True, stream=TTY()) is False
     assert should_use_tui(no_tui=True, stream=TTY()) is False
 
 
-def test_should_use_tui_false_when_not_tty(monkeypatch):
+def test_should_use_tui_false_when_not_tty():
     class Pipe:
         def isatty(self) -> bool:
             return False
 
-    monkeypatch.setattr("ai.tui.sys.platform", "darwin")
     assert should_use_tui(stream=Pipe()) is False
 
 
-def test_should_use_tui_false_on_windows(monkeypatch):
+def test_should_use_tui_true_on_tty_when_rich_present():
     class TTY:
         def isatty(self) -> bool:
             return True
 
-    monkeypatch.setattr("ai.tui.sys.platform", "win32")
-    assert should_use_tui(stream=TTY()) is False
-
-
-def test_should_use_tui_true_on_tty_when_textual_present(monkeypatch):
-    class TTY:
-        def isatty(self) -> bool:
-            return True
-
-    monkeypatch.setattr("ai.tui.sys.platform", "darwin")
     if not textual_available():
         return
     assert should_use_tui(stream=TTY()) is True
 
 
-def test_usage_app_builds_sections_and_css_exists():
-    from ai.tui.app import _CSS_PATH, UsageApp
+def test_run_usage_app_prints_full_report_including_glance(capsys):
+    from ai.tui.app import run_usage_app
 
-    assert Path(_CSS_PATH).is_file()
-    app = UsageApp(_snap_with_account(), [_burn_alert()], brief=True)
-    assert any(section.kind == "plan-glance" for section in app._sections)
-    assert "providers" not in {section.kind for section in app._sections}
-    assert app._sections[-1].kind == "plan-glance"
+    run_usage_app(_snap_with_account(), [_burn_alert()], brief=False)
+    out = capsys.readouterr().out
+    assert "AI USAGE" in out
+    assert "Per-provider usage" in out
+    assert "Action plan — at a glance" in out
+    assert out.index("Per-provider") < out.index("at a glance")
 
 
-def test_usage_app_auto_exits_after_paint():
-    import asyncio
+def test_run_usage_app_brief_still_ends_on_glance(capsys):
+    from ai.tui.app import run_usage_app
 
-    from ai.tui.app import UsageApp
-
-    app = UsageApp(_snap_with_account(), [_burn_alert()], brief=True)
-
-    async def _run() -> None:
-        async with app.run_test(size=(80, 40)) as pilot:
-            await pilot.pause()
-            # on_mount schedules exit after refresh; allow it to complete.
-            await pilot.pause()
-
-    asyncio.run(_run())
+    run_usage_app(_snap_with_account(), [_burn_alert()], brief=True)
+    out = capsys.readouterr().out
+    assert "at a glance" in out
+    assert "Per-provider usage" not in out

@@ -1,4 +1,4 @@
-"""Report sections for the Textual display (ANSI-colored, plan-glance last)."""
+"""Report sections for the styled pretty display (ANSI-colored, plan-glance last)."""
 
 from __future__ import annotations
 
@@ -40,7 +40,7 @@ def build_report_sections(
     brief: bool = False,
     traditional_summary: bool = False,
 ) -> list[ReportSection]:
-    """Build sections for the Textual report.
+    """Build sections for the styled report.
 
     Detail first; **Action plan — at a glance** is always last so scrollback
     lands on the compact plan (same idea as the classic string report).
