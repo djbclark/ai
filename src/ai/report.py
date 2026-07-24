@@ -103,28 +103,35 @@ def render_report(
     config: dict[str, Any] | None = None,
     color: bool | None = None,
     traditional_summary: bool = False,
+    full: bool = False,
     brief: bool = False,
+    glance_width: int | None = None,
 ) -> str:
     """
-    Report order (detail first, action plan last for terminal landing):
+    Pretty report. Default is glance-first; ``full=True`` is the long report.
+
+    **Default** (and ``brief=True``, an alias):
       1. Header
-      2. Per-provider live quota detail (skipped if brief)
-      3. Cross-checks (skipped if brief)
+      2. Short capacity summary (one line, when burn windows have value)
+      3. Collector errors (if any)
+      4. Action plan — at a glance (always last)
+      5. Dim ``Detail: ai --full`` footer
+
+    **Full** (``full=True``):
+      1. Header
+      2. Per-provider usage
+      3. Cross-checks
       4. Collector errors (if any)
-      5. Short tips (skipped if brief)
-      6. Action plan — always last so `ai` ends on what to do
+      5. Tips
+      6. Action plan (detailed; + glance trailer when detailed is tall)
 
-    The final action-plan block targets ≤ ``ACTION_PLAN_MAX_LINES`` lines of
-    ~``ACTION_PLAN_WIDTH``-column text so a typical terminal shows the whole
-    plan without scrolling back. If the detailed plan is longer, both are
-    rendered: detailed first, then a compact brief plan as the true end.
-
-    ``brief=True`` keeps header + collector errors + action plan only
-    (between full pretty and ``--alerts-only``).
+    ``brief`` is kept for CLI compatibility and is ignored when ``full=True``.
     """
+    del brief  # Alias of default; retained so callers need not change overnight.
     s = _Style(use_color(force=color))
     lines: list[str] = []
     width = ACTION_PLAN_WIDTH
+    plan_width = glance_width if glance_width is not None else width
     accounts = _sorted_accounts(snapshot.accounts)
     n_accounts = len(accounts)
     n_actionable = sum(
@@ -133,8 +140,8 @@ def render_report(
 
     lines.append(s.bold("=" * width))
     title = "AI USAGE — USE IT OR LOSE IT"
-    if brief:
-        title += " (brief)"
+    if full:
+        title += " (full)"
     lines.append(s.bold(s.cyan(title)))
     meta = f"Collected at {snapshot.collected_at.isoformat()}"
     meta += f" · {n_accounts} account{'s' if n_accounts != 1 else ''}"
@@ -145,8 +152,10 @@ def render_report(
     lines.append(s.dim(meta))
     lines.append(s.bold("=" * width))
 
-    if not brief:
-        # 1) Per-provider live quota detail
+    analysis_cfg = (config or {}).get("analysis") or {}
+    waking_hours = float(analysis_cfg.get("waking_hours_per_day", 16))
+
+    if full:
         lines.append("")
         lines.append(s.bold("## Per-provider usage"))
         lines.append(s.dim("-" * width))
@@ -156,7 +165,6 @@ def render_report(
         else:
             lines.append(s.dim("  (no provider data collected)"))
 
-        # 2) Independent live-source consistency checks (informational)
         lines.append("")
         lines.append(s.bold("## Cross-checks (informational)"))
         lines.append(s.dim("-" * width))
@@ -179,32 +187,69 @@ def render_report(
             lines.append(s.red(f"  - {err}"))
         lines.append("")
 
-    if not brief:
-        # 3) Tips before action plan (plan must remain the last section)
+    if full:
         lines.append(s.bold("## Tips"))
         lines.append(s.dim("-" * width))
         lines.extend(_tips_lines(s))
         lines.append("")
+        lines.extend(
+            _render_action_plan_section(
+                alerts,
+                s,
+                width=plan_width,
+                traditional_summary=traditional_summary,
+                waking_hours_per_day=waking_hours,
+            )
+        )
     else:
-        lines.append(
-            s.dim("  (brief mode — omit per-provider, cross-checks, tips; full: ai)")
+        capacity = _capacity_summary_line(alerts, s)
+        if capacity:
+            lines.append(capacity)
+            lines.append("")
+        lines.append(s.bold("## Action plan — at a glance"))
+        lines.append(s.dim("-" * width))
+        lines.extend(
+            _render_brief_action_plan(
+                alerts,
+                s,
+                width=plan_width,
+                max_lines=ACTION_PLAN_MAX_LINES - 2,
+            )
         )
         lines.append("")
-
-    # 4) Action plan last — terminal lands here after the command finishes
-    analysis_cfg = (config or {}).get("analysis") or {}
-    waking_hours = float(analysis_cfg.get("waking_hours_per_day", 16))
-    lines.extend(
-        _render_action_plan_section(
-            alerts,
-            s,
-            width=width,
-            traditional_summary=traditional_summary,
-            waking_hours_per_day=waking_hours,
-        )
-    )
+        lines.append(s.dim("  Detail: ai --full"))
 
     return "\n".join(lines)
+
+
+def _capacity_summary_line(alerts: list[UseOrLoseAlert], s: _Style) -> str | None:
+    """One-line burn-capacity blurb shared with the detailed action plan."""
+    action = [
+        a
+        for a in alerts
+        if a.urgency not in (Urgency.INFO, Urgency.NONE) and a.kind != "conserve"
+    ]
+    if not action:
+        return None
+    conserve = [
+        a
+        for a in alerts
+        if a.urgency not in (Urgency.INFO, Urgency.NONE) and a.kind == "conserve"
+    ]
+    total_value_usd = sum(
+        a.flexibility_profile.value_at_risk_usd
+        for a in action
+        if a.flexibility_profile and a.flexibility_profile.value_at_risk_usd is not None
+    )
+    providers = len({a.provider for a in action} | {a.provider for a in conserve})
+    if total_value_usd > 0:
+        return s.dim(
+            f"  Available capacity this cycle: {s.bold(f'${total_value_usd:.2f}')} "
+            f"across {len(action)} windows ({providers} providers)."
+        )
+    return s.dim(
+        f"  {len(action)} windows with unused capacity across {providers} providers."
+    )
 
 
 def _physical_line_count(lines: list[str]) -> int:
@@ -490,12 +535,6 @@ def _render_action_plan(
     info = [a for a in alerts if a.urgency == Urgency.INFO]
     lines: list[str] = []
 
-    total_value_usd = sum(
-        a.flexibility_profile.value_at_risk_usd
-        for a in action
-        if a.flexibility_profile and a.flexibility_profile.value_at_risk_usd is not None
-    )
-    providers = len({a.provider for a in action} | {a.provider for a in conserve})
     rule = "─" * max(8, min(width - 4, 76))
 
     if not action and not conserve and not info:
@@ -513,19 +552,12 @@ def _render_action_plan(
         lines.append("")
 
     if action:
-        if total_value_usd > 0:
-            lines.append(
-                s.dim(
-                    f"  Available capacity this cycle: {s.bold(f'${total_value_usd:.2f}')} "
-                    f"across {len(action)} windows ({providers} providers)."
-                )
-            )
-        else:
-            lines.append(
-                s.dim(
-                    f"  {len(action)} windows with unused capacity across {providers} providers."
-                )
-            )
+        capacity = _capacity_summary_line(
+            [*action, *conserve],
+            s,
+        )
+        if capacity:
+            lines.append(capacity)
         lines.append("")
 
         buckets = _action_buckets(action)

@@ -38,6 +38,7 @@ def run_inline_report(
     alerts: list[UseOrLoseAlert],
     *,
     config: dict[str, Any] | None = None,
+    full: bool = False,
     brief: bool = False,
     traditional_summary: bool = False,
 ) -> None:
@@ -47,6 +48,7 @@ def run_inline_report(
         snapshot,
         alerts,
         config=config,
+        full=full,
         brief=brief,
         traditional_summary=traditional_summary,
     )

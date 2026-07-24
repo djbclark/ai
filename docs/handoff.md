@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-24  
 **Branch:** `main`  
-**Tests:** `.venv/bin/python -m pytest -q` — **190** passing
+**Tests:** `.venv/bin/python -m pytest -q` — **197** passing
 
 Fresh agents: start at [`AGENTS.md`](../AGENTS.md). This file is the short
 “where we left off” note so the next session does not re-discover status.
@@ -20,7 +20,7 @@ Fresh agents: start at [`AGENTS.md`](../AGENTS.md). This file is the short
 | Second polish batch | Doctor version probe + config validation, `--brief`, completions, JSON contract, concurrency audit |
 | Action plan last | Report ends on action plan (≤~23×80); if detailed is taller, detailed + **at a glance** brief trailer |
 | **OpenCode Go quota** | Prefer CodexBar `--source web` for `opencodego` (local SQLite/$caps heuristic lied vs TUI “limit reached”); `opencode` shared_allotment on; docs — [`opencode-go-quota.md`](opencode-go-quota.md) |
-| **Styled pretty output** | Rich renderables (not Textual / not Rich `Layout`) — full scrollback; glance last ≤3 lines/provider — [`pretty-display.md`](pretty-display.md) |
+| **Styled pretty output** | Glance-first default (Rich); `--full` for long report; `--brief` aliases default — [`pretty-display.md`](pretty-display.md) |
 
 Recent commits (newest first): see `git log -5 --oneline`
 
@@ -79,6 +79,7 @@ Medium: history-backed pace note, consume #170 when merged.
 .venv/bin/python -m pytest -q
 ai doctor
 ai --brief -q
+ai --full -q
 # OpenCode Go should match TUI when cookies work:
 codexbar usage --provider opencodego --source web --no-color
 ```

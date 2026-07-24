@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 
 from ai.models import (
     AccountUsage,
@@ -14,11 +14,12 @@ from ai.models import (
 from ai.report import (
     ACTION_PLAN_MAX_LINES,
     ACTION_PLAN_WIDTH,
-    _Style,
     _action_plan_line,
     _physical_line_count,
     _render_brief_action_plan,
     _sorted_accounts,
+    _strip_ansi,
+    _Style,
     _throttled_waste_line,
     render_report,
 )
@@ -149,7 +150,7 @@ def test_render_report_shows_conserve_before_burn_buckets():
         ),
     )
     snap = Snapshot(collected_at=now, accounts=[])
-    text = render_report(snap, [burn, conserve], config={}, color=False)
+    text = render_report(snap, [burn, conserve], config={}, color=False, full=True)
     assert "CONSERVE" in text
     conserve_at = text.index("CONSERVE")
     # Burn buckets appear after conserve when present
@@ -179,7 +180,9 @@ def test_render_report_shows_usage_credits_section():
             resets_at=now + timedelta(days=5),
         ),
     )
-    text = render_report(Snapshot(collected_at=now, accounts=[acc]), [], config={}, color=False)
+    text = render_report(
+        Snapshot(collected_at=now, accounts=[acc]), [], config={}, color=False, full=True
+    )
     assert "usage credits" in text.lower()
     assert "50 of 100 USD" in text or "spent: 50" in text
     assert "remaining headroom" in text.lower()
@@ -244,6 +247,7 @@ def test_render_report_action_plan_is_last_after_detail():
         [burn],
         config={},
         color=False,
+        full=True,
     )
     assert text.index("## Per-provider usage") < text.index("## Cross-checks")
     assert text.index("## Cross-checks") < text.index("## Tips")
@@ -285,7 +289,7 @@ def test_action_plan_section_fits_viewport_when_short():
         [burn],
         config={},
         color=False,
-        brief=True,
+        full=True,
     )
     # Only one action-plan heading when it fits
     assert text.count("## Action plan") == 1
@@ -326,7 +330,7 @@ def test_long_action_plan_appends_brief_at_end():
         alerts,
         config={},
         color=False,
-        brief=True,
+        full=True,
     )
     assert "## Action plan (detailed)" in text
     assert "## Action plan — at a glance" in text
@@ -361,7 +365,7 @@ def test_brief_action_plan_respects_max_lines():
 
 
 def test_brief_action_plan_caps_lines_per_provider():
-    from ai.report import BRIEF_MAX_LINES_PER_PROVIDER, _brief_alert_line, _strip_ansi
+    from ai.report import BRIEF_MAX_LINES_PER_PROVIDER
 
     alerts = [
         UseOrLoseAlert(
@@ -401,12 +405,55 @@ def test_brief_action_plan_caps_lines_per_provider():
     assert any("Codex" in line for line in plain)
 
 
+def test_default_report_is_glance_first():
+    now = utcnow()
+    acc = AccountUsage(provider="codex", source="codexbar", account="a@x.com")
+    snap = Snapshot(collected_at=now, accounts=[acc], collector_errors=["tokscale: boom"])
+    text = render_report(snap, [], config={}, color=False)
+    assert "(full)" not in text
+    assert "Action plan — at a glance" in text
+    assert "Detail: ai --full" in text
+    assert "Collector errors" in text
+    assert "tokscale: boom" in text
+    assert "## Per-provider usage" not in text
+    assert "## Cross-checks" not in text
+    assert "## Tips" not in text
+    assert text.index("Collector errors") < text.index("Action plan")
+
+
+def test_brief_aliases_default_glance_first():
+    now = utcnow()
+    acc = AccountUsage(provider="codex", source="codexbar", account="a@x.com")
+    snap = Snapshot(collected_at=now, accounts=[acc])
+    default = render_report(snap, [], config={}, color=False)
+    brief = render_report(snap, [], config={}, color=False, brief=True)
+    assert "## Per-provider usage" not in brief
+    assert "at a glance" in brief
+    assert "Detail: ai --full" in brief
+    assert default.splitlines()[1] == brief.splitlines()[1]  # same title line
+
+
+def test_full_report_includes_providers():
+    now = utcnow()
+    acc = AccountUsage(provider="codex", source="codexbar", account="a@x.com")
+    text = render_report(
+        Snapshot(collected_at=now, accounts=[acc]),
+        [],
+        config={},
+        color=False,
+        full=True,
+    )
+    assert "(full)" in text
+    assert "## Per-provider usage" in text
+    assert "## Tips" in text
+    assert "Detail: ai --full" not in text
+
+
 def test_brief_report_omits_usage_and_tips():
     now = utcnow()
     acc = AccountUsage(provider="codex", source="codexbar", account="a@x.com")
     snap = Snapshot(collected_at=now, accounts=[acc], collector_errors=["tokscale: boom"])
     text = render_report(snap, [], config={}, color=False, brief=True)
-    assert "(brief)" in text
     assert "Action plan" in text
     assert "Collector errors" in text
     assert "tokscale: boom" in text
@@ -416,6 +463,27 @@ def test_brief_report_omits_usage_and_tips():
     # Errors before action plan; plan last
     assert text.index("Collector errors") < text.index("Action plan")
 
+
+def test_glance_respects_custom_width():
+    alerts = [
+        UseOrLoseAlert(
+            urgency=Urgency.HIGH,
+            provider="codex",
+            account="long.email.address@example.com",
+            window_label="Codex weekly quota with a long label",
+            remaining_percent=88.0,
+            days_until_reset=4.4,
+            plan=None,
+            message="x",
+            source="codexbar",
+            score=50.0,
+            kind="burn",
+        )
+    ]
+    narrow = _render_brief_action_plan(alerts, _Style(False), width=50, max_lines=10)
+    wide = _render_brief_action_plan(alerts, _Style(False), width=120, max_lines=10)
+    assert all(len(_strip_ansi(line)) <= 50 for line in narrow)
+    assert any(len(_strip_ansi(line)) > 50 for line in wide)
 
 def test_render_cross_checks_use_soft_labels():
     now = utcnow()
@@ -438,7 +506,7 @@ def test_render_cross_checks_use_soft_labels():
             ),
         ],
     )
-    text = render_report(snap, [], config={}, color=False)
+    text = render_report(snap, [], config={}, color=False, full=True)
     assert "[NOTE]" in text
     assert "[OK]" in text
     assert "WARNING" not in text

@@ -55,7 +55,8 @@ config & setup:
   ai -t / --timeout SEC    force subprocess timeout for all tools this run
                            (default {DEFAULT_SUBPROCESS_TIMEOUT:g}s; also [timeouts] in config.toml)
   ai -q / --quiet          no progress on stderr (JSON stdout stays clean either way)
-  ai --brief               errors + action plan only (pretty)
+  ai --brief               alias of default glance-first pretty report
+  ai --full                long pretty report (per-provider, tips, detailed plan)
   ai --no-tui              classic plain-text report (skip Rich styling)
   ai --print-completion bash|zsh   shell completion script to stdout
 
@@ -156,13 +157,19 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Only print use-or-lose recommendations (pretty text, unless --json)",
     )
-    p.add_argument(
-        "--brief",
+    detail = p.add_mutually_exclusive_group()
+    detail.add_argument(
+        "--full",
         action="store_true",
         help=(
-            "Pretty report: collector errors + trailing action plan only "
-            "(skip per-provider detail, cross-checks, tips)"
+            "Pretty report: per-provider detail, cross-checks, tips, and detailed "
+            "action plan (default is glance-first)"
         ),
+    )
+    detail.add_argument(
+        "--brief",
+        action="store_true",
+        help="Alias of the default glance-first pretty report (kept for compatibility)",
     )
     p.add_argument(
         "--no-tokscale",
@@ -320,6 +327,7 @@ def main(argv: list[str] | None = None) -> int:
                 snapshot,
                 alerts,
                 config=config,
+                full=bool(args.full),
                 brief=bool(args.brief),
                 traditional_summary=args.traditional_summary,
             )
@@ -335,6 +343,7 @@ def main(argv: list[str] | None = None) -> int:
             config=config,
             color=color,
             traditional_summary=args.traditional_summary,
+            full=bool(args.full),
             brief=bool(args.brief),
         )
     )
@@ -537,7 +546,8 @@ def diagnose(
     lines.append("Hints")
     lines.append("  ai --generate-config   # create ~/.config/ai defaults (no overwrite)")
     lines.append("  ai --show-config-path  # print config file paths")
-    lines.append("  ai --brief             # errors + trailing action plan")
+    lines.append("  ai --full              # long report (per-provider + detailed plan)")
+    lines.append("  ai --brief             # same as default glance-first report")
     lines.append("  ai --no-tui            # classic plain-text pretty report")
     lines.append("  ai -t 45               # force all tool timeouts for one run")
     lines.append("  ai --help              # full flag list + setup epilog")

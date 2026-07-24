@@ -12,6 +12,9 @@ from rich.text import Text
 from ai.models import Snapshot, UseOrLoseAlert
 from ai.tui.builders import ReportSection, build_report_sections
 
+# Panel chrome (borders + padding) eats columns from glance clamp width.
+_PANEL_CHROME = 4
+
 
 def _as_text(value: str) -> str | Text:
     if "\033" in value:
@@ -30,6 +33,12 @@ def _body_group(lines: list[str]) -> Group:
 
 
 def _print_section(console: Console, section: ReportSection) -> None:
+    if section.kind == "footer":
+        for line in section.lines:
+            console.print(_as_text(line) if isinstance(line, str) else line)
+        console.print()
+        return
+
     title = _as_text(section.title_ansi or section.title)
     body = _body_group(section.lines)
 
@@ -39,7 +48,6 @@ def _print_section(console: Console, section: ReportSection) -> None:
         return
 
     if section.kind == "plan-glance":
-        # Trailer: visible block that still expands into scrollback (not Layout).
         console.print(
             Panel(
                 body,
@@ -48,6 +56,11 @@ def _print_section(console: Console, section: ReportSection) -> None:
                 padding=(0, 1),
             )
         )
+        console.print()
+        return
+
+    if section.kind == "meta" and section.title == "Capacity":
+        console.print(body)
         console.print()
         return
 
@@ -61,17 +74,21 @@ def run_usage_app(
     alerts: list[UseOrLoseAlert],
     *,
     config: dict[str, Any] | None = None,
+    full: bool = False,
     brief: bool = False,
     traditional_summary: bool = False,
 ) -> None:
     """Print the styled report to stdout (static; action plan at a glance last)."""
+    console = Console(highlight=False, soft_wrap=True, emoji=False)
+    glance_width = max(40, console.width - _PANEL_CHROME)
     sections = build_report_sections(
         snapshot,
         alerts,
         config=config,
+        full=full,
         brief=brief,
         traditional_summary=traditional_summary,
+        glance_width=glance_width,
     )
-    console = Console(highlight=False, soft_wrap=False, emoji=False)
     for section in sections:
         _print_section(console, section)

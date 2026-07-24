@@ -4,6 +4,12 @@
 renderables printed sequentially). Do **not** use Textual or Rich `Layout`
 for the default report.
 
+**Default report is glance-first:** header, optional capacity one-liner,
+collector errors, **Action plan — at a glance** (≤3 alert lines/provider),
+and a dim `Detail: ai --full` footer. Use `--full` for per-provider detail,
+cross-checks, tips, and the detailed action plan. `--brief` is a compat alias
+of the default.
+
 ## Why Textual was the wrong fit
 
 `ai` prints a **long static report** that must remain in the terminal

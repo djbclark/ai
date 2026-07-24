@@ -60,9 +60,10 @@ ai --generate-config
 ai doctor                 # PATH tools + config presence + timeouts
 
 # Morning / before a long coding block
-ai                        # colored static report on a TTY (action plan at a glance last)
+ai                        # glance-first report on a TTY (at-a-glance plan last)
+ai --full                 # long report: per-provider, tips, detailed plan
+ai --brief                # same as default (compat alias)
 ai --no-tui               # classic plain-text report (also used when piping)
-ai --brief                # errors + action plan only
 ai -q                     # same report, no “Collecting…” on stderr
 
 # Scripting / cron (JSON on stdout; use exit codes)
@@ -114,12 +115,13 @@ ai --doctor
 
 | Flag                                             | Effect                                                             |
 | ------------------------------------------------ | ------------------------------------------------------------------ |
-| _(none)_ / `--format pretty`                     | Colored static report on a TTY (at-a-glance plan last); plain when piped |
+| _(none)_ / `--format pretty`                     | Glance-first report on a TTY (capacity blurb + at-a-glance plan); plain when piped |
+| `--full`                                         | Long pretty report: per-provider, cross-checks, tips, detailed plan |
 | `--json` / `--format json`                       | Full snapshot + alerts as JSON                                     |
+| `--brief`                                        | Alias of default glance-first pretty report                        |
 | `--no-tui`                                       | Force classic plain-text pretty report                             |
 | `--no-color`                                     | Disable ANSI colors in plain-text pretty mode                      |
 | `-q` / `--quiet`                                 | Suppress progress messages on stderr                               |
-| `--brief`                                        | Pretty: collector errors + action plan only                        |
 | `--alerts-only`                                  | Recommendations only (respects pretty vs json)                     |
 | `--traditional-summary`                          | Legacy flat summary format instead of unified action plan          |
 | `--print-completion bash\|zsh`                   | Print shell completion script to stdout                            |
@@ -155,8 +157,8 @@ This tool:
 2. Scores windows with **pace-based** logic (default): compare how far through the cycle you are vs how much you've used, then project waste or early lockout.
 3. Classifies each window as **Burn** (will leave capacity unused), **Conserve** (on track to exhaust before reset — slow down), or **On pace** (no alert).
 4. For **shared-allotment** providers (Claude, Gemini by default), scores the longest governing window only so a fresh 5-hour bar does not outrank the weekly budget it draws from.
-5. Renders detail (per-provider, cross-checks, tips), then a **unified action plan last** so the terminal lands on what to do: CONSERVE first, then THIS WEEK / THIS WEEKEND / LATER THIS MONTH / THROTTLED.
-6. Keeps the final action-plan block within ~**23 lines × 80 columns** when possible (no scroll-back). If the detailed plan is taller, both are printed: detailed first, then a compact **at a glance** plan as the true end.
+5. Default pretty output is **glance-first** (capacity blurb + compact action plan). Use `ai --full` for per-provider detail, cross-checks, tips, and the detailed plan.
+6. On `--full`, keeps the trailing plan within ~**23 lines × console width** when possible; if the detailed plan is taller, both detailed and **at a glance** are printed (glance last).
 7. Cross-checks overlapping sources; Claude multi-account stays canonical in cswap (with cache hydrate + fallbacks).
 
 This command intentionally does not report historical local-token usage or

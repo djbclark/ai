@@ -145,12 +145,68 @@ def test_brief_mode_skips_usage_section(monkeypatch, capsys):
     )
     monkeypatch.setattr(cli, "run_collectors", lambda _c: snap)
     monkeypatch.setattr(cli, "analyze_use_or_lose", lambda *_a, **_k: [alert])
-    assert cli.main(["--brief", "--no-color", "-q"]) == 2
+    assert cli.main(["--brief", "--no-color", "-q", "--no-tui"]) == 2
     out = capsys.readouterr().out
     assert "Action plan" in out
-    assert "brief" in out.lower()
+    assert "Detail: ai --full" in out
     assert "## Per-provider usage" not in out
     assert "## Tips" not in out
+
+
+def test_default_pretty_is_glance_first(monkeypatch, capsys):
+    from ai.models import AccountUsage, Urgency, UseOrLoseAlert
+
+    snap = Snapshot(
+        collected_at=utcnow(),
+        accounts=[AccountUsage(provider="codex", source="codexbar", account="a@x.com")],
+    )
+    alert = UseOrLoseAlert(
+        urgency=Urgency.HIGH,
+        provider="codex",
+        account="a@x.com",
+        window_label="Weekly",
+        remaining_percent=90.0,
+        days_until_reset=1.0,
+        plan=None,
+        message="burn",
+        source="codexbar",
+        score=10.0,
+        kind="burn",
+    )
+    monkeypatch.setattr(cli, "run_collectors", lambda _c: snap)
+    monkeypatch.setattr(cli, "analyze_use_or_lose", lambda *_a, **_k: [alert])
+    assert cli.main(["--no-color", "-q", "--no-tui"]) == 2
+    out = capsys.readouterr().out
+    assert "at a glance" in out
+    assert "## Per-provider usage" not in out
+
+
+def test_full_mode_includes_providers(monkeypatch, capsys):
+    from ai.models import AccountUsage, Urgency, UseOrLoseAlert
+
+    snap = Snapshot(
+        collected_at=utcnow(),
+        accounts=[AccountUsage(provider="codex", source="codexbar", account="a@x.com")],
+    )
+    alert = UseOrLoseAlert(
+        urgency=Urgency.HIGH,
+        provider="codex",
+        account="a@x.com",
+        window_label="Weekly",
+        remaining_percent=90.0,
+        days_until_reset=1.0,
+        plan=None,
+        message="burn",
+        source="codexbar",
+        score=10.0,
+        kind="burn",
+    )
+    monkeypatch.setattr(cli, "run_collectors", lambda _c: snap)
+    monkeypatch.setattr(cli, "analyze_use_or_lose", lambda *_a, **_k: [alert])
+    assert cli.main(["--full", "--no-color", "-q", "--no-tui"]) == 2
+    out = capsys.readouterr().out
+    assert "## Per-provider usage" in out
+    assert "(full)" in out
 
 
 def test_alerts_only_includes_cross_check_warnings(monkeypatch, capsys):

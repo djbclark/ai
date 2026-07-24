@@ -10,7 +10,9 @@ from ai.report import (
     ACTION_PLAN_MAX_LINES,
     ACTION_PLAN_WIDTH,
     URGENCY_ICON,
+    _capacity_summary_line,
     _human_deadline,
+    _physical_line_count,
     _render_account,
     _render_action_plan,
     _render_brief_action_plan,
@@ -27,7 +29,7 @@ class ReportSection:
 
     title: str
     lines: list[str] = field(default_factory=list)
-    kind: str = "body"  # header | providers | plan | plan-glance | errors | meta | tips
+    kind: str = "body"  # header | providers | plan | plan-glance | errors | meta | tips | footer
     # Title may also carry ANSI when set via Style.
     title_ansi: str | None = None
 
@@ -37,20 +39,23 @@ def build_report_sections(
     alerts: list[UseOrLoseAlert],
     *,
     config: dict[str, Any] | None = None,
+    full: bool = False,
     brief: bool = False,
     traditional_summary: bool = False,
+    glance_width: int | None = None,
 ) -> list[ReportSection]:
     """Build sections for the styled report.
 
-    Detail first; **Action plan — at a glance** is always last so scrollback
-    lands on the compact plan (same idea as the classic string report).
+    Default is glance-first; ``full=True`` is the long report. ``brief`` is an
+    alias of default (ignored when ``full=True``). Glance is always last.
     """
-    del traditional_summary
+    del brief, traditional_summary
     s = _Style(True)
     sections: list[ReportSection] = []
     accounts = _sorted_accounts(snapshot.accounts)
     n_accounts = len(accounts)
     n_actionable = sum(1 for a in alerts if a.urgency not in (Urgency.INFO, Urgency.NONE))
+    width = glance_width if glance_width is not None else ACTION_PLAN_WIDTH
 
     meta = f"Collected at {snapshot.collected_at.isoformat()}"
     meta += f" · {n_accounts} account{'s' if n_accounts != 1 else ''}"
@@ -59,8 +64,8 @@ def build_report_sections(
     else:
         meta += " · no burn/conserve alerts"
     title = "AI USAGE — USE IT OR LOSE IT"
-    if brief:
-        title += " (brief)"
+    if full:
+        title += " (full)"
     sections.append(
         ReportSection(
             title=title,
@@ -80,16 +85,10 @@ def build_report_sections(
             )
         )
 
-    if brief:
-        sections.append(
-            ReportSection(
-                title="Brief mode",
-                title_ansi=s.dim("Brief mode"),
-                lines=[s.dim("Omit per-provider, cross-checks, tips; full: ai")],
-                kind="meta",
-            )
-        )
-    else:
+    analysis_cfg = (config or {}).get("analysis") or {}
+    waking_hours = float(analysis_cfg.get("waking_hours_per_day", 16))
+
+    if full:
         provider_lines: list[str] = []
         if accounts:
             for acc in accounts:
@@ -131,25 +130,43 @@ def build_report_sections(
                 kind="tips",
             )
         )
-
-    analysis_cfg = (config or {}).get("analysis") or {}
-    waking_hours = float(analysis_cfg.get("waking_hours_per_day", 16))
-    width = ACTION_PLAN_WIDTH
-
-    if not brief:
         detailed = _render_action_plan(
             alerts, s, width=width, waking_hours_per_day=waking_hours
         )
+        detailed_lines = [line for line in detailed if line is not None]
+        # Match classic full report: single plan when it fits; else detailed + glance.
+        header_rows = 2  # title + rule in classic path
+        if _physical_line_count(detailed_lines) + header_rows <= ACTION_PLAN_MAX_LINES:
+            sections.append(
+                ReportSection(
+                    title="Action plan — use these before they reset",
+                    title_ansi=s.bold(s.yellow("Action plan — use these before they reset")),
+                    lines=detailed_lines,
+                    kind="plan",
+                )
+            )
+            return sections
         sections.append(
             ReportSection(
                 title="Action plan (detailed)",
                 title_ansi=s.bold(s.yellow("Action plan (detailed)")),
-                lines=[line for line in detailed if line is not None],
+                lines=detailed_lines,
                 kind="plan",
             )
         )
 
-    # Compact plan always last — what the terminal lands on.
+    else:
+        capacity = _capacity_summary_line(alerts, s)
+        if capacity:
+            sections.append(
+                ReportSection(
+                    title="Capacity",
+                    title_ansi=s.dim("Capacity"),
+                    lines=[capacity],
+                    kind="meta",
+                )
+            )
+
     glance = _render_brief_action_plan(
         alerts, s, width=width, max_lines=ACTION_PLAN_MAX_LINES - 2
     )
@@ -161,6 +178,14 @@ def build_report_sections(
             kind="plan-glance",
         )
     )
+    if not full:
+        sections.append(
+            ReportSection(
+                title="",
+                lines=[s.dim("Detail: ai --full")],
+                kind="footer",
+            )
+        )
     return sections
 
 

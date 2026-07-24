@@ -55,33 +55,39 @@ def _burn_alert() -> UseOrLoseAlert:
     )
 
 
-def test_build_report_sections_includes_plan_and_providers():
-    sections = build_report_sections(_snap_with_account(), [_burn_alert()], brief=False)
-    kinds = [s.kind for s in sections]
-    assert "header" in kinds
-    assert "plan" in kinds
-    assert "plan-glance" in kinds
-    assert "providers" in kinds
-    assert "tips" in kinds
-    assert kinds[-1] == "plan-glance"
-    plan = next(s for s in sections if s.kind == "plan")
-    assert any("Codex" in line for line in plan.lines)
-
-
-def test_build_report_sections_brief_omits_providers():
-    sections = build_report_sections(_snap_with_account(), [_burn_alert()], brief=True)
+def test_build_report_sections_default_is_glance_first():
+    sections = build_report_sections(_snap_with_account(), [_burn_alert()], full=False)
     kinds = [s.kind for s in sections]
     assert "providers" not in kinds
     assert "plan" not in kinds
     assert "plan-glance" in kinds
+    assert "footer" in kinds
+    assert kinds[-2] == "plan-glance"
+    assert any("Detail: ai --full" in line for s in sections for line in s.lines)
+
+
+def test_build_report_sections_full_includes_providers():
+    sections = build_report_sections(_snap_with_account(), [_burn_alert()], full=True)
+    kinds = [s.kind for s in sections]
     assert "header" in kinds
-    assert kinds[-1] == "plan-glance"
+    assert "providers" in kinds
+    assert "tips" in kinds
+    assert "plan" in kinds
+    assert "footer" not in kinds
+    plan = next(s for s in sections if s.kind == "plan")
+    assert any("Codex" in line for line in plan.lines)
+
+
+def test_build_report_sections_brief_aliases_default():
+    default = build_report_sections(_snap_with_account(), [_burn_alert()])
+    brief = build_report_sections(_snap_with_account(), [_burn_alert()], brief=True)
+    assert [s.kind for s in default] == [s.kind for s in brief]
 
 
 def test_build_report_sections_includes_collector_errors():
     snap = _snap_with_account()
     snap.collector_errors.append("tokscale: timeout")
-    sections = build_report_sections(snap, [], brief=True)
+    sections = build_report_sections(snap, [], full=False)
     errors = next(s for s in sections if s.kind == "errors")
     assert any("tokscale" in line for line in errors.lines)
 
@@ -120,21 +126,21 @@ def test_should_use_tui_true_on_tty_when_rich_present():
     assert should_use_tui(stream=TTY()) is True
 
 
-def test_run_usage_app_prints_full_report_including_glance(capsys):
+def test_run_usage_app_default_omits_providers(capsys):
     from ai.tui.app import run_usage_app
 
-    run_usage_app(_snap_with_account(), [_burn_alert()], brief=False)
+    run_usage_app(_snap_with_account(), [_burn_alert()], full=False)
     out = capsys.readouterr().out
     assert "AI USAGE" in out
-    assert "Per-provider usage" in out
+    assert "Per-provider usage" not in out
     assert "Action plan — at a glance" in out
-    assert out.index("Per-provider") < out.index("at a glance")
+    assert "Detail: ai --full" in out
 
 
-def test_run_usage_app_brief_still_ends_on_glance(capsys):
+def test_run_usage_app_full_includes_providers(capsys):
     from ai.tui.app import run_usage_app
 
-    run_usage_app(_snap_with_account(), [_burn_alert()], brief=True)
+    run_usage_app(_snap_with_account(), [_burn_alert()], full=True)
     out = capsys.readouterr().out
-    assert "at a glance" in out
-    assert "Per-provider usage" not in out
+    assert "Per-provider usage" in out
+    assert "Detail: ai --full" not in out
