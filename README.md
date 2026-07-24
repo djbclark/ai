@@ -1,10 +1,10 @@
-# ai
+# aiuse
 
 Aggregate live **subscription quota** and **prepaid balance** information across
 your local AI tooling, then highlight allotments you should use **before they
 reset** (use-it-or-lose-it).
 
-CLI command: **`aiuse`**
+CLI command: **`aiuse`** (stub **`ai`** → same entrypoint)
 
 > **AI agents:** start at [`AGENTS.md`](AGENTS.md) for a map of this repo,
 > active priorities, Claude/cswap reliability notes
@@ -13,11 +13,11 @@ CLI command: **`aiuse`**
 
 ## Data sources
 
-| Tool                                                               | Purpose                                                   | Authority                                                                         |
-| ------------------------------------------------------------------ | --------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| Tool                                                                     | Purpose                                                   | Authority                                                                                                     |
+| ------------------------------------------------------------------------ | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
 | [**cswap**](https://github.com/realiti4/claude-swap) `cswap list --json` | Live Claude Code quota for every configured email/account | Canonical multi-account Claude source; may hydrate from cswap’s local usage cache when JSON is decision-stale |
-| [**CodexBar**](https://github.com/) `codexbar usage --format json` | Live quotas and balances for enabled providers            | Preferred for non-Claude providers; Claude fallback if cswap has no live rows     |
-| [**tokscale**](https://www.npmjs.com/) `tokscale usage --json`     | Independent live subscription quota measurement           | Cross-checked against CodexBar (and Claude/cswap); selected when preferred source has no live row |
+| [**CodexBar**](https://github.com/) `codexbar usage --format json`       | Live quotas and balances for enabled providers            | Preferred for non-Claude providers; Claude fallback if cswap has no live rows                                 |
+| [**tokscale**](https://www.npmjs.com/) `tokscale usage --json`           | Independent live subscription quota measurement           | Cross-checked against CodexBar (and Claude/cswap); selected when preferred source has no live row             |
 
 This project shells out to tools already on your `PATH`; it does not scrape billing dashboards itself. For Claude multi-account reliability (stale JSON vs cache), see [`docs/cswap-reliability.md`](docs/cswap-reliability.md).
 
@@ -26,11 +26,20 @@ This project shells out to tools already on your `PATH`; it does not scrape bill
 **End users (pipx):**
 
 ```bash
-pipx install 'git+https://github.com/djbclark/aiuse.git'
+pipx install aiuse
+# until PyPI is live, or always from git tip:
+# pipx install 'git+https://github.com/djbclark/aiuse.git'
 aiuse doctor
 ```
 
 (`ai` is installed as a stub that runs the same CLI.)
+
+**Homebrew (personal tap):**
+
+```bash
+brew tap djbclark/aiuse
+brew install aiuse
+```
 
 **Developers (editable):**
 
@@ -43,7 +52,6 @@ pip install -e ".[dev]"
 
 More channels: [`docs/packaging.md`](docs/packaging.md).
 
-
 Optional config (standard location: **`~/.config/aiuse/`**, or `$XDG_CONFIG_HOME/aiuse/`):
 
 ```bash
@@ -52,14 +60,14 @@ aiuse --generate-config
 
 # Or copy examples by hand:
 mkdir -p "${XDG_CONFIG_HOME:-$HOME/.config}/aiuse"
-cp config/services.example.yaml "${XDG_CONFIG_HOME:-$HOME/.config}/ai/services.yaml"
-cp config/config.example.toml "${XDG_CONFIG_HOME:-$HOME/.config}/ai/config.toml"
+cp config/services.example.yaml "${XDG_CONFIG_HOME:-$HOME/.config}/aiuse/services.yaml"
+cp config/config.example.toml "${XDG_CONFIG_HOME:-$HOME/.config}/aiuse/config.toml"
 ```
 
-| File | Purpose |
-| --- | --- |
-| `~/.config/aiuse/services.yaml` | Plans, analysis thresholds, which collectors are enabled |
-| `~/.config/aiuse/config.toml` | Tool settings: subprocess **timeouts** (default **45s**), room for more later |
+| File                            | Purpose                                                                       |
+| ------------------------------- | ----------------------------------------------------------------------------- |
+| `~/.config/aiuse/services.yaml` | Plans, analysis thresholds, which collectors are enabled                      |
+| `~/.config/aiuse/config.toml`   | Tool settings: subprocess **timeouts** (default **45s**), room for more later |
 
 Run `aiuse --show-config-path` to print both paths. `aiuse --generate-config` creates
 missing parent dirs (`~/.config`, `~/.config/aiuse`) and writes defaults; if a file
@@ -127,34 +135,34 @@ aiuse doctor
 aiuse --doctor
 ```
 
-| Flag                                             | Effect                                                             |
-| ------------------------------------------------ | ------------------------------------------------------------------ |
+| Flag                                             | Effect                                                                           |
+| ------------------------------------------------ | -------------------------------------------------------------------------------- |
 | _(none)_ / `--format pretty`                     | Priority ladder on stdout (empty→slow→mid→use); meta on stderr; plain when piped |
-| `--full`                                         | Long pretty report: per-provider, cross-checks, tips, detailed plan |
-| `--json` / `--format json`                       | Full snapshot + alerts as JSON                                     |
-| `--brief`                                        | Alias of default priority-ladder pretty report                     |
-| `--no-tui`                                       | Force classic plain-text pretty report                             |
-| `--no-color`                                     | Disable ANSI colors in plain-text pretty mode                      |
-| `-q` / `--quiet`                                 | Suppress progress messages on stderr                               |
-| `--alerts-only`                                  | Recommendations only (respects pretty vs json)                     |
-| `--traditional-summary`                          | Legacy flat summary format instead of unified action plan          |
-| `--print-completion bash\|zsh`                   | Print shell completion script to stdout                            |
-| `--no-tokscale` / `--no-cswap` / `--no-codexbar` | Skip specific collectors                                           |
-| `--providers copilot,grok`                       | Query specific CodexBar providers (CSV, one per subprocess)        |
-| `-t` / `--timeout SECONDS`                       | Force subprocess timeout for all external tools (default **45**)   |
-| `--generate-config`                              | Write default `~/.config/aiuse/*` files; never overwrites existing    |
-| `--show-config-path`                             | Print services.yaml and config.toml paths                          |
-| `doctor` / `--doctor`                            | Check tools on PATH, config presence, effective timeouts; no collect |
-| `--min-remaining 50 --max-days 10`               | Override alert thresholds                                          |
-| `--save PATH`                                    | Also write full JSON snapshot to PATH                              |
+| `--full`                                         | Long pretty report: per-provider, cross-checks, tips, detailed plan              |
+| `--json` / `--format json`                       | Full snapshot + alerts as JSON                                                   |
+| `--brief`                                        | Alias of default priority-ladder pretty report                                   |
+| `--no-tui`                                       | Force classic plain-text pretty report                                           |
+| `--no-color`                                     | Disable ANSI colors in plain-text pretty mode                                    |
+| `-q` / `--quiet`                                 | Suppress progress messages on stderr                                             |
+| `--alerts-only`                                  | Recommendations only (respects pretty vs json)                                   |
+| `--traditional-summary`                          | Legacy flat summary format instead of unified action plan                        |
+| `--print-completion bash\|zsh`                   | Print shell completion script to stdout                                          |
+| `--no-tokscale` / `--no-cswap` / `--no-codexbar` | Skip specific collectors                                                         |
+| `--providers copilot,grok`                       | Query specific CodexBar providers (CSV, one per subprocess)                      |
+| `-t` / `--timeout SECONDS`                       | Force subprocess timeout for all external tools (default **45**)                 |
+| `--generate-config`                              | Write default `~/.config/aiuse/*` files; never overwrites existing               |
+| `--show-config-path`                             | Print services.yaml and config.toml paths                                        |
+| `doctor` / `--doctor`                            | Check tools on PATH, config presence, effective timeouts; no collect             |
+| `--min-remaining 50 --max-days 10`               | Override alert thresholds                                                        |
+| `--save PATH`                                    | Also write full JSON snapshot to PATH                                            |
 
 ### Exit codes
 
-| Code | When |
-| --- | --- |
-| **0** | Collect succeeded (or nothing to report) and there are **no** burn/conserve alerts. INFO-only notes still count as 0. |
+| Code  | When                                                                                                                                                                                                                               |
+| ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **0** | Collect succeeded (or nothing to report) and there are **no** burn/conserve alerts. INFO-only notes still count as 0.                                                                                                              |
 | **1** | Hard failure: collectors reported errors and **no** accounts were collected. Also used by `aiuse doctor` when an **enabled** tool is missing from `PATH`, and by `--generate-config` when nothing was written / overwrite refused. |
-| **2** | Collect succeeded and at least one **burn** or **conserve** alert is present. Cross-check disagreements alone do **not** set 2. Bad `--timeout` values also use 2. |
+| **2** | Collect succeeded and at least one **burn** or **conserve** alert is present. Cross-check disagreements alone do **not** set 2. Bad `--timeout` values also use 2.                                                                 |
 
 `aiuse doctor` checks config file presence, **config validation** (unknown keys, bad
 timeouts, dead plan aliases), tools on `PATH`, and a light **version probe**
@@ -242,11 +250,11 @@ of those corresponding inputs.
 
 ## Scoring modes (`analysis.scoring_mode`)
 
-| Mode | Meaning |
-| --- | --- |
-| **`pace`** (default) | Burn / conserve / on-pace from projected waste and lockout |
-| **`multi_dim`** | Previous value + flexibility + deadline blend (escape hatch) |
-| **`legacy`** | Original deadline-heavy scorer (`use_multi_dim_scoring: false` still maps here) |
+| Mode                 | Meaning                                                                         |
+| -------------------- | ------------------------------------------------------------------------------- |
+| **`pace`** (default) | Burn / conserve / on-pace from projected waste and lockout                      |
+| **`multi_dim`**      | Previous value + flexibility + deadline blend (escape hatch)                    |
+| **`legacy`**         | Original deadline-heavy scorer (`use_multi_dim_scoring: false` still maps here) |
 
 Pace knobs (also in `services.yaml` under `analysis.pace`):
 
@@ -273,8 +281,8 @@ Shared allotment: `analysis.provider_overrides.<provider>.shared_allotment: true
 - [`docs/cswap-reliability.md`](docs/cswap-reliability.md) — Claude multi-account reliability: why `cswap list --json` can drop usable quota, and how cache hydration + fallbacks work.
 - [`docs/opencode-go-quota.md`](docs/opencode-go-quota.md) — OpenCode Go: why CodexBar `auto`/local can show remaining % when the TUI says limit reached, and how `aiuse` prefers web.
 - [`docs/cursor-quota.md`](docs/cursor-quota.md) — Cursor Included/Auto/API + on-demand vs CodexBar slots.
-- [`docs/pretty-display.md`](docs/pretty-display.md)
-- [`docs/packaging.md`](docs/packaging.md) — pipx / PyPI / Homebrew notes. — why pretty output uses Rich (not Textual / not Rich `Layout`) so the full report stays in scrollback.
+- [`docs/pretty-display.md`](docs/pretty-display.md) — why pretty output uses Rich (not Textual / not Rich `Layout`) so the full report stays in scrollback.
+- [`docs/packaging.md`](docs/packaging.md) — pipx / PyPI / Homebrew notes.
 - [`docs/claude-local-usage.md`](docs/claude-local-usage.md) — Local Claude Code files / ccusage (token burn) vs subscription 5h/7d % from the OAuth usage API.
 - [`docs/tokscale-per-provider-investigation.md`](docs/tokscale-per-provider-investigation.md) — why tokscale cannot yet fan out per provider like CodexBar.
 - [`docs/json-contract.md`](docs/json-contract.md) — stable JSON fields and exit codes for scripts.

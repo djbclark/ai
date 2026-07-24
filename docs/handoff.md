@@ -4,7 +4,8 @@
 **Branch:** `main`  
 **Local tree:** `~/src/aiuse` (reopen Cursor here — old `~/src/ai` is gone)  
 **Remote:** https://github.com/djbclark/aiuse  
-**Tests:** `.venv/bin/python -m pytest -q` — expect **200+** passing
+**Tests:** `.venv/bin/python -m pytest -q` — expect **200+** passing  
+**Version:** **2.1.0** (first release of renamed `aiuse`; git `v2.0.0` is historical pre-rename)
 
 Fresh agents: start at [`AGENTS.md`](../AGENTS.md). This file is the short
 “where we left off” note so the next session does not re-discover status.
@@ -27,7 +28,7 @@ Fresh agents: start at [`AGENTS.md`](../AGENTS.md). This file is the short
 | Cache | Snapshots under `~/.cache/aiuse/snapshots` |
 | Pretty / priority ladder | Rich stdout ladder; meta on stderr; `--full` long report — [`pretty-display.md`](pretty-display.md) |
 | Cursor / OpenCode Go quota | Docs: [`cursor-quota.md`](cursor-quota.md), [`opencode-go-quota.md`](opencode-go-quota.md) |
-| Packaging started | [`packaging.md`](packaging.md), draft Homebrew formula; PyPI name `ai` taken → ship as `aiuse` |
+| Packaging (in progress) | `LICENSE`, `2.1.0`, `python -m build` + twine check green, publish workflow, Homebrew formula draft — see below |
 
 Recent commits: `git log -8 --oneline`
 
@@ -39,6 +40,15 @@ Recent commits: `git log -8 --oneline`
 - Open-ended “what next?” → **do not restart fix plan at Step 1**.
 
 ## Loose ends / next options
+
+### Packaging — remaining operator clicks (E)
+
+1. **PyPI Trusted Publishing** (one-time): create pending publisher for project
+   `aiuse`, workflow `publish.yml`, environment `pypi` — then publish GitHub
+   Release `v2.1.0` so Actions uploads. Details: [`packaging.md`](packaging.md).
+2. **Homebrew sha256**: after `v2.1.0` tag is on GitHub, fill
+   `sha256` in [`packaging/homebrew/aiuse.rb`](../packaging/homebrew/aiuse.rb)
+   and sync to tap `djbclark/homebrew-aiuse`.
 
 ### Blocked (only when upstream lands)
 
@@ -53,13 +63,13 @@ Recent commits: `git log -8 --oneline`
 | --- | --- |
 | **A — Live smoke checklist** | Operator said they will do later |
 | **Step 35 — local burn (ccusage)** | Do not start unless asked |
-| **E — Packaging finish** | Draft done; still need PyPI publish / Homebrew tap + stable archive sha256 if desired |
+| **E — Packaging finish** | Code/docs/workflow ready; PyPI publisher + release + brew sha256 left |
 | **G — History burn insights** | Not started |
 | **H — Cron/LaunchAgent recipe** | Not started (exit codes + JSON contract already enable it) |
 
 ### Suggested if operator wants more product work
 
-Small: live smoke (A), cron recipe (H), packaging finish (E).  
+Small: live smoke (A), cron recipe (H), finish packaging clicks (E).  
 Medium: history-backed pace note, consume #170 when merged.
 
 ## Key paths

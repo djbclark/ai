@@ -1,8 +1,10 @@
 class Aiuse < Formula
+  include Language::Python::Virtualenv
+
   desc "Aggregate AI subscription quotas and flag use-it-or-lose-it allotments"
   homepage "https://github.com/djbclark/aiuse"
-  url "https://github.com/djbclark/aiuse.git", branch: "main"
-  version "2.0.0"
+  url "https://github.com/djbclark/aiuse/archive/refs/tags/v2.1.0.tar.gz"
+  sha256 "REPLACE_AFTER_TAG_PUSH"
   license "MIT"
   head "https://github.com/djbclark/aiuse.git", branch: "main"
 
@@ -10,7 +12,7 @@ class Aiuse < Formula
 
   def install
     venv = virtualenv_create(libexec, "python3.14")
-    venv.pip_install buildpath.to_s
+    venv.pip_install buildpath
     bin.install_symlink libexec/"bin/aiuse"
     bin.install_symlink libexec/"bin/ai"
   end

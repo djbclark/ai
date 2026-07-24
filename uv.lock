@@ -7,11 +7,12 @@ resolution-markers = [
 ]
 
 [[package]]
-name = "ai"
-version = "2.0.0"
+name = "aiuse"
+version = "2.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "pyyaml" },
+    { name = "rich" },
 ]
 
 [package.optional-dependencies]
@@ -31,6 +32,7 @@ requires-dist = [
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
     { name = "pyyaml", specifier = ">=6.0" },
+    { name = "rich", specifier = ">=13.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.15.21" },
     { name = "yamllint", marker = "extra == 'dev'", specifier = ">=1.35.1" },
 ]

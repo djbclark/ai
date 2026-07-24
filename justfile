@@ -1,4 +1,4 @@
-# ai — local test, lint, format, and security checks.
+# aiuse — local test, lint, format, and security checks.
 
 set shell := ["bash", "-uc"]
 
