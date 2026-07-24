@@ -2,8 +2,8 @@
 
 Regular runs accumulate snapshots under `~/.cache/aiuse/snapshots` when
 `analysis.persist_snapshots` is true (see [`history-learning.md`](history-learning.md)).
-This is the foundation for history insights without changing pace scoring until
-you opt into `learn_from_history`.
+This is the foundation for history insights; with `learn_from_history: auto`
+(default), scoring starts using history once enough snapshots exist.
 
 **Primary for this operator:** manage the agent from
 [`~/ops/site-djbclark`](https://github.com/djbclark/site-djbclark) role

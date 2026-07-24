@@ -153,13 +153,42 @@ def test_history_status_line(tmp_path: Path):
         assert "0 snapshots" in line
         assert "learning off" in line
         assert str(tmp_path) in line
+        line_auto = history_status_line(analysis_cfg={"learn_from_history": "auto"})
+        assert "learning auto/waiting" in line_auto
         (tmp_path / "a.json").write_text(
             json.dumps({"collected_at": _now().isoformat(), "accounts": []}),
             encoding="utf-8",
         )
+        (tmp_path / "b.json").write_text(
+            json.dumps({"collected_at": _now().isoformat(), "accounts": []}),
+            encoding="utf-8",
+        )
         line2 = history_status_line(analysis_cfg={"learn_from_history": True})
-        assert "1 snapshot" in line2
+        assert "2 snapshots" in line2
         assert "learning on" in line2
+        line_auto_on = history_status_line(analysis_cfg={"learn_from_history": "auto"})
+        assert "learning auto/on" in line_auto_on
+
+
+def test_should_learn_from_history_auto(tmp_path: Path):
+    from aiuse.analysis.history import should_learn_from_history, should_persist_snapshots
+
+    with patch("aiuse.analysis.history.snapshot_dir", return_value=tmp_path):
+        assert should_learn_from_history({"learn_from_history": "auto"}) is False
+        assert should_persist_snapshots({"learn_from_history": "auto"}) is True
+        assert should_persist_snapshots({"learn_from_history": False}) is False
+        assert should_persist_snapshots({"persist_snapshots": True, "learn_from_history": False}) is True
+        (tmp_path / "a.json").write_text(
+            json.dumps({"collected_at": _now().isoformat(), "accounts": []}),
+            encoding="utf-8",
+        )
+        (tmp_path / "b.json").write_text(
+            json.dumps({"collected_at": _now().isoformat(), "accounts": []}),
+            encoding="utf-8",
+        )
+        assert should_learn_from_history({"learn_from_history": "auto"}) is True
+        assert should_learn_from_history({"learn_from_history": False}) is False
+        assert should_learn_from_history({"learn_from_history": True}) is True
 
 
 def test_load_recent_snapshots_empty_dir(tmp_path: Path):

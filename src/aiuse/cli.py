@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from aiuse.__init__ import __version__
-from aiuse.analysis.history import save_snapshot
+from aiuse.analysis.history import save_snapshot, should_persist_snapshots
 from aiuse.analysis.use_or_lose import analyze_use_or_lose
 from aiuse.collectors.base import which
 from aiuse.collectors.runner import run_collectors
@@ -257,11 +257,7 @@ def main(argv: list[str] | None = None) -> int:
     alerts = analyze_use_or_lose(snapshot, config)
 
     analysis_cfg = config.get("analysis") if isinstance(config.get("analysis"), dict) else {}
-    # learn_from_history implies persist so scoring always has fresh samples.
-    should_persist = bool(analysis_cfg.get("persist_snapshots")) or bool(
-        analysis_cfg.get("learn_from_history")
-    )
-    if should_persist:
+    if should_persist_snapshots(analysis_cfg):
         try:
             snapshot_path = save_snapshot(snapshot, alerts)
             _progress(f"Saved snapshot to {snapshot_path}")

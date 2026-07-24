@@ -10,6 +10,7 @@ from aiuse.analysis.history import (
     compute_learned_burn_rates,
     compute_learned_flexibility,
     merge_learned_flexibility,
+    should_learn_from_history,
 )
 from aiuse.analysis.pace import classify_pace, compute_pace, governing_partition
 from aiuse.models import (
@@ -239,7 +240,7 @@ def analyze_use_or_lose(
 
     learned_flex: dict[str, float] = {}
     learned_burn_rates: dict[str, tuple[float, int]] = {}
-    if analysis_cfg.get("learn_from_history"):
+    if should_learn_from_history(analysis_cfg):
         retention = int(analysis_cfg.get("snapshot_retention_days", 90))
         learned_flex = compute_learned_flexibility(current=snapshot, retention_days=retention)
         if mode == "pace":
@@ -526,7 +527,7 @@ def analyze_use_or_lose(
             )
     alerts.sort(key=lambda a: (-a.score, a.provider.casefold(), a.window_label.casefold()))
 
-    if analysis_cfg.get("learn_from_history"):
+    if should_learn_from_history(analysis_cfg):
         retention = int(analysis_cfg.get("snapshot_retention_days", 90))
         for wasted in chronic_waste_summary(current=snapshot, retention_days=retention):
             provider = wasted["provider"]

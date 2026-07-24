@@ -31,7 +31,7 @@ if [[ ! -f "${SERVICES}" ]]; then
   cat >"${SERVICES}" <<'EOF'
 analysis:
   persist_snapshots: true
-  learn_from_history: false
+  learn_from_history: auto
 EOF
   echo "created: ${SERVICES} (persist_snapshots: true)"
 else
@@ -86,5 +86,5 @@ echo "aiuse:     ${AIUSE_BIN}"
 echo "logs:      ${LOG_DIR}/"
 echo "interval:  1 hour (StartInterval 3600)"
 echo "note:      exit 1 = hard failure; exit 2 = alerts present (collection ok)"
-echo "next:      after a few days of snapshots, set learn_from_history: true"
+echo "next:      learn_from_history: auto turns learning on once >= 2 snapshots exist"
 echo "           (see docs/history-learning.md)"

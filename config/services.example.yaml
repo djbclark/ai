@@ -19,11 +19,9 @@ analysis:
   urgent_days_until_reset: 7
 
   # Persist each run under ~/.cache/aiuse/snapshots (for LaunchAgent / history).
-  # Does not change scoring by itself — enable learn_from_history after a few days.
-  persist_snapshots: false
-  # Experimental: blend learned burn rates + chronic-waste alerts from snapshots.
-  # Implies persist_snapshots.
-  learn_from_history: false
+  persist_snapshots: true
+  # true | false | auto — auto (default) turns learning on once >= 2 snapshots exist.
+  learn_from_history: auto
   snapshot_retention_days: 90
 
   # ---- consumption flexibility (Phase 1: data-only, Phase 2: scoring) ----

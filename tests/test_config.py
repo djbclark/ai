@@ -50,7 +50,7 @@ def test_default_analysis_persist_and_learn_flags():
 
     analysis = DEFAULT_CONFIG["analysis"]
     assert analysis["persist_snapshots"] is False
-    assert analysis["learn_from_history"] is False
+    assert analysis["learn_from_history"] == "auto"
 
 
 def test_default_timeouts_are_45s():

@@ -25,10 +25,8 @@ then offer choices — **do not restart at Step 1**.
    merges, consume official `lastGoodUsage` in `collectors/cswap.py` (cache
    hydrate → fallback). Tracked: [djbclark/aiuse#1](https://github.com/djbclark/aiuse/issues/1).
    Design: [`docs/cswap-reliability.md`](docs/cswap-reliability.md).
-3. **Operator-driven only** — live smoke (A), turn on `learn_from_history`
-   after snapshots accumulate ([`docs/history-learning.md`](docs/history-learning.md)),
-   or new features. Packaging + LaunchAgent (via
-   [`site-djbclark` site_agents](https://github.com/djbclark/site-djbclark)) are done.
+3. **Operator-driven only** — live smoke (A), richer history UX, or new
+   features. Packaging + hourly LaunchAgent + `learn_from_history: auto` are done.
 4. **Parked (do not start unless asked):**
    - **Step 35** — local ccusage / stats-cache burn (not plan %). See Phase 7
      and [`docs/claude-local-usage.md`](docs/claude-local-usage.md).

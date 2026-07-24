@@ -362,6 +362,51 @@ def count_snapshots(
     return len(load_recent_snapshots(retention_days=retention_days, max_count=max_count))
 
 
+def should_persist_snapshots(analysis_cfg: dict[str, Any] | None = None) -> bool:
+    """Whether this run should write a snapshot file.
+
+    Explicit ``persist_snapshots: true`` always saves. ``learn_from_history``
+    ``true`` or ``auto`` also saves (so auto can accumulate until learning
+    activates). Explicit ``learn_from_history: false`` does not force persist.
+    """
+    cfg = analysis_cfg or {}
+    if cfg.get("persist_snapshots"):
+        return True
+    raw = cfg.get("learn_from_history", "auto")
+    if raw is False:
+        return False
+    if isinstance(raw, str) and raw.strip().lower() in {"false", "no", "off", "0"}:
+        return False
+    # true / auto / unrecognized → persist so history can become useful
+    return True
+
+
+def should_learn_from_history(analysis_cfg: dict[str, Any] | None = None) -> bool:
+    """Whether history should influence scoring/alerts this run.
+
+    ``learn_from_history`` values:
+    - ``true`` / ``"true"`` — always attempt learning
+    - ``false`` / ``"false"`` — never
+    - ``"auto"`` (default) — learn once retained snapshot count >= min (2)
+    """
+    cfg = analysis_cfg or {}
+    raw = cfg.get("learn_from_history", "auto")
+    if isinstance(raw, bool):
+        return raw
+    if isinstance(raw, str):
+        key = raw.strip().lower()
+        if key in {"true", "yes", "on", "1"}:
+            return True
+        if key in {"false", "no", "off", "0"}:
+            return False
+        # "auto" and any other unrecognized string → auto
+    try:
+        retention = int(cfg.get("snapshot_retention_days") or _DEFAULT_RETENTION_DAYS)
+    except (TypeError, ValueError):
+        retention = _DEFAULT_RETENTION_DAYS
+    return count_snapshots(retention_days=retention) >= _DEFAULT_MIN_SNAPSHOTS
+
+
 def history_status_line(*, analysis_cfg: dict[str, Any] | None = None) -> str:
     """One-line status for --full / docs: snapshot count and learning flag."""
     cfg = analysis_cfg or {}
@@ -370,6 +415,16 @@ def history_status_line(*, analysis_cfg: dict[str, Any] | None = None) -> str:
     except (TypeError, ValueError):
         retention = _DEFAULT_RETENTION_DAYS
     n = count_snapshots(retention_days=retention)
-    learning = "on" if cfg.get("learn_from_history") else "off"
+    raw = cfg.get("learn_from_history", "auto")
+    if isinstance(raw, bool):
+        mode = "on" if raw else "off"
+    elif isinstance(raw, str) and raw.strip().lower() in {"false", "no", "off", "0"}:
+        mode = "off"
+    elif isinstance(raw, str) and raw.strip().lower() in {"true", "yes", "on", "1"}:
+        mode = "on"
+    else:
+        # auto
+        active = n >= _DEFAULT_MIN_SNAPSHOTS
+        mode = f"auto/{'on' if active else 'waiting'}"
     noun = "snapshot" if n == 1 else "snapshots"
-    return f"History: {n} {noun} in {snapshot_dir()} (learning {learning})"
+    return f"History: {n} {noun} in {snapshot_dir()} (learning {mode})"

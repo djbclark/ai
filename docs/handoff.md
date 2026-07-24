@@ -5,7 +5,7 @@
 **Local tree:** `~/src/aiuse`  
 **Remote:** https://github.com/djbclark/aiuse  
 **Tests:** `.venv/bin/python -m pytest -q` — expect **200+** passing  
-**Version:** **2.1.2**
+**Version:** **2.1.3**
 
 Fresh agents: start at [`AGENTS.md`](../AGENTS.md).
 
@@ -24,7 +24,7 @@ Fresh agents: start at [`AGENTS.md`](../AGENTS.md).
 | Fix plan Steps **1–32** + **34** | Complete                                                            |
 | Packaging                        | PyPI + Homebrew + OIDC; current **2.1.2**                           |
 | **H — LaunchAgent**              | Live: `com.djbclark.aiuse` via site-djbclark `site_agents` (hourly) |
-| **G — History (thin)**           | `persist_snapshots` on; learning still opt-in                       |
+| **G — History (thin)**           | `persist_snapshots` + `learn_from_history: auto`                    |
 
 ## Packaging / scheduling
 
@@ -33,7 +33,7 @@ Fresh agents: start at [`AGENTS.md`](../AGENTS.md).
 | PyPI / Homebrew / OIDC | Done                                                                |
 | LaunchAgent            | **Rolled out** via `~/ops/site-djbclark` (`just site-agents-apply`) |
 | `persist_snapshots`    | **true** (set by site_agents)                                       |
-| `learn_from_history`   | Still **opt-in**                                                    |
+| `learn_from_history`   | **`auto`** — learns once ≥ 2 snapshots exist                        |
 
 ## Operator preferences (standing)
 
@@ -51,14 +51,14 @@ Fresh agents: start at [`AGENTS.md`](../AGENTS.md).
 
 ### Deferred
 
-| Item                        | Status                      |
-| --------------------------- | --------------------------- |
-| **A — Live smoke**          | Operator-owned              |
-| **Step 35**                 | Parked                      |
-| **E — Packaging**           | Done                        |
-| **H — LaunchAgent**         | Done (site-djbclark)        |
-| **G — History learning on** | Opt-in after more snapshots |
-| **G deeper UX**             | Thin status line done       |
+| Item                        | Status                                 |
+| --------------------------- | -------------------------------------- |
+| **A — Live smoke**          | Operator-owned                         |
+| **Step 35**                 | Parked                                 |
+| **E — Packaging**           | Done                                   |
+| **H — LaunchAgent**         | Done (site-djbclark)                   |
+| **G — History learning on** | **`auto`** (active once ≥ 2 snapshots) |
+| **G deeper UX**             | Thin status line done                  |
 
 ## Quick verification
 
