@@ -5,7 +5,7 @@
 **Local tree:** `~/src/aiuse`  
 **Remote:** https://github.com/djbclark/aiuse  
 **Tests:** `.venv/bin/python -m pytest -q` — expect **200+** passing  
-**Version:** **2.1.1**
+**Version:** **2.1.2**
 
 Fresh agents: start at [`AGENTS.md`](../AGENTS.md).
 
@@ -13,26 +13,27 @@ Fresh agents: start at [`AGENTS.md`](../AGENTS.md).
 
 1. Open Cursor workspace at **`~/src/aiuse`**.
 2. Confirm config: `aiuse doctor` → `~/.config/aiuse/`.
-3. Optional: LaunchAgent is managed by site-djbclark —
-   `cd ~/ops/site-djbclark && just site-agents-apply`
+3. LaunchAgent: managed by **site-djbclark** —
+   `cd ~/ops/site-djbclark && just site-agents-apply && just site-agents-status`
    ([`scheduling.md`](scheduling.md)).
 
 ## Done this stretch
 
-| Area                             | Notes                                                                                              |
-| -------------------------------- | -------------------------------------------------------------------------------------------------- |
-| Fix plan Steps **1–32** + **34** | Complete                                                                                           |
-| Package rename / packaging       | **aiuse** on PyPI + Homebrew + OIDC                                                                |
-| **H — LaunchAgent**              | Recipe + `install.sh`; 6h; `persist_snapshots`                                                     |
-| **G — History (thin)**           | `persist_snapshots` decoupled; `--full` history line; [`history-learning.md`](history-learning.md) |
+| Area                             | Notes                                                           |
+| -------------------------------- | --------------------------------------------------------------- |
+| Fix plan Steps **1–32** + **34** | Complete                                                        |
+| Packaging                        | PyPI + Homebrew + OIDC; current **2.1.2**                       |
+| **H — LaunchAgent**              | Live: `com.djbclark.aiuse` via site-djbclark `site_agents` (6h) |
+| **G — History (thin)**           | `persist_snapshots` on; learning still opt-in                   |
 
 ## Packaging / scheduling
 
-| Channel                | State                                           |
-| ---------------------- | ----------------------------------------------- |
-| PyPI / Homebrew / OIDC | Done                                            |
-| LaunchAgent            | Docs + template — operator runs `install.sh`    |
-| `learn_from_history`   | Still **opt-in** (enable after snapshots exist) |
+| Channel                | State                                                               |
+| ---------------------- | ------------------------------------------------------------------- |
+| PyPI / Homebrew / OIDC | Done                                                                |
+| LaunchAgent            | **Rolled out** via `~/ops/site-djbclark` (`just site-agents-apply`) |
+| `persist_snapshots`    | **true** (set by site_agents)                                       |
+| `learn_from_history`   | Still **opt-in**                                                    |
 
 ## Operator preferences (standing)
 
@@ -40,6 +41,7 @@ Fresh agents: start at [`AGENTS.md`](../AGENTS.md).
 - Do not install/configure `cswap` / `codexbar` / `tokscale` in code changes.
 - Do not use ccusage as plan 5h/7d authority.
 - Open-ended “what next?” → **do not restart fix plan at Step 1**.
+- Scheduled agents / LaunchAgents for this Mac → **site-djbclark** `site_agents`, not ad-hoc plists.
 
 ## Loose ends / next options
 
@@ -49,22 +51,21 @@ Fresh agents: start at [`AGENTS.md`](../AGENTS.md).
 
 ### Deferred
 
-| Item                        | Status                                          |
-| --------------------------- | ----------------------------------------------- |
-| **A — Live smoke**          | Operator-owned                                  |
-| **Step 35**                 | Parked                                          |
-| **E — Packaging**           | Done                                            |
-| **H — LaunchAgent**         | Recipe done; operator installs when ready       |
-| **G — History learning on** | Opt-in after snapshots; richer insights later   |
-| **G deeper UX**             | Thin status line done; more report polish later |
+| Item                        | Status                      |
+| --------------------------- | --------------------------- |
+| **A — Live smoke**          | Operator-owned              |
+| **Step 35**                 | Parked                      |
+| **E — Packaging**           | Done                        |
+| **H — LaunchAgent**         | Done (site-djbclark)        |
+| **G — History learning on** | Opt-in after more snapshots |
+| **G deeper UX**             | Thin status line done       |
 
 ## Quick verification
 
 ```bash
-cd ~/src/aiuse
-.venv/bin/python -m pytest -q
-aiuse doctor
-# after enabling persist_snapshots:
+just -f ~/ops/site-djbclark/justfile site-agents-status
+aiuse --version   # 2.1.2+
+ls ~/.cache/aiuse/snapshots | wc -l
 aiuse --full -q --no-tui | head -15
 ```
 
